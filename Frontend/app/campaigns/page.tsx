@@ -3,6 +3,7 @@ import { Sidebar } from '@/components/sidebar'
 import { CampaignCard } from '@/components/campaign-card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import Link from 'next/link'
 import {
   Select,
   SelectContent,
@@ -141,9 +142,14 @@ export default function CampaignsPage() {
                 <SelectItem value="regression">Regression</SelectItem>
               </SelectContent>
             </Select>
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2 w-full md:w-auto">
-              <Plus size={20} />
-              New Campaign
+            <Button
+              asChild
+              className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2 w-full md:w-auto"
+            >
+              <Link href="/campaigns/new">
+                <Plus size={20} />
+                New Campaign
+              </Link>
             </Button>
           </div>
 

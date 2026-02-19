@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import {
   Play,
   Pause,
-  Stop,
+  Square,
   RefreshCw,
   Download,
   Filter,
@@ -283,7 +283,7 @@ export default function ExecutionsPage() {
                                 variant="outline"
                                 className="text-destructive"
                               >
-                                <Stop className="w-4 h-4" />
+                                <Square className="w-4 h-4" />
                               </Button>
                             </>
                           )}
