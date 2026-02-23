@@ -1,0 +1,62 @@
+package com.pfe.platform.testmanagementmicroservice.service.TestCase;
+
+import com.pfe.platform.testmanagementmicroservice.entity.TestCase;
+import com.pfe.platform.testmanagementmicroservice.entity.TestSuite;
+import com.pfe.platform.testmanagementmicroservice.repository.TestCaseRepository;
+import com.pfe.platform.testmanagementmicroservice.repository.TestSuiteRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+public class TestCaseServiceImpl implements TestCaseService {
+
+    private final TestCaseRepository testCaseRepository;
+    private final TestSuiteRepository testSuiteRepository;
+
+    @Override
+    public List<TestCase> findAll() {
+        return testCaseRepository.findAll();
+    }
+
+    @Override
+    public List<TestCase> findBySuite(Long suiteId) {
+        return testCaseRepository.findBySuiteId(suiteId);
+    }
+
+    @Override
+    public TestCase findById(Long id) {
+        return testCaseRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("TestCase not found: " + id));
+    }
+
+    @Override
+    public TestCase create(Long suiteId, TestCase testCase) {
+        TestSuite suite = testSuiteRepository.findById(suiteId)
+                .orElseThrow(() -> new IllegalArgumentException("Suite not found: " + suiteId));
+        testCase.setId(null);
+        testCase.setSuite(suite);
+        return testCaseRepository.save(testCase);
+    }
+
+    @Override
+    public TestCase update(Long id, TestCase incoming) {
+        TestCase existing = findById(id);
+        existing.setName(incoming.getName());
+        existing.setType(incoming.getType());
+        existing.setPriority(incoming.getPriority());
+        existing.setRiskScore(incoming.getRiskScore());
+        return testCaseRepository.save(existing);
+    }
+
+    @Override
+    public void delete(Long id) {
+        if (!testCaseRepository.existsById(id)) {
+            throw new IllegalArgumentException("TestCase not found: " + id);
+        }
+        testCaseRepository.deleteById(id);
+    }
+}
+

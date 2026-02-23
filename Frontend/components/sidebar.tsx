@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
+  Folder,
   PlayCircle,
   BarChart3,
   FileText,
@@ -28,6 +29,11 @@ export function Sidebar() {
       label: 'Dashboard',
       href: '/dashboard',
       icon: LayoutDashboard,
+    },
+    {
+      label: 'Projects',
+      href: '/projects',
+      icon: Folder,
     },
     {
       label: 'Test Campaigns',

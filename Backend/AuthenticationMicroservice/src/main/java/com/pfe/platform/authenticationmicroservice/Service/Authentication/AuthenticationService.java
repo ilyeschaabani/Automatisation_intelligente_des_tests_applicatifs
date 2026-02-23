@@ -10,6 +10,6 @@ public interface AuthenticationService {
     User singUp(SignUpRequest signUpRequest);
     JwtAuthenticationResponse login(SignInRequest signInRequest);
     JwtAuthenticationResponse refreshToken(RefreshTokenrequest refreshTokenrequest);
-    public User getProfileById(Long id);
-    public User getProfile(String email);
+    User getProfileById(Long id);
+    User getProfile(String email);
 }

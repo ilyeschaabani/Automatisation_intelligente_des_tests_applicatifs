@@ -20,13 +20,6 @@ export function middleware(request: NextRequest) {
   const hasRefreshToken = Boolean(request.cookies.get('refresh_token')?.value)
   const isAuthed = hasAccessToken || hasRefreshToken
 
-  // If already logged in, keep auth pages out of the way.
-  if (isAuthed && isPublic) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
-    return NextResponse.redirect(url)
-  }
-
   // If not logged in, force to login for all non-public routes.
   if (!isAuthed && !isPublic) {
     const url = request.nextUrl.clone()
