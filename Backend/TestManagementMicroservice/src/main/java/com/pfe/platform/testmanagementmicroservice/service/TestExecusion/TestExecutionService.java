@@ -7,16 +7,13 @@ import java.util.List;
 public interface TestExecutionService {
     List<TestExecution> findAll();
 
-    List<TestExecution> findByCampaign(Long campaignId);
-
-    List<TestExecution> findByTestCase(Long testCaseId);
+    List<TestExecution> findBySession(Long sessionId);
 
     TestExecution findById(Long id);
 
-    TestExecution create(Long campaignId, Long testCaseId, TestExecution exec);
+    TestExecution createBySession(Long sessionId, TestExecution exec);
 
     TestExecution update(Long id, TestExecution incoming);
 
     void delete(Long id);
 }
-

@@ -1,10 +1,11 @@
 package com.pfe.platform.testmanagementmicroservice.controller;
 
 import com.pfe.platform.testmanagementmicroservice.DTO.ProjectCreateRequest;
+import com.pfe.platform.testmanagementmicroservice.DTO.ProjectDto;
 import com.pfe.platform.testmanagementmicroservice.entity.Project;
+import com.pfe.platform.testmanagementmicroservice.service.Project.ProjectMapper;
 import com.pfe.platform.testmanagementmicroservice.service.Project.ProjectService;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,25 +22,25 @@ public class ProjectController {
     }
 
     @GetMapping
-    public List<Project> getAll() {
-        return projectService.findAll();
+    public List<ProjectDto> getAll() {
+        return projectService.findAll().stream().map(ProjectMapper::toDto).toList();
     }
 
     @GetMapping("/{id}")
-    public Project getById(@PathVariable Long id) {
-        return projectService.findById(id);
+    public ProjectDto getById(@PathVariable Long id) {
+        return ProjectMapper.toDto(projectService.findById(id));
     }
-
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Project create(@Validated @RequestBody ProjectCreateRequest req) {
-        return projectService.create(req);
+    public ProjectDto create(@Validated @RequestBody ProjectCreateRequest req) {
+        Project created = projectService.create(req);
+        return ProjectMapper.toDto(created);
     }
 
     @PutMapping("/{id}")
-    public Project update(@PathVariable Long id, @RequestBody Project project) {
-        return projectService.update(id, project);
+    public ProjectDto update(@PathVariable Long id, @RequestBody Project project) {
+        return ProjectMapper.toDto(projectService.update(id, project));
     }
 
     @DeleteMapping("/{id}")
@@ -48,4 +49,3 @@ public class ProjectController {
         projectService.delete(id);
     }
 }
-

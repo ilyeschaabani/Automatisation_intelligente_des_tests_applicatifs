@@ -1,5 +1,7 @@
 package com.pfe.platform.testmanagementmicroservice.entity;
 
+import com.pfe.platform.testmanagementmicroservice.entity.Enum.TestType;
+import com.pfe.platform.testmanagementmicroservice.entity.Enum.ToolTest;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -22,18 +24,22 @@ public class TestCase {
     @Column(nullable = false)
     String name;
 
-    /** e.g. FUNCTIONAL, REGRESSION, PERFORMANCE */
-    String type;
+    @Column(length = 4000)
+    String description;
 
-    /** e.g. LOW, MEDIUM, HIGH */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    TestType testType;
+
+    /** e.g. LOW, MEDIUM, HIGH (kept as String for now) */
     String priority;
+
+    @Enumerated(EnumType.STRING)
+    ToolTest tool;
 
     Double riskScore;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "suite_id", nullable = false)
     TestSuite suite;
-
-
 }
-

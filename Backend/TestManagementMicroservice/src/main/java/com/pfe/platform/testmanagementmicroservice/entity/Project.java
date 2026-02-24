@@ -1,7 +1,7 @@
 package com.pfe.platform.testmanagementmicroservice.entity;
 
 import com.pfe.platform.testmanagementmicroservice.entity.Enum.ProjectType;
-import com.pfe.platform.testmanagementmicroservice.entity.Enum.RepoProvider;
+import com.pfe.platform.testmanagementmicroservice.entity.Enum.SourceType;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -10,6 +10,8 @@ import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Getter
@@ -26,36 +28,35 @@ public class Project {
     @Column(nullable = false)
      String name;
 
-    @Column(length = 4000)
-     String description;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+     ProjectType projectType;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+     SourceType sourceType;
+
+    @Column(length = 4000)
      String repositoryUrl;
 
-    @Enumerated(EnumType.STRING)
-     ProjectType type;
+    /** Reference to a secret/token stored elsewhere */
+     String gitTokenId;
 
-     String defaultBranch;
-
-
-    @Enumerated(EnumType.STRING)
-    RepoProvider repoProvider;
-
-
-    String createdBy;
+    /** e.g. "SPRING_BOOT", "NODE_JS", "DJANGO" ... */
+     String technologyStack;
 
     @Column(nullable = false)
-    private boolean archived = false;
-
-
+    private boolean deployed = false;
 
     @Column(nullable = false, updatable = false)
      Instant createdAt;
 
+    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
+    List<TestSession> sessions = new ArrayList<>();
+
     @PrePersist
     void onCreate() {
         if (createdAt == null) createdAt = Instant.now();
-        if (defaultBranch == null || defaultBranch.isBlank()) defaultBranch = "main";
     }
 
 }
-

@@ -1,13 +1,11 @@
 package com.pfe.platform.testmanagementmicroservice.service.Project;
 
 import com.pfe.platform.testmanagementmicroservice.DTO.ProjectCreateRequest;
-import com.pfe.platform.testmanagementmicroservice.entity.Enum.RepoProvider;
 import com.pfe.platform.testmanagementmicroservice.entity.Project;
 import com.pfe.platform.testmanagementmicroservice.repository.ProjectRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.net.URI;
 import java.util.List;
 
 @Service
@@ -29,57 +27,31 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     public Project create(ProjectCreateRequest req) {
-        validateRepoUrl(req.repoProvider(), req.repositoryUrl());
-
         Project p = new Project();
         p.setName(req.name());
-        p.setDescription(blankToNull(req.description()));
+        p.setProjectType(req.projectType());
+        p.setSourceType(req.sourceType());
         p.setRepositoryUrl(blankToNull(req.repositoryUrl()));
-        p.setType(req.type());
-        p.setDefaultBranch(blankToNull(req.defaultBranch()));
-        p.setRepoProvider(req.repoProvider());
-        p.setArchived(Boolean.TRUE.equals(req.archived()));
-
+        p.setGitTokenId(blankToNull(req.gitTokenId()));
+        p.setTechnologyStack(blankToNull(req.technologyStack()));
+        p.setDeployed(Boolean.TRUE.equals(req.deployed()));
         return projectRepository.save(p);
     }
 
-
     private static String blankToNull(String v) {
         return v == null || v.isBlank() ? null : v.trim();
-    }
-
-
-    private static void validateRepoUrl(RepoProvider provider, String repositoryUrl) {
-        if (provider == null) return;
-        if (repositoryUrl == null || repositoryUrl.isBlank()) return;
-
-        URI uri;
-        try {
-            uri = URI.create(repositoryUrl.trim());
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid repositoryUrl");
-        }
-
-        String host = uri.getHost();
-        if (host == null) throw new IllegalArgumentException("Invalid repositoryUrl host");
-
-        String h = host.toLowerCase();
-        if (provider == RepoProvider.GITHUB && !h.endsWith("github.com")) {
-            throw new IllegalArgumentException("repoProvider is GITHUB but URL host is not github.com");
-        }
-        if (provider == RepoProvider.GITLAB && !h.contains("gitlab")) {
-            throw new IllegalArgumentException("repoProvider is GITLAB but URL host is not GitLab");
-        }
     }
 
     @Override
     public Project update(Long id, Project incoming) {
         Project existing = findById(id);
         existing.setName(incoming.getName());
-        existing.setDescription(incoming.getDescription());
+        existing.setProjectType(incoming.getProjectType());
+        existing.setSourceType(incoming.getSourceType());
         existing.setRepositoryUrl(incoming.getRepositoryUrl());
-        existing.setType(incoming.getType());
-        existing.setCreatedBy(incoming.getCreatedBy());
+        existing.setGitTokenId(incoming.getGitTokenId());
+        existing.setTechnologyStack(incoming.getTechnologyStack());
+        existing.setDeployed(incoming.isDeployed());
         return projectRepository.save(existing);
     }
 
@@ -89,8 +61,5 @@ public class ProjectServiceImpl implements ProjectService {
             throw new IllegalArgumentException("Project not found: " + id);
         }
         projectRepository.deleteById(id);
-
     }
-
-
 }

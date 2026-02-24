@@ -1,6 +1,7 @@
-
 package com.pfe.platform.testmanagementmicroservice.entity;
 
+import com.pfe.platform.testmanagementmicroservice.entity.Enum.ExecutionStatus;
+import com.pfe.platform.testmanagementmicroservice.entity.Enum.ExecutionType;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -22,25 +23,24 @@ public class TestExecution {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     Long id;
 
-    /** e.g. PASSED, FAILED, SKIPPED */
-    String status;
+    Integer executionNumber;
 
-    /** execution time in milliseconds */
-    Long duration;
+    Instant executionDate;
 
-    Instant executedAt;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    ExecutionType executionType = ExecutionType.INITIAL;
 
-    @Column(length = 4000)
-    String errorMessage;
-
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "campaign_id", nullable = false)
-    TestCampaign campaign;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    ExecutionStatus status = ExecutionStatus.QUEUED;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "test_case_id", nullable = false)
-    TestCase testCase;
+    @JoinColumn(name = "session_id", nullable = false)
+    TestSession session;
 
-
+    @PrePersist
+    void onCreate() {
+        if (executionDate == null) executionDate = Instant.now();
+    }
 }
-

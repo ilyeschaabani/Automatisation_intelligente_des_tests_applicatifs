@@ -6,7 +6,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
 public interface TestExecutionRepository extends JpaRepository<TestExecution, Long> {
-    List<TestExecution> findByCampaignId(Long campaignId);
-    List<TestExecution> findByTestCaseId(Long testCaseId);
+    List<TestExecution> findBySessionId(Long sessionId);
 }
-

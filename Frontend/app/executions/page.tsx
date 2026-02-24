@@ -6,92 +6,124 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Label } from '@/components/ui/label'
+import {
   Play,
-  Pause,
-  Square,
-  RefreshCw,
-  Download,
   Filter,
   Search,
   Clock,
-  CheckCircle2,
-  AlertCircle,
-  XCircle,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { useEffect, useMemo, useState } from 'react'
 
-const executions = [
-  {
-    id: 'EXE-2024-001',
-    campaign: 'Banking Core Tests',
-    app: 'Payment System',
-    status: 'running',
-    progress: 75,
-    tests: { total: 250, passed: 180, failed: 5, skipped: 10, running: 55 },
-    startTime: '2024-01-15 10:30:00',
-    estimatedTime: '15 mins',
-    duration: '11 mins',
-    type: 'Functional',
-  },
-  {
-    id: 'EXE-2024-002',
-    campaign: 'API Regression Suite',
-    app: 'Account Management',
-    status: 'completed',
-    progress: 100,
-    tests: { total: 180, passed: 175, failed: 3, skipped: 2, running: 0 },
-    startTime: '2024-01-15 09:00:00',
-    estimatedTime: '12 mins',
-    duration: '12 mins 35s',
-    type: 'API',
-  },
-  {
-    id: 'EXE-2024-003',
-    campaign: 'Mobile Web Tests',
-    app: 'Customer Portal',
-    status: 'failed',
-    progress: 100,
-    tests: { total: 120, passed: 95, failed: 15, skipped: 10, running: 0 },
-    startTime: '2024-01-14 16:45:00',
-    estimatedTime: '10 mins',
-    duration: '10 mins 12s',
-    type: 'Functional',
-  },
-  {
-    id: 'EXE-2024-004',
-    campaign: 'Security DAST Scan',
-    app: 'API Gateway',
-    status: 'completed',
-    progress: 100,
-    tests: { total: 95, passed: 93, failed: 0, skipped: 2, running: 0 },
-    startTime: '2024-01-14 14:20:00',
-    estimatedTime: '8 mins',
-    duration: '8 mins 45s',
-    type: 'Security',
-  },
-]
+import {
+  createExecution,
+  getExecutions,
+  type ExecutionStatus,
+  type ExecutionType,
+  type TestExecution,
+} from '@/lib/api-client'
 
-const statusConfig = {
-  running: { bg: 'bg-blue-50', text: 'text-blue-700', badge: 'bg-blue-100' },
-  completed: {
-    bg: 'bg-green-50',
-    text: 'text-green-700',
-    badge: 'bg-green-100',
-  },
-  failed: { bg: 'bg-red-50', text: 'text-red-700', badge: 'bg-red-100' },
-  paused: { bg: 'bg-yellow-50', text: 'text-yellow-700', badge: 'bg-yellow-100' },
+const statusStyle: Record<ExecutionStatus, string> = {
+  QUEUED: 'bg-gray-100 text-gray-800 dark:bg-gray-950 dark:text-gray-400',
+  RUNNING: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-400',
+  FINISHED: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400',
+  ERROR: 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-400',
+}
+
+function formatDate(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString()
 }
 
 export default function ExecutionsPage() {
-  const [selectedExecution, setSelectedExecution] = useState<string | null>(null)
+  const searchParams = useSearchParams()
+  const sessionIdParam = searchParams.get('sessionId')
+  const sessionId = sessionIdParam ? Number(sessionIdParam) : null
+
+  const [executions, setExecutions] = useState<TestExecution[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
 
-  const filteredExecutions = executions.filter(
-    (exe) =>
-      exe.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      exe.campaign.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      exe.app.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
+  const [executionType, setExecutionType] = useState<ExecutionType>('INITIAL')
+
+  const loadExecutions = async (sid: number) => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const data = await getExecutions(sid)
+      setExecutions(Array.isArray(data) ? data : [])
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Failed to load executions'
+      console.error('Failed to load executions', e)
+      setExecutions([])
+      setError(message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!sessionId || Number.isNaN(sessionId)) {
+      setExecutions([])
+      setIsLoading(false)
+      return
+    }
+    void loadExecutions(sessionId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionIdParam])
+
+  const filteredExecutions = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase()
+    if (!query) return executions
+    return executions.filter((exe) => {
+      return (
+        String(exe.id).toLowerCase().includes(query) ||
+        String(exe.executionNumber).toLowerCase().includes(query) ||
+        String(exe.status).toLowerCase().includes(query) ||
+        String(exe.executionType).toLowerCase().includes(query)
+      )
+    })
+  }, [executions, searchTerm])
+
+  const onCreateExecution = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (!sessionId) return
+
+    setIsCreating(true)
+    setError(null)
+    try {
+      await createExecution(sessionId, { executionType })
+      setIsCreateOpen(false)
+      setExecutionType('INITIAL')
+      await loadExecutions(sessionId)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create execution'
+      console.error('Failed to create execution', err)
+      setError(message)
+    } finally {
+      setIsCreating(false)
+    }
+  }
 
   return (
     <div className="flex h-screen bg-background">
@@ -128,30 +160,94 @@ export default function ExecutionsPage() {
                     <Filter className="w-4 h-4 mr-2" />
                     Filter
                   </Button>
-                  <Button size="sm" className="bg-primary hover:bg-primary/90">
-                    <Play className="w-4 h-4 mr-2" />
-                    New Execution
-                  </Button>
+                  <Sheet open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+                    <SheetTrigger asChild>
+                      <Button
+                        size="sm"
+                        className="bg-primary hover:bg-primary/90"
+                        disabled={!sessionId || isLoading}
+                      >
+                        <Play className="w-4 h-4 mr-2" />
+                        New Execution
+                      </Button>
+                    </SheetTrigger>
+                    <SheetContent side="right" className="sm:max-w-md">
+                      <SheetHeader>
+                        <SheetTitle>New Execution</SheetTitle>
+                        <SheetDescription>
+                          Create an execution for session{' '}
+                          <span className="font-medium">{sessionId ?? '—'}</span>
+                        </SheetDescription>
+                      </SheetHeader>
+
+                      <form className="mt-6 space-y-6" onSubmit={onCreateExecution}>
+                        <div className="space-y-2">
+                          <Label>Execution type</Label>
+                          <Select value={executionType} onValueChange={(v) => setExecutionType(v as any)}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="INITIAL">INITIAL</SelectItem>
+                              <SelectItem value="RETEST">RETEST</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+
+                        <SheetFooter className="pt-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setIsCreateOpen(false)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button type="submit" disabled={isCreating}>
+                            {isCreating ? 'Creating…' : 'Create execution'}
+                          </Button>
+                        </SheetFooter>
+                      </form>
+                    </SheetContent>
+                  </Sheet>
                 </div>
               </div>
             </div>
 
             {/* Executions List */}
             <div className="space-y-4">
-              {filteredExecutions.map((execution) => {
-                const config =
-                  statusConfig[execution.status as keyof typeof statusConfig]
-                const passRate = Math.round(
-                  (execution.tests.passed / execution.tests.total) * 100,
-                )
+              {!sessionId ? (
+                <Card className="p-6">
+                  <p className="text-sm text-muted-foreground">
+                    Select a session first. Open a project and create a session, then use “View executions”.
+                  </p>
+                </Card>
+              ) : null}
 
+              {isLoading ? (
+                <Card className="p-6">
+                  <p className="text-sm text-muted-foreground">Loading executions…</p>
+                </Card>
+              ) : null}
+
+              {error && sessionId ? (
+                <Card className="p-6">
+                  <p className="text-sm text-destructive">{error}</p>
+                </Card>
+              ) : null}
+
+              {sessionId && !isLoading && !error && filteredExecutions.length === 0 ? (
+                <Card className="p-6">
+                  <p className="text-sm text-muted-foreground">No executions found.</p>
+                </Card>
+              ) : null}
+
+              {filteredExecutions.map((execution) => {
                 return (
                   <Card
                     key={execution.id}
-                    className={`p-6 cursor-pointer transition-all hover:shadow-md ${
-                      selectedExecution === execution.id ? 'ring-2 ring-primary' : ''
-                    }`}
-                    onClick={() => setSelectedExecution(execution.id)}
+                    className="p-6 transition-all hover:shadow-md"
                   >
                     <div className="grid grid-cols-1 gap-6">
                       {/* Top Row */}
@@ -159,151 +255,24 @@ export default function ExecutionsPage() {
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
                             <h3 className="text-lg font-bold text-foreground">
-                              {execution.id}
+                              Execution #{execution.executionNumber}
                             </h3>
                             <Badge
-                              variant="secondary"
-                              className={`${config.badge} text-xs font-medium uppercase`}
+                              variant="outline"
+                              className={statusStyle[execution.status]}
                             >
                               {execution.status}
                             </Badge>
-                            <Badge variant="outline">{execution.type}</Badge>
+                            <Badge variant="outline">{execution.executionType}</Badge>
                           </div>
-                          <p className="text-sm text-muted-foreground mb-1">
-                            {execution.campaign}
-                          </p>
                           <p className="text-sm text-muted-foreground">
-                            App: {execution.app}
+                            Session: {sessionId}
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="text-2xl font-bold text-foreground">
-                            {passRate}%
-                          </p>
                           <p className="text-xs text-muted-foreground">
-                            Pass Rate
+                            {formatDate(execution.executionDate)}
                           </p>
-                        </div>
-                      </div>
-
-                      {/* Progress Bar */}
-                      <div>
-                        <div className="flex justify-between mb-2">
-                          <span className="text-xs text-muted-foreground">
-                            Progress
-                          </span>
-                          <span className="text-xs font-medium text-foreground">
-                            {execution.progress}%
-                          </span>
-                        </div>
-                        <div className="w-full bg-secondary rounded-full h-2">
-                          <div
-                            className={`h-2 rounded-full transition-all ${
-                              execution.status === 'running'
-                                ? 'bg-blue-500'
-                                : execution.status === 'completed'
-                                  ? 'bg-green-500'
-                                  : 'bg-red-500'
-                            }`}
-                            style={{ width: `${execution.progress}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Test Stats Grid */}
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                        <div className="bg-secondary rounded-lg p-3">
-                          <p className="text-xs text-muted-foreground mb-1">
-                            Total Tests
-                          </p>
-                          <p className="text-lg font-bold text-foreground">
-                            {execution.tests.total}
-                          </p>
-                        </div>
-                        <div className="bg-secondary rounded-lg p-3">
-                          <div className="flex items-center gap-1 mb-1">
-                            <CheckCircle2 className="w-4 h-4 text-green-600" />
-                            <p className="text-xs text-muted-foreground">
-                              Passed
-                            </p>
-                          </div>
-                          <p className="text-lg font-bold text-green-600">
-                            {execution.tests.passed}
-                          </p>
-                        </div>
-                        <div className="bg-secondary rounded-lg p-3">
-                          <div className="flex items-center gap-1 mb-1">
-                            <XCircle className="w-4 h-4 text-red-600" />
-                            <p className="text-xs text-muted-foreground">
-                              Failed
-                            </p>
-                          </div>
-                          <p className="text-lg font-bold text-red-600">
-                            {execution.tests.failed}
-                          </p>
-                        </div>
-                        <div className="bg-secondary rounded-lg p-3">
-                          <div className="flex items-center gap-1 mb-1">
-                            <AlertCircle className="w-4 h-4 text-yellow-600" />
-                            <p className="text-xs text-muted-foreground">
-                              Skipped
-                            </p>
-                          </div>
-                          <p className="text-lg font-bold text-yellow-600">
-                            {execution.tests.skipped}
-                          </p>
-                        </div>
-                        <div className="bg-secondary rounded-lg p-3">
-                          <div className="flex items-center gap-1 mb-1">
-                            <Clock className="w-4 h-4 text-blue-600" />
-                            <p className="text-xs text-muted-foreground">
-                              Duration
-                            </p>
-                          </div>
-                          <p className="text-sm font-bold text-blue-600">
-                            {execution.duration}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Bottom Row - Actions and Time Info */}
-                      <div className="flex items-center justify-between pt-4 border-t border-border">
-                        <div className="text-xs text-muted-foreground">
-                          <p>Started: {execution.startTime}</p>
-                          <p>Est. Time: {execution.estimatedTime}</p>
-                        </div>
-                        <div className="flex gap-2">
-                          {execution.status === 'running' && (
-                            <>
-                              <Button size="sm" variant="outline">
-                                <Pause className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-destructive"
-                              >
-                                <Square className="w-4 h-4" />
-                              </Button>
-                            </>
-                          )}
-                          {execution.status === 'completed' ||
-                            (execution.status === 'failed' && (
-                              <>
-                                <Button size="sm" variant="outline">
-                                  <RefreshCw className="w-4 h-4" />
-                                </Button>
-                                <Button size="sm" variant="outline">
-                                  <Download className="w-4 h-4" />
-                                </Button>
-                              </>
-                            ))}
-                          <Button
-                            size="sm"
-                            className="bg-primary hover:bg-primary/90"
-                          >
-                            View Details
-                          </Button>
                         </div>
                       </div>
                     </div>

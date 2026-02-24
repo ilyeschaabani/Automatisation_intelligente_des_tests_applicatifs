@@ -1,15 +1,12 @@
 package com.pfe.platform.testmanagementmicroservice.service.TestExecusion;
 
-import com.pfe.platform.testmanagementmicroservice.entity.TestCampaign;
-import com.pfe.platform.testmanagementmicroservice.entity.TestCase;
 import com.pfe.platform.testmanagementmicroservice.entity.TestExecution;
-import com.pfe.platform.testmanagementmicroservice.repository.TestCampaignRepository;
-import com.pfe.platform.testmanagementmicroservice.repository.TestCaseRepository;
+import com.pfe.platform.testmanagementmicroservice.entity.TestSession;
 import com.pfe.platform.testmanagementmicroservice.repository.TestExecutionRepository;
+import com.pfe.platform.testmanagementmicroservice.repository.TestSessionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
 import java.util.List;
 
 @Service
@@ -17,8 +14,7 @@ import java.util.List;
 public class TestExecutionServiceImpl implements TestExecutionService {
 
     private final TestExecutionRepository testExecutionRepository;
-    private final TestCampaignRepository testCampaignRepository;
-    private final TestCaseRepository testCaseRepository;
+    private final TestSessionRepository testSessionRepository;
 
     @Override
     public List<TestExecution> findAll() {
@@ -26,13 +22,8 @@ public class TestExecutionServiceImpl implements TestExecutionService {
     }
 
     @Override
-    public List<TestExecution> findByCampaign(Long campaignId) {
-        return testExecutionRepository.findByCampaignId(campaignId);
-    }
-
-    @Override
-    public List<TestExecution> findByTestCase(Long testCaseId) {
-        return testExecutionRepository.findByTestCaseId(testCaseId);
+    public List<TestExecution> findBySession(Long sessionId) {
+        return testExecutionRepository.findBySessionId(sessionId);
     }
 
     @Override
@@ -42,28 +33,21 @@ public class TestExecutionServiceImpl implements TestExecutionService {
     }
 
     @Override
-    public TestExecution create(Long campaignId, Long testCaseId, TestExecution exec) {
-        TestCampaign campaign = testCampaignRepository.findById(campaignId)
-                .orElseThrow(() -> new IllegalArgumentException("Campaign not found: " + campaignId));
-        TestCase testCase = testCaseRepository.findById(testCaseId)
-                .orElseThrow(() -> new IllegalArgumentException("TestCase not found: " + testCaseId));
-
+    public TestExecution createBySession(Long sessionId, TestExecution exec) {
+        TestSession session = testSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("Session not found: " + sessionId));
         exec.setId(null);
-        exec.setCampaign(campaign);
-        exec.setTestCase(testCase);
-        if (exec.getExecutedAt() == null) {
-            exec.setExecutedAt(Instant.now());
-        }
+        exec.setSession(session);
         return testExecutionRepository.save(exec);
     }
 
     @Override
     public TestExecution update(Long id, TestExecution incoming) {
         TestExecution existing = findById(id);
+        existing.setExecutionNumber(incoming.getExecutionNumber());
+        existing.setExecutionType(incoming.getExecutionType());
         existing.setStatus(incoming.getStatus());
-        existing.setDuration(incoming.getDuration());
-        existing.setExecutedAt(incoming.getExecutedAt());
-        existing.setErrorMessage(incoming.getErrorMessage());
+        existing.setExecutionDate(incoming.getExecutionDate());
         return testExecutionRepository.save(existing);
     }
 

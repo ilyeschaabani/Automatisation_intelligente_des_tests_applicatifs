@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { Header } from '@/components/header'
 import { Sidebar } from '@/components/sidebar'
@@ -29,51 +29,19 @@ import {
 } from '@/components/ui/select'
 import { Plus, Search } from 'lucide-react'
 
-const projects = [
-  {
-    id: 'PRJ-001',
-    name: 'Banking Web App',
-    description: 'Release testing for core banking web application.',
-    repositoryUrl: 'https://gitlab.example.com/banking/web-app',
-    type: 'Web',
-    createdBy: 'admin@company.com',
-    createdAt: '2026-02-01T10:15:00Z',
-    ownerUserId: 'USR-001',
-    defaultBranch: 'main',
-    repoProvider: 'GitLab',
-    archived: false,
-  },
-  {
-    id: 'PRJ-002',
-    name: 'Mobile Customer Portal',
-    description: 'Customer portal mobile web regression suites.',
-    repositoryUrl: 'https://github.com/company/mobile-portal',
-    type: 'Mobile',
-    createdBy: 'qa.lead@company.com',
-    createdAt: '2026-01-12T09:00:00Z',
-    ownerUserId: 'USR-002',
-    defaultBranch: 'develop',
-    repoProvider: 'GitHub',
-    archived: false,
-  },
-  {
-    id: 'PRJ-003',
-    name: 'API Gateway',
-    description: 'API gateway integration and security tests.',
-    repositoryUrl: 'https://gitlab.example.com/banking/api-gateway',
-    type: 'API',
-    createdBy: 'devops@company.com',
-    createdAt: '2025-11-20T14:30:00Z',
-    ownerUserId: 'USR-003',
-    defaultBranch: 'main',
-    repoProvider: 'GitLab',
-    archived: true,
-  },
-]
+import {
+  createProject,
+  getProjects,
+  inferGitProviderFromUrl,
+  resolveRepo,
+  type Project,
+  type ProjectType,
+  type SourceType,
+} from '@/lib/api-client'
 
-const statusStyle: Record<'Active' | 'Archived', string> = {
-  Active: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400',
-  Archived: 'bg-gray-100 text-gray-800 dark:bg-gray-950 dark:text-gray-400',
+const statusStyle: Record<'Deployed' | 'Not deployed', string> = {
+  Deployed: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400',
+  'Not deployed': 'bg-gray-100 text-gray-800 dark:bg-gray-950 dark:text-gray-400',
 }
 
 function formatDate(value: string): string {
@@ -82,37 +50,142 @@ function formatDate(value: string): string {
   return date.toLocaleString()
 }
 
+function getProvider(project: Project): string {
+  return String(project.sourceType ?? '—')
+}
+
+function getRepositoryUrl(project: Project): string {
+  return String(project.repositoryUrl ?? '—')
+}
+
+function getType(project: Project): string {
+  const value = String(project.projectType ?? '—')
+  if (value === 'WEB') return 'WEB'
+  if (value === 'MOBILE') return 'MOBILE'
+  if (value === 'API') return 'API'
+  if (value === 'DESKTOP') return 'DESKTOP'
+  if (value === 'OTHER') return 'OTHER'
+  return value
+}
+
+function getDefaultBranch(project: Project): string {
+  return String(project.technologyStack ?? '—')
+}
+
 export default function ProjectsPage() {
+  const [projects, setProjects] = useState<Project[]>([])
+  const [searchQuery, setSearchQuery] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isResolvingRepo, setIsResolvingRepo] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
   const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
   const [repositoryUrl, setRepositoryUrl] = useState('')
-  const [type, setType] = useState<'Web' | 'Mobile' | 'API' | 'Desktop' | 'Other'>('Web')
-  const [defaultBranch, setDefaultBranch] = useState('main')
-  const [repoProvider, setRepoProvider] = useState<'GitHub' | 'GitLab'>('GitLab')
-  const [archived, setArchived] = useState(false)
+  const [projectType, setProjectType] = useState<ProjectType>('WEB')
+  const [sourceType, setSourceType] = useState<SourceType>('GIT')
+  const [gitTokenId, setGitTokenId] = useState('')
+  const [technologyStack, setTechnologyStack] = useState('')
+  const [deployed, setDeployed] = useState(false)
+
+  const loadProjects = async () => {
+    setIsLoading(true)
+    try {
+      const data = await getProjects()
+      setProjects(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error('Failed to load projects', error)
+      setProjects([])
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadProjects()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const filteredProjects = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    if (!query) return projects
+
+    return projects.filter((project) => {
+      const projectName = String(project.name ?? '').toLowerCase()
+      const repoUrl = String(project.repositoryUrl ?? '').toLowerCase()
+      return projectName.includes(query) || repoUrl.includes(query)
+    })
+  }, [projects, searchQuery])
 
   const resetForm = () => {
+    setFormError(null)
     setName('')
-    setDescription('')
     setRepositoryUrl('')
-    setType('Web')
-    setDefaultBranch('main')
-    setRepoProvider('GitLab')
-    setArchived(false)
+    setProjectType('WEB')
+    setSourceType('GIT')
+    setGitTokenId('')
+    setTechnologyStack('')
+    setDeployed(false)
   }
 
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsSubmitting(true)
+    setFormError(null)
 
     try {
-      // UI-only for now (backend wiring can be added later).
+      await createProject({
+        name,
+        projectType,
+        sourceType,
+        repositoryUrl: repositoryUrl.trim() ? repositoryUrl.trim() : null,
+        gitTokenId: gitTokenId.trim() ? gitTokenId.trim() : null,
+        technologyStack: technologyStack.trim() ? technologyStack.trim() : null,
+        deployed,
+      })
       setIsCreateOpen(false)
       resetForm()
+      await loadProjects()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to create project'
+      console.error('Create project failed', error)
+      setFormError(message)
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const onAutoFill = async () => {
+    const url = repositoryUrl.trim()
+    if (!url) return
+
+    setIsResolvingRepo(true)
+    setFormError(null)
+    try {
+      if (sourceType !== 'GIT') {
+        setFormError('Auto-fill is available only when Source type is GIT.')
+        return
+      }
+
+      const inferredProvider = inferGitProviderFromUrl(url)
+      if (!inferredProvider) {
+        setFormError('Cannot infer provider from URL. Use a GitHub/GitLab URL.')
+        return
+      }
+
+      const resolved = await resolveRepo({ repositoryUrl: url, provider: inferredProvider })
+
+      const resolvedName = resolved.repo ?? resolved.name
+      const resolvedUrl = resolved.htmlUrl ?? resolved.repositoryUrl
+
+      if (!name.trim() && resolvedName) setName(resolvedName)
+      if (resolvedUrl) setRepositoryUrl(resolvedUrl)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to auto-fill'
+      console.error('Failed to auto-fill repository details', error)
+      setFormError(message)
+    } finally {
+      setIsResolvingRepo(false)
     }
   }
 
@@ -160,64 +233,86 @@ export default function ProjectsPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="projectDescription">Description</Label>
+                    <Label htmlFor="projectRepoUrl">Repository URL</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="projectRepoUrl"
+                        value={repositoryUrl}
+                        onChange={(e) => setRepositoryUrl(e.target.value)}
+                        placeholder="https://github.com/org/repo"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={onAutoFill}
+                        disabled={isResolvingRepo || !repositoryUrl.trim()}
+                      >
+                        {isResolvingRepo ? 'Auto-filling…' : 'Auto-fill'}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {formError ? (
+                    <p className="text-sm text-destructive">{formError}</p>
+                  ) : null}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Project type</Label>
+                      <Select value={projectType} onValueChange={(v) => setProjectType(v as any)}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="WEB">WEB</SelectItem>
+                          <SelectItem value="MOBILE">MOBILE</SelectItem>
+                          <SelectItem value="API">API</SelectItem>
+                          <SelectItem value="DESKTOP">DESKTOP</SelectItem>
+                          <SelectItem value="OTHER">OTHER</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Source type</Label>
+                      <Select value={sourceType} onValueChange={(v) => setSourceType(v as any)}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select source" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="GIT">GIT</SelectItem>
+                          <SelectItem value="URL">URL</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="projectGitToken">Git token id</Label>
                     <Input
-                      id="projectDescription"
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
+                      id="projectGitToken"
+                      value={gitTokenId}
+                      onChange={(e) => setGitTokenId(e.target.value)}
                       placeholder="Optional"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="projectRepoUrl">Repository URL</Label>
+                    <Label htmlFor="projectTechStack">Technology stack</Label>
                     <Input
-                      id="projectRepoUrl"
-                      value={repositoryUrl}
-                      onChange={(e) => setRepositoryUrl(e.target.value)}
-                      placeholder="https://github.com/org/repo"
+                      id="projectTechStack"
+                      value={technologyStack}
+                      onChange={(e) => setTechnologyStack(e.target.value)}
+                      placeholder="Optional"
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Type</Label>
-                      <Select value={type} onValueChange={(v) => setType(v as any)}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Web">Web</SelectItem>
-                          <SelectItem value="Mobile">Mobile</SelectItem>
-                          <SelectItem value="API">API</SelectItem>
-                          <SelectItem value="Desktop">Desktop</SelectItem>
-                          <SelectItem value="Other">Other</SelectItem>
-                        </SelectContent>
-                      </Select>
+                  <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Deployed</p>
+                      <p className="text-xs text-muted-foreground">Is the app currently deployed?</p>
                     </div>
-
-                    <div className="space-y-2">
-                      <Label>Repo provider</Label>
-                      <Select value={repoProvider} onValueChange={(v) => setRepoProvider(v as any)}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select provider" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="GitHub">GitHub</SelectItem>
-                          <SelectItem value="GitLab">GitLab</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="projectDefaultBranch">Default branch</Label>
-                    <Input
-                      id="projectDefaultBranch"
-                      value={defaultBranch}
-                      onChange={(e) => setDefaultBranch(e.target.value)}
-                      placeholder="main"
-                    />
+                    <Switch checked={deployed} onCheckedChange={setDeployed} />
                   </div>
                   <SheetFooter className="pt-2">
                     <Button
@@ -242,12 +337,23 @@ export default function ProjectsPage() {
           <div className="flex flex-col md:flex-row gap-4 mb-8">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground size-5" />
-              <Input placeholder="Search projects..." className="pl-10" />
+              <Input
+                placeholder="Search projects..."
+                className="pl-10"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {projects.map((project) => (
+            {!isLoading && filteredProjects.length === 0 ? (
+              <Card className="p-6">
+                <p className="text-sm text-muted-foreground">No projects found.</p>
+              </Card>
+            ) : null}
+
+            {filteredProjects.map((project) => (
               <Card key={project.id} className="p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
@@ -255,14 +361,14 @@ export default function ProjectsPage() {
                       {project.name}
                     </p>
                     <p className="text-sm text-muted-foreground mt-1 truncate">
-                      {project.repositoryUrl}
+                      {getRepositoryUrl(project)}
                     </p>
                   </div>
                   <Badge
                     variant="outline"
-                    className={statusStyle[project.archived ? 'Archived' : 'Active']}
+                    className={statusStyle[project.deployed ? 'Deployed' : 'Not deployed']}
                   >
-                    {project.archived ? 'Archived' : 'Active'}
+                    {project.deployed ? 'Deployed' : 'Not deployed'}
                   </Badge>
                 </div>
 
@@ -270,26 +376,26 @@ export default function ProjectsPage() {
                   <div>
                     <p className="text-xs text-muted-foreground">Type</p>
                     <p className="text-sm font-semibold text-foreground mt-1">
-                      {project.type}
+                      {getType(project)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Provider</p>
+                    <p className="text-xs text-muted-foreground">Source</p>
                     <p className="text-sm font-semibold text-foreground mt-1">
-                      {project.repoProvider}
+                      {getProvider(project)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Default branch</p>
+                    <p className="text-xs text-muted-foreground">Tech stack</p>
                     <p className="text-sm font-semibold text-foreground mt-1">
-                      {project.defaultBranch}
+                      {getDefaultBranch(project)}
                     </p>
                   </div>
                 </div>
 
                 <div className="mt-4">
                   <p className="text-xs text-muted-foreground">
-                    Created by <span className="font-medium text-foreground">{project.createdBy}</span> • Owner <span className="font-medium text-foreground">{project.ownerUserId}</span> • {formatDate(project.createdAt)}
+                    Created {project.createdAt ? formatDate(project.createdAt) : '—'}
                   </p>
                 </div>
 

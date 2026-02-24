@@ -19,13 +19,9 @@ public class TestExecutionController {
     }
 
     @GetMapping
-    public List<TestExecution> getAll(@RequestParam(name = "campaignId", required = false) Long campaignId,
-                                      @RequestParam(name = "testCaseId", required = false) Long testCaseId) {
-        if (campaignId != null) {
-            return testExecutionService.findByCampaign(campaignId);
-        }
-        if (testCaseId != null) {
-            return testExecutionService.findByTestCase(testCaseId);
+    public List<TestExecution> getAll(@RequestParam(name = "sessionId", required = false) Long sessionId) {
+        if (sessionId != null) {
+            return testExecutionService.findBySession(sessionId);
         }
         return testExecutionService.findAll();
     }
@@ -36,10 +32,9 @@ public class TestExecutionController {
     }
 
     @PostMapping
-    public ResponseEntity<TestExecution> create(@RequestParam Long campaignId,
-                                                @RequestParam Long testCaseId,
-                                                @RequestBody TestExecution execution) {
-        TestExecution created = testExecutionService.create(campaignId, testCaseId, execution);
+    public ResponseEntity<TestExecution> create(@RequestParam Long sessionId,
+                                               @RequestBody TestExecution execution) {
+        TestExecution created = testExecutionService.createBySession(sessionId, execution);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 

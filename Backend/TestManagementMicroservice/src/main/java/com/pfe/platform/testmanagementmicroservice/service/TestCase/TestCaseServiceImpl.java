@@ -45,8 +45,10 @@ public class TestCaseServiceImpl implements TestCaseService {
     public TestCase update(Long id, TestCase incoming) {
         TestCase existing = findById(id);
         existing.setName(incoming.getName());
-        existing.setType(incoming.getType());
+        existing.setDescription(incoming.getDescription());
+        existing.setTestType(incoming.getTestType());
         existing.setPriority(incoming.getPriority());
+        existing.setTool(incoming.getTool());
         existing.setRiskScore(incoming.getRiskScore());
         return testCaseRepository.save(existing);
     }
@@ -59,4 +61,3 @@ public class TestCaseServiceImpl implements TestCaseService {
         testCaseRepository.deleteById(id);
     }
 }
-
