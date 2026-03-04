@@ -39,19 +39,99 @@ export interface TestSession {
 export type ExecutionType = 'INITIAL' | 'RETEST'
 export type ExecutionStatus = 'QUEUED' | 'RUNNING' | 'FINISHED' | 'ERROR'
 
-export type TestExecution = {
+export interface TestExecutionDto {
   id: number
-  executionNumber: number
+  executionNumber: number | null
   executionDate: string
+  executionType: ExecutionType
+  status: ExecutionStatus
+  sessionId: number
+}
+
+export type TestExecution = TestExecutionDto
+
+export interface TestExecutionInput {
+  executionNumber?: number | null
+  executionDate?: string
   executionType: ExecutionType
   status: ExecutionStatus
 }
 
-export type CreateExecutionPayload = {
-  executionType: ExecutionType
+export type GitProvider = 'GITHUB' | 'GITLAB'
+
+export type TestType = 'FUNCTIONAL' | 'PERFORMANCE' | 'REGRESSION' | 'SECURITY' | 'API'
+
+export interface TestCaseDto {
+  id: number
+  name: string
+  description?: string | null
+  testType?: TestType | string | null
+  priority?: string | null
+  tool?: string | null
+  riskScore?: number | null
 }
 
-export type GitProvider = 'GITHUB' | 'GITLAB'
+export interface TestCaseCreateRequest {
+  name: string
+  description?: string | null
+  testType?: TestType | string | null
+  priority?: string | null
+  tool?: string | null
+  riskScore?: number | null
+}
+
+export interface TestCampaignSetTestCasesRequest {
+  testCaseIds: number[]
+}
+
+export interface TestCampaignDto {
+  id: number
+  projectId: number
+  name: string
+  version?: string | null
+  status?: string | null
+  startDate?: string | null
+  endDate?: string | null
+  environment?: string | null
+  triggerType?: string | null
+  sessionStatus?: string | null
+  executionStartDate?: string | null
+  executionEndDate?: string | null
+  createdBy?: string | null
+  testCaseIds: number[]
+}
+
+export interface TestCampaignCreateRequest {
+  projectId: number
+  name: string
+  version?: string | null
+  status?: string | null
+  startDate?: string | null
+  endDate?: string | null
+  environment?: string | null
+  triggerType?: string | null
+  sessionStatus?: string | null
+  executionStartDate?: string | null
+  executionEndDate?: string | null
+  createdBy?: string | null
+}
+
+export interface TestCampaignUpdateRequest {
+  name?: string | null
+  version?: string | null
+  status?: string | null
+  startDate?: string | null
+  endDate?: string | null
+  environment?: string | null
+  triggerType?: string | null
+  sessionStatus?: string | null
+  executionStartDate?: string | null
+  executionEndDate?: string | null
+  createdBy?: string | null
+  // Not part of the documented DTO yet, but supported as a fallback until a
+  // dedicated /testcases endpoint exists server-side.
+  testCaseIds?: number[]
+}
 
 export type RepoResolveResponse = {
   owner?: string | null
@@ -275,21 +355,155 @@ export async function getSessions(projectId: number): Promise<TestSession[]> {
 }
 
 export async function getExecutions(sessionId: number): Promise<TestExecution[]> {
-  return requestJson<TestExecution[]>(`/api/executions?sessionId=${encodeURIComponent(String(sessionId))}`, {
-    cache: 'no-store',
-  })
+  return listExecutions({ sessionId })
 }
 
 export async function createExecution(
   sessionId: number,
-  payload: CreateExecutionPayload,
+  input: TestExecutionInput,
 ): Promise<TestExecution> {
-  return requestJson<TestExecution>(`/api/executions?sessionId=${encodeURIComponent(String(sessionId))}`, {
+  return createExecutionDto(sessionId, input)
+}
+
+export async function listExecutions(params?: {
+  sessionId?: number
+}): Promise<TestExecutionDto[]> {
+  const query = new URLSearchParams()
+  if (params?.sessionId !== undefined) query.set('sessionId', String(params.sessionId))
+  const suffix = query.toString() ? `?${query.toString()}` : ''
+  return requestJson<TestExecutionDto[]>(`/api/executions${suffix}`, { cache: 'no-store' })
+}
+
+export async function getExecution(id: number): Promise<TestExecutionDto> {
+  return requestJson<TestExecutionDto>(`/api/executions/${encodeURIComponent(String(id))}`, {
+    cache: 'no-store',
+  })
+}
+
+export async function createExecutionDto(
+  sessionId: number,
+  input: TestExecutionInput,
+): Promise<TestExecutionDto> {
+  const body: Record<string, unknown> = {
+    executionType: normalizeEnum(input.executionType, ['INITIAL', 'RETEST'] as const),
+    status: normalizeEnum(input.status, ['QUEUED', 'RUNNING', 'FINISHED', 'ERROR'] as const),
+  }
+
+  if ('executionNumber' in input) body.executionNumber = input.executionNumber ?? null
+  if (input.executionDate !== undefined) body.executionDate = input.executionDate
+
+  return requestJson<TestExecutionDto>(`/api/executions?sessionId=${encodeURIComponent(String(sessionId))}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
+export async function updateExecution(
+  id: number,
+  input: Partial<TestExecutionInput>,
+): Promise<TestExecutionDto> {
+  const body: Record<string, unknown> = {}
+
+  if ('executionNumber' in input) body.executionNumber = input.executionNumber ?? null
+  if (input.executionDate !== undefined) body.executionDate = input.executionDate
+  if ('executionType' in input && input.executionType !== undefined) {
+    body.executionType = normalizeEnum(input.executionType, ['INITIAL', 'RETEST'] as const)
+  }
+  if ('status' in input && input.status !== undefined) {
+    body.status = normalizeEnum(input.status, ['QUEUED', 'RUNNING', 'FINISHED', 'ERROR'] as const)
+  }
+
+  return requestJson<TestExecutionDto>(`/api/executions/${encodeURIComponent(String(id))}`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
+export async function deleteExecution(id: number): Promise<void> {
+  await requestVoid(`/api/executions/${encodeURIComponent(String(id))}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function listCampaigns(params: { projectId: number }): Promise<TestCampaignDto[]> {
+  const query = new URLSearchParams({ projectId: String(params.projectId) })
+  return requestJson<TestCampaignDto[]>(`/api/campaigns?${query.toString()}`, { cache: 'no-store' })
+}
+
+export async function getCampaign(id: number): Promise<TestCampaignDto> {
+  return requestJson<TestCampaignDto>(`/api/campaigns/${encodeURIComponent(String(id))}`, {
+    cache: 'no-store',
+  })
+}
+
+export async function createCampaign(input: TestCampaignCreateRequest): Promise<TestCampaignDto> {
+  return requestJson<TestCampaignDto>('/api/campaigns', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      ...payload,
-      executionType: normalizeEnum(payload.executionType, ['INITIAL', 'RETEST'] as const),
+      projectId: input.projectId,
+      name: input.name,
+      version: input.version ?? null,
+      status: input.status ?? null,
+      startDate: input.startDate ?? null,
+      endDate: input.endDate ?? null,
+      environment: input.environment ?? null,
+      triggerType: input.triggerType ?? null,
+      sessionStatus: input.sessionStatus ?? null,
+      executionStartDate: input.executionStartDate ?? null,
+      executionEndDate: input.executionEndDate ?? null,
+      createdBy: input.createdBy ?? null,
+    }),
+  })
+}
+
+export async function updateCampaign(id: number, input: TestCampaignUpdateRequest): Promise<TestCampaignDto> {
+  return requestJson<TestCampaignDto>(`/api/campaigns/${encodeURIComponent(String(id))}`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+}
+
+export async function attachCampaignTestCases(
+  campaignId: number,
+  testCaseIds: number[],
+): Promise<void> {
+  const response = await fetch(
+    `/api/campaigns/${encodeURIComponent(String(campaignId))}/testcases`,
+    {
+      method: 'PUT',
+      credentials: 'include',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify({ testCaseIds } satisfies TestCampaignSetTestCasesRequest),
+    },
+  )
+
+  if (response.ok) return
+  const message = await readReadableError(response)
+  throw new Error(message)
+}
+
+export async function listTestCases(): Promise<TestCaseDto[]> {
+  return requestJson<TestCaseDto[]>(`/api/cases`, { cache: 'no-store' })
+}
+
+export async function createTestCase(input: TestCaseCreateRequest): Promise<TestCaseDto> {
+  return requestJson<TestCaseDto>(`/api/cases`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      name: input.name,
+      description: input.description ?? null,
+      testType: input.testType ?? null,
+      priority: input.priority ?? null,
+      tool: input.tool ?? null,
+      riskScore: input.riskScore ?? null,
     }),
   })
 }

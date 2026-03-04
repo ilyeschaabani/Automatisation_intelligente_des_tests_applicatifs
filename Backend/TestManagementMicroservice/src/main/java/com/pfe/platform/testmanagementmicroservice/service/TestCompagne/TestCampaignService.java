@@ -1,5 +1,8 @@
 package com.pfe.platform.testmanagementmicroservice.service.TestCompagne;
 
+import com.pfe.platform.testmanagementmicroservice.DTO.TestCampaignCreateRequest;
+import com.pfe.platform.testmanagementmicroservice.DTO.TestCampaignSetTestCasesRequest;
+import com.pfe.platform.testmanagementmicroservice.DTO.TestCampaignUpdateRequest;
 import com.pfe.platform.testmanagementmicroservice.entity.TestCampaign;
 
 import java.util.List;
@@ -11,10 +14,11 @@ public interface TestCampaignService {
 
     TestCampaign findById(Long id);
 
-    TestCampaign create(Long projectId, TestCampaign campaign);
+    TestCampaign create(TestCampaignCreateRequest request);
 
-    TestCampaign update(Long id, TestCampaign incoming);
+    TestCampaign update(Long id, TestCampaignUpdateRequest request);
+
+    TestCampaign setTestCases(Long id, TestCampaignSetTestCasesRequest request);
 
     void delete(Long id);
 }
-

@@ -6,4 +6,3 @@ public enum TestType {
     REGRESSION,
     SECURITY
 }
-

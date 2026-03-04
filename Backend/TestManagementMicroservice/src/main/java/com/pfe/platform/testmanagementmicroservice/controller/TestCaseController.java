@@ -19,8 +19,8 @@ public class TestCaseController {
     }
 
     @GetMapping
-    public List<TestCase> getAll(@RequestParam(name = "suiteId", required = false) Long suiteId) {
-        return (suiteId == null) ? testCaseService.findAll() : testCaseService.findBySuite(suiteId);
+    public List<TestCase> getAll() {
+        return testCaseService.findAll();
     }
 
     @GetMapping("/{id}")
@@ -29,8 +29,8 @@ public class TestCaseController {
     }
 
     @PostMapping
-    public ResponseEntity<TestCase> create(@RequestParam Long suiteId, @RequestBody TestCase testCase) {
-        TestCase created = testCaseService.create(suiteId, testCase);
+    public ResponseEntity<TestCase> create(@RequestBody TestCase testCase) {
+        TestCase created = testCaseService.create(testCase);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 

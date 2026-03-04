@@ -36,8 +36,8 @@ public class TestExecution {
     ExecutionStatus status = ExecutionStatus.QUEUED;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "session_id", nullable = false)
-    TestSession session;
+    @JoinColumn(name = "campaign_id", nullable = false)
+    TestCampaign campaign;
 
     @PrePersist
     void onCreate() {

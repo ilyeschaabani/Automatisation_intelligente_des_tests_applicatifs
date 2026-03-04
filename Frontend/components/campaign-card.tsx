@@ -1,7 +1,13 @@
+"use client"
+
+import { useRouter } from 'next/navigation'
+import { useCallback } from 'react'
+
 import { Badge } from '@/components/ui/badge'
-import { MoreVertical, Play, CheckCircle2, AlertCircle } from 'lucide-react'
+import { MoreVertical, CheckCircle2, AlertCircle } from 'lucide-react'
 
 interface CampaignCardProps {
+  id?: number | string
   name: string
   type: 'Functional' | 'API' | 'Regression'
   status: 'Running' | 'Completed' | 'Failed' | 'Scheduled'
@@ -13,7 +19,7 @@ interface CampaignCardProps {
 }
 
 const statusConfig = {
-  Running: { color: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-400', icon: 'animate-spin' },
+  Running: { color: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-400' },
   Completed: { color: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400' },
   Failed: { color: 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-400' },
   Scheduled: { color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-400' },
@@ -25,7 +31,16 @@ const typeColors = {
   Regression: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-950 dark:text-cyan-400',
 }
 
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+}
+
 export function CampaignCard({
+  id,
   name,
   type,
   status,
@@ -35,11 +50,31 @@ export function CampaignCard({
   failed,
   lastRun,
 }: CampaignCardProps) {
+  const router = useRouter()
   const config = statusConfig[status]
   const typeColor = typeColors[type]
+  const href = id !== undefined && id !== null && String(id).trim()
+    ? `/campaigns/${encodeURIComponent(String(id))}`
+    : `/campaigns/${slugify(name)}`
+
+  const navigate = useCallback(() => {
+    router.push(href)
+  }, [router, href])
 
   return (
-    <div className="bg-card border border-border rounded-lg p-5 hover:shadow-md transition-shadow">
+    <div
+      className="bg-card border border-border rounded-lg p-5 hover:shadow-md transition-shadow cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      role="link"
+      tabIndex={0}
+      aria-label={`Open campaign details: ${name}`}
+      onClick={() => navigate()}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          navigate()
+        }
+      }}
+    >
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
           <h3 className="font-semibold text-foreground">{name}</h3>
@@ -53,7 +88,15 @@ export function CampaignCard({
             </Badge>
           </div>
         </div>
-        <button className="p-2 hover:bg-secondary rounded-lg">
+        <button
+          type="button"
+          className="p-2 hover:bg-secondary rounded-lg"
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+          }}
+          aria-label="Campaign actions"
+        >
           <MoreVertical size={18} className="text-muted-foreground" />
         </button>
       </div>

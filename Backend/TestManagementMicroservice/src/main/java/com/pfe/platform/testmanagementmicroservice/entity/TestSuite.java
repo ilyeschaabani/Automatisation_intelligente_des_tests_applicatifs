@@ -1,12 +1,13 @@
 package com.pfe.platform.testmanagementmicroservice.entity;
 
 import jakarta.persistence.*;
-import lombok.AccessLevel;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+/**
+ * @deprecated TestSuite is removed. Test cases now belong directly to a Project.
+ */
+@Deprecated
 @Entity
 @Getter
 @Setter
@@ -25,6 +26,4 @@ public class TestSuite {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "project_id", nullable = false)
     Project project;
-
 }
-

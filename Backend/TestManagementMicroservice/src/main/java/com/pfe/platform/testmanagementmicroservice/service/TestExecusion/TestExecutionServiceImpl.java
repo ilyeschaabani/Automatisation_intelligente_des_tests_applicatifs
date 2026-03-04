@@ -1,9 +1,9 @@
 package com.pfe.platform.testmanagementmicroservice.service.TestExecusion;
 
+import com.pfe.platform.testmanagementmicroservice.entity.TestCampaign;
 import com.pfe.platform.testmanagementmicroservice.entity.TestExecution;
-import com.pfe.platform.testmanagementmicroservice.entity.TestSession;
+import com.pfe.platform.testmanagementmicroservice.repository.TestCampaignRepository;
 import com.pfe.platform.testmanagementmicroservice.repository.TestExecutionRepository;
-import com.pfe.platform.testmanagementmicroservice.repository.TestSessionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -14,7 +14,7 @@ import java.util.List;
 public class TestExecutionServiceImpl implements TestExecutionService {
 
     private final TestExecutionRepository testExecutionRepository;
-    private final TestSessionRepository testSessionRepository;
+    private final TestCampaignRepository testCampaignRepository;
 
     @Override
     public List<TestExecution> findAll() {
@@ -22,8 +22,8 @@ public class TestExecutionServiceImpl implements TestExecutionService {
     }
 
     @Override
-    public List<TestExecution> findBySession(Long sessionId) {
-        return testExecutionRepository.findBySessionId(sessionId);
+    public List<TestExecution> findByCampaign(Long campaignId) {
+        return testExecutionRepository.findByCampaignId(campaignId);
     }
 
     @Override
@@ -33,11 +33,11 @@ public class TestExecutionServiceImpl implements TestExecutionService {
     }
 
     @Override
-    public TestExecution createBySession(Long sessionId, TestExecution exec) {
-        TestSession session = testSessionRepository.findById(sessionId)
-                .orElseThrow(() -> new IllegalArgumentException("Session not found: " + sessionId));
+    public TestExecution createByCampaign(Long campaignId, TestExecution exec) {
+        TestCampaign campaign = testCampaignRepository.findById(campaignId)
+                .orElseThrow(() -> new IllegalArgumentException("Campaign not found: " + campaignId));
         exec.setId(null);
-        exec.setSession(session);
+        exec.setCampaign(campaign);
         return testExecutionRepository.save(exec);
     }
 

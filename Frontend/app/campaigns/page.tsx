@@ -1,3 +1,5 @@
+"use client"
+
 import { Header } from '@/components/header'
 import { Sidebar } from '@/components/sidebar'
 import { CampaignCard } from '@/components/campaign-card'
@@ -13,90 +15,110 @@ import {
 } from '@/components/ui/select'
 import { Plus, Search } from 'lucide-react'
 
-const allCampaigns = [
-  {
-    name: 'Banking Mobile App - v2.5',
-    type: 'Functional' as const,
-    status: 'Running' as const,
-    progress: 65,
-    tests: 145,
-    passed: 94,
-    failed: 0,
-    lastRun: '5 mins ago',
-  },
-  {
-    name: 'Payment Gateway API Tests',
-    type: 'API' as const,
-    status: 'Completed' as const,
-    progress: 100,
-    tests: 89,
-    passed: 87,
-    failed: 2,
-    lastRun: '2 hours ago',
-  },
-  {
-    name: 'Regression Suite - Production',
-    type: 'Regression' as const,
-    status: 'Scheduled' as const,
-    progress: 0,
-    tests: 234,
-    passed: 0,
-    failed: 0,
-    lastRun: 'Tomorrow 2:00 AM',
-  },
-  {
-    name: 'Core Banking Features',
-    type: 'Functional' as const,
-    status: 'Completed' as const,
-    progress: 100,
-    tests: 112,
-    passed: 110,
-    failed: 2,
-    lastRun: '1 day ago',
-  },
-  {
-    name: 'Authentication Module Tests',
-    type: 'API' as const,
-    status: 'Running' as const,
-    progress: 40,
-    tests: 76,
-    passed: 30,
-    failed: 1,
-    lastRun: '3 mins ago',
-  },
-  {
-    name: 'UI Components - v3.0',
-    type: 'Functional' as const,
-    status: 'Failed' as const,
-    progress: 85,
-    tests: 98,
-    passed: 84,
-    failed: 14,
-    lastRun: '30 mins ago',
-  },
-  {
-    name: 'Database Integration Tests',
-    type: 'Regression' as const,
-    status: 'Completed' as const,
-    progress: 100,
-    tests: 167,
-    passed: 165,
-    failed: 2,
-    lastRun: '5 hours ago',
-  },
-  {
-    name: 'Security & Compliance Checks',
-    type: 'API' as const,
-    status: 'Running' as const,
-    progress: 72,
-    tests: 56,
-    passed: 40,
-    failed: 0,
-    lastRun: '2 mins ago',
-  },
-]
+import { useEffect, useMemo, useState } from 'react'
+import { toast } from '@/hooks/use-toast'
+import { getProjects, listCampaigns, type Project, type TestCampaignDto } from '@/lib/api-client'
+
+type CardStatus = 'Running' | 'Completed' | 'Failed' | 'Scheduled'
+type CardType = 'Functional' | 'API' | 'Regression'
+
+const demoCampaignCard = {
+  name: 'Payment Gateway API Tests',
+  type: 'API' as const,
+  status: 'Running' as const,
+  progress: 65,
+  tests: 89,
+  passed: 87,
+  failed: 2,
+  lastRun: '5 mins ago',
+}
+
+function mapStatus(status: unknown): CardStatus {
+  const value = String(status ?? '').toUpperCase()
+  if (value === 'RUNNING') return 'Running'
+  if (value === 'COMPLETED') return 'Completed'
+  if (value === 'FAILED') return 'Failed'
+  if (value === 'SCHEDULED') return 'Scheduled'
+  return 'Scheduled'
+}
+
+function mapType(_campaign: TestCampaignDto): CardType {
+  return 'Functional'
+}
 
 export default function CampaignsPage() {
+  const [projects, setProjects] = useState<Project[]>([])
+  const [projectsLoading, setProjectsLoading] = useState(true)
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null)
+
+  const [campaigns, setCampaigns] = useState<TestCampaignDto[]>([])
+  const [campaignsLoading, setCampaignsLoading] = useState(false)
+  const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+
+    const run = async () => {
+      setProjectsLoading(true)
+      try {
+        const data = await getProjects()
+        if (cancelled) return
+        const list = Array.isArray(data) ? data : []
+        setProjects(list)
+        if (list.length > 0) setSelectedProjectId((prev) => prev ?? list[0].id)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to load projects'
+        if (!cancelled) {
+          setProjects([])
+          toast({ title: 'Failed to load projects', description: message, variant: 'destructive' })
+        }
+      } finally {
+        if (!cancelled) setProjectsLoading(false)
+      }
+    }
+
+    void run()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!selectedProjectId) {
+      setCampaigns([])
+      return
+    }
+
+    let cancelled = false
+    const run = async () => {
+      setCampaignsLoading(true)
+      try {
+        const data = await listCampaigns({ projectId: selectedProjectId })
+        if (cancelled) return
+        setCampaigns(Array.isArray(data) ? data : [])
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to load campaigns'
+        if (!cancelled) {
+          setCampaigns([])
+          toast({ title: 'Failed to load campaigns', description: message, variant: 'destructive' })
+        }
+      } finally {
+        if (!cancelled) setCampaignsLoading(false)
+      }
+    }
+
+    void run()
+    return () => {
+      cancelled = true
+    }
+  }, [selectedProjectId])
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return campaigns
+    return campaigns.filter((c) => String(c.name ?? '').toLowerCase().includes(q))
+  }, [campaigns, search])
+
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
@@ -117,29 +139,36 @@ export default function CampaignsPage() {
           <div className="flex flex-col md:flex-row gap-4 mb-8">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground size-5" />
-              <Input placeholder="Search campaigns..." className="pl-10" />
+              <Input
+                placeholder="Search campaigns..."
+                className="pl-10"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
             </div>
-            <Select defaultValue="all">
-              <SelectTrigger className="w-full md:w-40">
-                <SelectValue placeholder="Filter by status" />
+            <Select
+              value={selectedProjectId ? String(selectedProjectId) : ''}
+              onValueChange={(v) => setSelectedProjectId(Number(v))}
+              disabled={projectsLoading || projects.length === 0}
+            >
+              <SelectTrigger className="w-full md:w-64">
+                <SelectValue placeholder={projectsLoading ? 'Loading projects…' : 'Select project'} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="running">Running</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="failed">Failed</SelectItem>
-                <SelectItem value="scheduled">Scheduled</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select defaultValue="all-types">
-              <SelectTrigger className="w-full md:w-40">
-                <SelectValue placeholder="Filter by type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all-types">All Types</SelectItem>
-                <SelectItem value="functional">Functional</SelectItem>
-                <SelectItem value="api">API</SelectItem>
-                <SelectItem value="regression">Regression</SelectItem>
+                {projects.length === 0 ? (
+                  <SelectItem value="__none" disabled>
+                    No projects found
+                  </SelectItem>
+                ) : (
+                  projects
+                    .slice()
+                    .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+                    .map((p) => (
+                      <SelectItem key={p.id} value={String(p.id)}>
+                        {p.name}
+                      </SelectItem>
+                    ))
+                )}
               </SelectContent>
             </Select>
             <Button
@@ -155,9 +184,27 @@ export default function CampaignsPage() {
 
           {/* Campaigns Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {allCampaigns.map((campaign) => (
-              <CampaignCard key={campaign.name} {...campaign} />
-            ))}
+            {/* Static demo card kept for UI testing */}
+            <CampaignCard {...demoCampaignCard} />
+
+            {campaignsLoading ? (
+              <p className="text-sm text-muted-foreground">Loading campaigns…</p>
+            ) : (
+              filtered.map((campaign) => (
+                <CampaignCard
+                  key={campaign.id}
+                  id={campaign.id}
+                  name={String(campaign.name ?? 'Untitled campaign')}
+                  type={mapType(campaign)}
+                  status={mapStatus(campaign.status)}
+                  progress={0}
+                  tests={Array.isArray(campaign.testCaseIds) ? campaign.testCaseIds.length : 0}
+                  passed={0}
+                  failed={0}
+                  lastRun="—"
+                />
+              ))
+            )}
           </div>
         </div>
       </main>

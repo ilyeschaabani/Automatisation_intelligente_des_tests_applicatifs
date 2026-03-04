@@ -25,12 +25,11 @@ public class TestReport {
     String summary;
 
     @OneToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "session_id", nullable = false, unique = true)
-    TestSession session;
+    @JoinColumn(name = "campaign_id", nullable = false, unique = true)
+    TestCampaign campaign;
 
     @PrePersist
     void onCreate() {
         if (createdAt == null) createdAt = Instant.now();
     }
 }
-

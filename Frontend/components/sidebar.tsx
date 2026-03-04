@@ -94,7 +94,7 @@ export function Sidebar() {
       <aside
         className={cn(
           'fixed left-0 top-0 bottom-0 w-64 bg-sidebar text-sidebar-foreground border-r border-sidebar-border transition-all duration-300 flex flex-col z-30',
-          'lg:static lg:w-64',
+          'lg:sticky lg:top-0 lg:h-screen lg:w-64',
           !isOpen && 'lg:hidden -translate-x-full'
         )}
       >

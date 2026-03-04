@@ -7,6 +7,10 @@ import lombok.experimental.FieldDefaults;
 
 import java.time.Instant;
 
+/**
+ * @deprecated Sessions are being replaced by campaigns. This entity will be removed.
+ */
+@Deprecated
 @Entity
 @Getter
 @Setter
@@ -41,12 +45,8 @@ public class TestSession {
     @JoinColumn(name = "campaign_id")
     TestCampaign campaign;
 
-    @OneToOne(mappedBy = "session", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
-    TestReport report;
-
     @PrePersist
     void onCreate() {
         if (startDate == null) startDate = Instant.now();
     }
 }
-

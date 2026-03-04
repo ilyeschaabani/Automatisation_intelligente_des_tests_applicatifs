@@ -1,6 +1,11 @@
 package com.pfe.platform.testmanagementmicroservice.controller;
 
+import com.pfe.platform.testmanagementmicroservice.DTO.TestCampaignCreateRequest;
+import com.pfe.platform.testmanagementmicroservice.DTO.TestCampaignDto;
+import com.pfe.platform.testmanagementmicroservice.DTO.TestCampaignSetTestCasesRequest;
+import com.pfe.platform.testmanagementmicroservice.DTO.TestCampaignUpdateRequest;
 import com.pfe.platform.testmanagementmicroservice.entity.TestCampaign;
+import com.pfe.platform.testmanagementmicroservice.service.TestCompagne.TestCampaignMapper;
 import com.pfe.platform.testmanagementmicroservice.service.TestCompagne.TestCampaignService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,24 +24,34 @@ public class TestCampaignController {
     }
 
     @GetMapping
-    public List<TestCampaign> getAll(@RequestParam(name = "projectId", required = false) Long projectId) {
-        return (projectId == null) ? testCampaignService.findAll() : testCampaignService.findByProject(projectId);
+    public List<TestCampaignDto> getAll(@RequestParam(name = "projectId", required = false) Long projectId) {
+        List<TestCampaign> campaigns = (projectId == null)
+                ? testCampaignService.findAll()
+                : testCampaignService.findByProject(projectId);
+
+        return campaigns.stream().map(TestCampaignMapper::toDto).toList();
     }
 
     @GetMapping("/{id}")
-    public TestCampaign getById(@PathVariable Long id) {
-        return testCampaignService.findById(id);
+    public TestCampaignDto getById(@PathVariable Long id) {
+        return TestCampaignMapper.toDto(testCampaignService.findById(id));
     }
 
     @PostMapping
-    public ResponseEntity<TestCampaign> create(@RequestParam Long projectId, @RequestBody TestCampaign campaign) {
-        TestCampaign created = testCampaignService.create(projectId, campaign);
-        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    public ResponseEntity<TestCampaignDto> create(@RequestBody TestCampaignCreateRequest request) {
+        TestCampaign created = testCampaignService.create(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(TestCampaignMapper.toDto(created));
     }
 
     @PutMapping("/{id}")
-    public TestCampaign update(@PathVariable Long id, @RequestBody TestCampaign campaign) {
-        return testCampaignService.update(id, campaign);
+    public TestCampaignDto update(@PathVariable Long id, @RequestBody TestCampaignUpdateRequest request) {
+        return TestCampaignMapper.toDto(testCampaignService.update(id, request));
+    }
+
+    @PutMapping("/{id}/testcases")
+    public TestCampaignDto setTestCases(@PathVariable Long id,
+                                        @RequestBody TestCampaignSetTestCasesRequest request) {
+        return TestCampaignMapper.toDto(testCampaignService.setTestCases(id, request));
     }
 
     @DeleteMapping("/{id}")

@@ -1,9 +1,7 @@
 package com.pfe.platform.testmanagementmicroservice.service.TestCase;
 
 import com.pfe.platform.testmanagementmicroservice.entity.TestCase;
-import com.pfe.platform.testmanagementmicroservice.entity.TestSuite;
 import com.pfe.platform.testmanagementmicroservice.repository.TestCaseRepository;
-import com.pfe.platform.testmanagementmicroservice.repository.TestSuiteRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -14,16 +12,10 @@ import java.util.List;
 public class TestCaseServiceImpl implements TestCaseService {
 
     private final TestCaseRepository testCaseRepository;
-    private final TestSuiteRepository testSuiteRepository;
 
     @Override
     public List<TestCase> findAll() {
         return testCaseRepository.findAll();
-    }
-
-    @Override
-    public List<TestCase> findBySuite(Long suiteId) {
-        return testCaseRepository.findBySuiteId(suiteId);
     }
 
     @Override
@@ -33,11 +25,8 @@ public class TestCaseServiceImpl implements TestCaseService {
     }
 
     @Override
-    public TestCase create(Long suiteId, TestCase testCase) {
-        TestSuite suite = testSuiteRepository.findById(suiteId)
-                .orElseThrow(() -> new IllegalArgumentException("Suite not found: " + suiteId));
+    public TestCase create(TestCase testCase) {
         testCase.setId(null);
-        testCase.setSuite(suite);
         return testCaseRepository.save(testCase);
     }
 

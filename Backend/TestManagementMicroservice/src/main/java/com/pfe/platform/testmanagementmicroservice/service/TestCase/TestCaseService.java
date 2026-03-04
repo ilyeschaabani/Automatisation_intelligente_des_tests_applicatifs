@@ -7,14 +7,11 @@ import java.util.List;
 public interface TestCaseService {
     List<TestCase> findAll();
 
-    List<TestCase> findBySuite(Long suiteId);
-
     TestCase findById(Long id);
 
-    TestCase create(Long suiteId, TestCase testCase);
+    TestCase create(TestCase testCase);
 
     TestCase update(Long id, TestCase incoming);
 
     void delete(Long id);
 }
-

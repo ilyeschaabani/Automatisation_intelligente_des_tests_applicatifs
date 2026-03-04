@@ -39,7 +39,5 @@ public class TestCase {
 
     Double riskScore;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "suite_id", nullable = false)
-    TestSuite suite;
+    // Removed campaign relation: campaigns link to test cases via join table.
 }

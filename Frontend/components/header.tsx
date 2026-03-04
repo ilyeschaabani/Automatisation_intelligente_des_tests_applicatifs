@@ -9,6 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -116,6 +117,8 @@ export function Header() {
             <Bell size={20} className="text-foreground" />
             <span className="absolute top-1 right-1 size-2 bg-red-500 rounded-full" />
           </button>
+
+          <ThemeToggle />
 
           {/* Divider */}
           <div className="w-px h-6 bg-border hidden md:block" />

@@ -1,6 +1,8 @@
 package com.pfe.platform.testmanagementmicroservice.controller;
 
+import com.pfe.platform.testmanagementmicroservice.DTO.TestExecutionDto;
 import com.pfe.platform.testmanagementmicroservice.entity.TestExecution;
+import com.pfe.platform.testmanagementmicroservice.service.TestExecusion.TestExecutionMapper;
 import com.pfe.platform.testmanagementmicroservice.service.TestExecusion.TestExecutionService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,28 +21,29 @@ public class TestExecutionController {
     }
 
     @GetMapping
-    public List<TestExecution> getAll(@RequestParam(name = "sessionId", required = false) Long sessionId) {
-        if (sessionId != null) {
-            return testExecutionService.findBySession(sessionId);
-        }
-        return testExecutionService.findAll();
+    public List<TestExecutionDto> getAll(@RequestParam(name = "campaignId", required = false) Long campaignId) {
+        List<TestExecution> executions = (campaignId != null)
+                ? testExecutionService.findByCampaign(campaignId)
+                : testExecutionService.findAll();
+
+        return executions.stream().map(TestExecutionMapper::toDto).toList();
     }
 
     @GetMapping("/{id}")
-    public TestExecution getById(@PathVariable Long id) {
-        return testExecutionService.findById(id);
+    public TestExecutionDto getById(@PathVariable Long id) {
+        return TestExecutionMapper.toDto(testExecutionService.findById(id));
     }
 
     @PostMapping
-    public ResponseEntity<TestExecution> create(@RequestParam Long sessionId,
-                                               @RequestBody TestExecution execution) {
-        TestExecution created = testExecutionService.createBySession(sessionId, execution);
-        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    public ResponseEntity<TestExecutionDto> create(@RequestParam Long campaignId,
+                                                  @RequestBody TestExecution execution) {
+        TestExecution created = testExecutionService.createByCampaign(campaignId, execution);
+        return ResponseEntity.status(HttpStatus.CREATED).body(TestExecutionMapper.toDto(created));
     }
 
     @PutMapping("/{id}")
-    public TestExecution update(@PathVariable Long id, @RequestBody TestExecution execution) {
-        return testExecutionService.update(id, execution);
+    public TestExecutionDto update(@PathVariable Long id, @RequestBody TestExecution execution) {
+        return TestExecutionMapper.toDto(testExecutionService.update(id, execution));
     }
 
     @DeleteMapping("/{id}")
