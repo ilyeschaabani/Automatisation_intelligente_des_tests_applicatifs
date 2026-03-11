@@ -2,7 +2,6 @@ package com.pfe.platform.authenticationmicroservice.Service.JWT;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import lombok.RequiredArgsConstructor;
@@ -10,52 +9,69 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
-import java.security.Key;
+import javax.crypto.SecretKey;
 import java.util.Date;
 import java.util.Map;
 import java.util.function.Function;
 
 @Service
 @RequiredArgsConstructor
-
 public class JWTserviceImpl implements JWTservice {
 
     @Value("${jwt.secret}")
     private String jwtSecret;
 
+    @Override
     public String generateToken(UserDetails userDetails) {
-        return Jwts.builder().setSubject(userDetails.getUsername())
-                .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 60 * 10))
-                .signWith(getSiginKey(), SignatureAlgorithm.HS512)
+        return Jwts.builder()
+                .subject(userDetails.getUsername())
+                .issuedAt(new Date(System.currentTimeMillis()))
+                .expiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60 * 10))
+                .signWith(getSigningKey())
                 .compact();
     }
-    public String generateRefreshToken(Map<String,Object> claims, UserDetails userDetails) {
-        return Jwts.builder().setClaims(claims).setSubject(userDetails.getUsername())
-                .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + 604800000))
-                .signWith(getSiginKey(),SignatureAlgorithm.HS512)
+
+    @Override
+    public String generateRefreshToken(Map<String, Object> claims, UserDetails userDetails) {
+        return Jwts.builder()
+                .claims(claims)
+                .subject(userDetails.getUsername())
+                .issuedAt(new Date(System.currentTimeMillis()))
+                .expiration(new Date(System.currentTimeMillis() + 604800000L))
+                .signWith(getSigningKey())
                 .compact();
     }
-    private <T> T extractClaim(String token,  Function<Claims,T> claimsResolver) {
+
+    private <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
         final Claims claims = extractAllClaims(token);
         return claimsResolver.apply(claims);
     }
-    private Key getSiginKey() {
+
+    private SecretKey getSigningKey() {
         byte[] keyBytes = Decoders.BASE64.decode(jwtSecret);
         return Keys.hmacShaKeyFor(keyBytes);
     }
+
     private Claims extractAllClaims(String token) {
-        return Jwts.parser().setSigningKey(getSiginKey()).parseClaimsJws(token).getBody();
+        return Jwts.parser()
+                .verifyWith(getSigningKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
     }
+
+    @Override
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
     }
-    public boolean validateToken(String token , UserDetails userDetails) {
-        final String username =extractUsername(token);
-        return (username.equals(userDetails.getUsername()) && !isTokenexpired(token)) ;
+
+    @Override
+    public boolean validateToken(String token, UserDetails userDetails) {
+        final String username = extractUsername(token);
+        return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
     }
-    private boolean isTokenexpired (String token) {
+
+    private boolean isTokenExpired(String token) {
         return extractClaim(token, Claims::getExpiration).before(new Date());
     }
 }

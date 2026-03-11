@@ -13,6 +13,7 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 
@@ -43,6 +44,31 @@ public class User  implements UserDetails {
     String password;
 
     String imageUrl;
+
+    // -----------------------------
+    // GitHub integration
+    // -----------------------------
+
+    /** GitHub numeric user id from https://api.github.com/user */
+    @Column(unique = true, length = 50)
+    String githubId;
+
+    /** GitHub login/username */
+    String githubUsername;
+
+    /** GitHub avatar url */
+    String githubAvatarUrl;
+
+    /** True when a GitHub account is linked */
+    @Column
+    Boolean githubConnected;
+
+    /** Access token encrypted at rest (AES-GCM payload, base64) */
+    @Column(length = 4096)
+    String githubAccessToken;
+
+    /** Timestamp when token was stored (for lifecycle checks/auditing) */
+    Instant githubTokenCreatedAt;
 
     @PrePersist
     @PreUpdate
