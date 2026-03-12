@@ -25,12 +25,18 @@ public class ScannerEngine {
     private final ProjectDetector detector;
     private final List<FrameworkScanner> scanners;
     private final Optional<AiFrameworkDetector> aiDetector;
+    private final GitAuthProperties gitAuthProperties;
 
-    public ScannerEngine(ProjectCloner cloner, ProjectDetector detector, List<FrameworkScanner> scanners, Optional<AiFrameworkDetector> aiDetector) {
+    public ScannerEngine(ProjectCloner cloner,
+                         ProjectDetector detector,
+                         List<FrameworkScanner> scanners,
+                         Optional<AiFrameworkDetector> aiDetector,
+                         GitAuthProperties gitAuthProperties) {
         this.cloner = cloner;
         this.detector = detector;
         this.scanners = scanners;
         this.aiDetector = aiDetector;
+        this.gitAuthProperties = gitAuthProperties;
     }
 
     public ApiContract scan(String projectPath, String repoUrl) {
@@ -54,11 +60,16 @@ public class ScannerEngine {
         boolean deleteAfter = false;
         String source;
 
+        // fallback defaults (only if request didn't provide creds)
+        String effToken = (gitToken != null && !gitToken.isBlank()) ? gitToken : gitAuthProperties.getToken();
+        String effUsername = (gitUsername != null && !gitUsername.isBlank()) ? gitUsername : gitAuthProperties.getUsername();
+        String effPassword = (gitPassword != null && !gitPassword.isBlank()) ? gitPassword : gitAuthProperties.getPassword();
+
         try {
             if (repoUrl != null && !repoUrl.isBlank()) {
                 Instant t0 = Instant.now();
                 log.info("scan.clone.start repoUrl={}", repoUrl);
-                repoRoot = cloner.cloneToTemp(repoUrl, gitToken, gitUsername, gitPassword);
+                repoRoot = cloner.cloneToTemp(repoUrl, effToken, effUsername, effPassword);
                 deleteAfter = true;
                 source = repoUrl;
                 log.info("scan.clone.done repoRoot={} tookMs={}", repoRoot, Duration.between(t0, Instant.now()).toMillis());
@@ -132,6 +143,21 @@ public class ScannerEngine {
             contract.setMetadata(metadata);
             log.info("scan.done status=OK totalMs={}", Duration.between(start, Instant.now()).toMillis());
             return contract;
+        } catch (IllegalStateException e) {
+            // If clone failed due to missing credentials, return a user-friendly contract instead of a hard 500.
+            if (repoUrl != null && e.getCause() != null && e.getCause().getClass().getName().contains("TransportException")) {
+                String msg = String.valueOf(e.getCause().getMessage());
+                if (msg.toLowerCase().contains("authentication is required")) {
+                    ApiContract contract = ApiContract.builder()
+                            .source(repoUrl)
+                            .metadata(ProjectMetadata.builder().framework(ProjectMetadata.Framework.UNKNOWN).build())
+                            .build();
+                    contract.getIssues().add("Git authentication required for this repository. Provide gitAuth.token (recommended) or gitUsername/gitPassword.");
+                    log.info("scan.done status=CLONE_AUTH_REQUIRED totalMs={}", Duration.between(start, Instant.now()).toMillis());
+                    return contract;
+                }
+            }
+            throw e;
         } finally {
             if (deleteAfter) {
                 Instant t0 = Instant.now();

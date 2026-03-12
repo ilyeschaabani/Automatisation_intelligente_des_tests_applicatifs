@@ -25,12 +25,11 @@ class GitHubTokenManagerTests {
     }
 
     @Test
-    void decrypt_rejectsBadFormat() {
+    void decrypt_plaintextToken_isReturnedAsIs_forBackwardCompatibility() {
         byte[] key = new byte[32];
         String base64Key = java.util.Base64.getEncoder().encodeToString(key);
         GitHubTokenManager mgr = new GitHubTokenManager(base64Key);
 
-        assertThrows(IllegalStateException.class, () -> mgr.decrypt("not-a-valid-token"));
+        assertEquals("not-a-valid-token", mgr.decrypt("not-a-valid-token"));
     }
 }
-

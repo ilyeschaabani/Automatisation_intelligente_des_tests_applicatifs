@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -47,16 +48,32 @@ public class JWtAuthFIlter extends OncePerRequestFilter {
             return;
         }
 
-        final String userEmail = jwtUtils.extractUsername(jwt);
-        if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            UserDetails userDetails = UserUtils.userDetailsService().loadUserByUsername(userEmail);
+        final String userEmail;
+        try {
+            userEmail = jwtUtils.extractUsername(jwt);
+        } catch (Exception ex) {
+            // malformed token
+            logger.debug("Failed to extract username from JWT", ex);
+            filterChain.doFilter(request, response);
+            return;
+        }
 
-            if (jwtUtils.validateToken(jwt, userDetails)) {
-                UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken =
-                        new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-                SecurityContextHolder.getContext().setAuthentication(usernamePasswordAuthenticationToken);
-            } else {
-                logger.debug("Invalid JWT token for user: {}", userEmail);
+        if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            try {
+                UserDetails userDetails = UserUtils.userDetailsService().loadUserByUsername(userEmail);
+
+                if (jwtUtils.validateToken(jwt, userDetails)) {
+                    UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken =
+                            new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                    SecurityContextHolder.getContext().setAuthentication(usernamePasswordAuthenticationToken);
+                } else {
+                    logger.debug("Invalid JWT token for user: {}", userEmail);
+                }
+            } catch (UsernameNotFoundException ex) {
+                // Token refers to a user that no longer exists -> treat as unauthenticated.
+                logger.debug("JWT user no longer exists: {}", userEmail);
+            } catch (Exception ex) {
+                logger.debug("JWT authentication failed", ex);
             }
         }
 

@@ -32,12 +32,116 @@ import { Plus, Search } from 'lucide-react'
 import {
   createProject,
   getProjects,
-  inferGitProviderFromUrl,
-  resolveRepo,
   type Project,
   type ProjectType,
   type SourceType,
 } from '@/lib/api-client'
+
+type GitHubMeResponse = {
+  githubConnected: boolean
+  githubId?: string
+  githubUsername?: string
+  githubAvatarUrl?: string
+  githubTokenCreatedAt?: string
+}
+
+type RepoRow = {
+  key: string
+  name: string
+  owner: string
+  isPrivate: boolean
+  url: string
+  updatedAt?: string
+}
+
+type GitHubConnectionState =
+  | { kind: 'idle' }
+  | { kind: 'loading' }
+  | { kind: 'notConfigured' }
+  | { kind: 'unauthorized' }
+  | { kind: 'notConnected' }
+  | { kind: 'connected'; me: GitHubMeResponse }
+  | { kind: 'error'; message: string }
+
+type RepoListState =
+  | { kind: 'idle' }
+  | { kind: 'loading' }
+  | { kind: 'available'; repos: RepoRow[] }
+  | { kind: 'unavailable' }
+  | { kind: 'error'; message: string }
+
+function normalizeRepos(payload: unknown): RepoRow[] {
+  const list: unknown[] = Array.isArray(payload)
+    ? payload
+    : payload && typeof payload === 'object' && Array.isArray((payload as any).repos)
+      ? ((payload as any).repos as unknown[])
+      : []
+
+  return list
+    .map((repo, idx) => {
+      if (!repo || typeof repo !== 'object') return null
+      const r = repo as any
+
+      const name: string =
+        typeof r.name === 'string'
+          ? r.name
+          : typeof r.full_name === 'string'
+            ? String(r.full_name).split('/').slice(-1)[0]
+            : ''
+
+      const owner: string =
+        typeof r.owner === 'string'
+          ? r.owner
+          : r.owner && typeof r.owner === 'object' && typeof r.owner.login === 'string'
+            ? r.owner.login
+            : typeof r.full_name === 'string'
+              ? String(r.full_name).split('/')[0] ?? ''
+              : ''
+
+      const url: string =
+        typeof r.html_url === 'string'
+          ? r.html_url
+          : typeof r.url === 'string'
+            ? r.url
+            : ''
+
+      const isPrivate = Boolean(r.private)
+
+      const updatedAt: string | undefined =
+        typeof r.updated_at === 'string'
+          ? r.updated_at
+          : typeof r.updatedAt === 'string'
+            ? r.updatedAt
+            : undefined
+
+      const key =
+        typeof r.id === 'number' || typeof r.id === 'string'
+          ? String(r.id)
+          : `${owner}/${name || 'repo'}:${idx}`
+
+      if (!name) return null
+      return { key, name, owner, isPrivate, url, updatedAt }
+    })
+    .filter(Boolean) as RepoRow[]
+}
+
+async function githubApiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL
+  if (!baseUrl) throw new Error('NEXT_PUBLIC_API_URL is not configured')
+
+  const normalizedBase = baseUrl.replace(/\/+$/, '')
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  const url = `${normalizedBase}${normalizedPath}`
+
+  return fetch(url, {
+    ...init,
+    credentials: 'include',
+    cache: init.cache ?? 'no-store',
+    headers: {
+      ...(init.headers ?? {}),
+    },
+  })
+}
 
 const statusStyle: Record<'Deployed' | 'Not deployed', string> = {
   Deployed: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400',
@@ -68,25 +172,24 @@ function getType(project: Project): string {
   return value
 }
 
-function getDefaultBranch(project: Project): string {
-  return String(project.technologyStack ?? '—')
-}
-
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isResolvingRepo, setIsResolvingRepo] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [repositoryUrl, setRepositoryUrl] = useState('')
   const [projectType, setProjectType] = useState<ProjectType>('WEB')
   const [sourceType, setSourceType] = useState<SourceType>('GIT')
-  const [gitTokenId, setGitTokenId] = useState('')
-  const [technologyStack, setTechnologyStack] = useState('')
   const [deployed, setDeployed] = useState(false)
+
+  const [gitHubConnection, setGitHubConnection] = useState<GitHubConnectionState>({
+    kind: 'idle',
+  })
+  const [gitHubRepos, setGitHubRepos] = useState<RepoListState>({ kind: 'idle' })
+  const [selectedRepoKey, setSelectedRepoKey] = useState('')
 
   const loadProjects = async () => {
     setIsLoading(true)
@@ -123,10 +226,111 @@ export default function ProjectsPage() {
     setRepositoryUrl('')
     setProjectType('WEB')
     setSourceType('GIT')
-    setGitTokenId('')
-    setTechnologyStack('')
     setDeployed(false)
+    setSelectedRepoKey('')
   }
+
+  const connectUrl = useMemo(() => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL
+    if (!apiUrl) return ''
+    return `${apiUrl.replace(/\/+$/, '')}/api/github/connect`
+  }, [])
+
+  const loadGitHubInfo = async () => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL
+    if (!apiUrl) {
+      setGitHubConnection({ kind: 'notConfigured' })
+      setGitHubRepos({ kind: 'idle' })
+      return
+    }
+
+    setGitHubConnection({ kind: 'loading' })
+    setGitHubRepos({ kind: 'loading' })
+
+    try {
+      const meRes = await githubApiFetch('/api/github/me')
+
+      if (meRes.status === 401) {
+        setGitHubConnection({ kind: 'unauthorized' })
+        setGitHubRepos({ kind: 'idle' })
+        return
+      }
+
+      if (meRes.status === 404 || meRes.status === 400) {
+        setGitHubConnection({ kind: 'notConnected' })
+        setGitHubRepos({ kind: 'idle' })
+        return
+      }
+
+      if (!meRes.ok) {
+        const text = await meRes.text().catch(() => '')
+        setGitHubConnection({
+          kind: 'error',
+          message: `Unable to load GitHub status (${meRes.status})${text ? `: ${text}` : ''}`,
+        })
+        setGitHubRepos({ kind: 'idle' })
+        return
+      }
+
+      const meData = (await meRes.json().catch(() => null)) as unknown
+      if (!meData || typeof meData !== 'object') {
+        setGitHubConnection({ kind: 'error', message: 'Unexpected response from GitHub status.' })
+        setGitHubRepos({ kind: 'idle' })
+        return
+      }
+
+      const me = meData as GitHubMeResponse
+      if (!me.githubConnected) {
+        setGitHubConnection({ kind: 'notConnected' })
+        setGitHubRepos({ kind: 'idle' })
+        return
+      }
+
+      setGitHubConnection({ kind: 'connected', me })
+
+      const reposRes = await githubApiFetch('/api/github/repos')
+      if (reposRes.status === 404) {
+        setGitHubRepos({ kind: 'unavailable' })
+        return
+      }
+
+      if (!reposRes.ok) {
+        const text = await reposRes.text().catch(() => '')
+        setGitHubRepos({
+          kind: 'error',
+          message: `Unable to load repos (${reposRes.status})${text ? `: ${text}` : ''}`,
+        })
+        return
+      }
+
+      const reposData = (await reposRes.json().catch(() => null)) as unknown
+      const normalized = normalizeRepos(reposData)
+      setGitHubRepos({ kind: 'available', repos: normalized })
+    } catch (error) {
+      setGitHubConnection({
+        kind: 'error',
+        message: error instanceof Error ? error.message : 'Network error',
+      })
+      setGitHubRepos({ kind: 'idle' })
+    }
+  }
+
+  useEffect(() => {
+    if (!isCreateOpen) return
+    if (sourceType !== 'GIT') return
+    void loadGitHubInfo()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCreateOpen, sourceType])
+
+  useEffect(() => {
+    setSelectedRepoKey('')
+    setRepositoryUrl('')
+    if (sourceType !== 'GIT') {
+      setGitHubConnection({ kind: 'idle' })
+      setGitHubRepos({ kind: 'idle' })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceType])
 
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -134,13 +338,22 @@ export default function ProjectsPage() {
     setFormError(null)
 
     try {
+      if (sourceType === 'GIT') {
+        if (gitHubConnection.kind !== 'connected') {
+          setFormError('GitHub must be connected to create a GIT project.')
+          return
+        }
+        if (!repositoryUrl.trim()) {
+          setFormError('Please select a repository.')
+          return
+        }
+      }
+
       await createProject({
         name,
         projectType,
         sourceType,
         repositoryUrl: repositoryUrl.trim() ? repositoryUrl.trim() : null,
-        gitTokenId: gitTokenId.trim() ? gitTokenId.trim() : null,
-        technologyStack: technologyStack.trim() ? technologyStack.trim() : null,
         deployed,
       })
       setIsCreateOpen(false)
@@ -152,40 +365,6 @@ export default function ProjectsPage() {
       setFormError(message)
     } finally {
       setIsSubmitting(false)
-    }
-  }
-
-  const onAutoFill = async () => {
-    const url = repositoryUrl.trim()
-    if (!url) return
-
-    setIsResolvingRepo(true)
-    setFormError(null)
-    try {
-      if (sourceType !== 'GIT') {
-        setFormError('Auto-fill is available only when Source type is GIT.')
-        return
-      }
-
-      const inferredProvider = inferGitProviderFromUrl(url)
-      if (!inferredProvider) {
-        setFormError('Cannot infer provider from URL. Use a GitHub/GitLab URL.')
-        return
-      }
-
-      const resolved = await resolveRepo({ repositoryUrl: url, provider: inferredProvider })
-
-      const resolvedName = resolved.repo ?? resolved.name
-      const resolvedUrl = resolved.htmlUrl ?? resolved.repositoryUrl
-
-      if (!name.trim() && resolvedName) setName(resolvedName)
-      if (resolvedUrl) setRepositoryUrl(resolvedUrl)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to auto-fill'
-      console.error('Failed to auto-fill repository details', error)
-      setFormError(message)
-    } finally {
-      setIsResolvingRepo(false)
     }
   }
 
@@ -232,26 +411,6 @@ export default function ProjectsPage() {
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="projectRepoUrl">Repository URL</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id="projectRepoUrl"
-                        value={repositoryUrl}
-                        onChange={(e) => setRepositoryUrl(e.target.value)}
-                        placeholder="https://github.com/org/repo"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={onAutoFill}
-                        disabled={isResolvingRepo || !repositoryUrl.trim()}
-                      >
-                        {isResolvingRepo ? 'Auto-filling…' : 'Auto-fill'}
-                      </Button>
-                    </div>
-                  </div>
-
                   {formError ? (
                     <p className="text-sm text-destructive">{formError}</p>
                   ) : null}
@@ -281,31 +440,74 @@ export default function ProjectsPage() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="GIT">GIT</SelectItem>
-                          <SelectItem value="URL">URL</SelectItem>
+                          <SelectItem value="LOCAL">LOCAL</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="projectGitToken">Git token id</Label>
-                    <Input
-                      id="projectGitToken"
-                      value={gitTokenId}
-                      onChange={(e) => setGitTokenId(e.target.value)}
-                      placeholder="Optional"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="projectTechStack">Technology stack</Label>
-                    <Input
-                      id="projectTechStack"
-                      value={technologyStack}
-                      onChange={(e) => setTechnologyStack(e.target.value)}
-                      placeholder="Optional"
-                    />
-                  </div>
+                  {sourceType === 'GIT' ? (
+                    <div className="space-y-2">
+                      <Label>Repository</Label>
+                      {gitHubConnection.kind === 'notConfigured' ? (
+                        <p className="text-sm text-muted-foreground">
+                          Missing NEXT_PUBLIC_API_URL configuration.
+                        </p>
+                      ) : gitHubConnection.kind === 'unauthorized' ? (
+                        <p className="text-sm text-muted-foreground">Please sign in to connect GitHub.</p>
+                      ) : gitHubConnection.kind === 'notConnected' ? (
+                        <div className="space-y-2">
+                          <p className="text-sm text-muted-foreground">
+                            GitHub is not connected. Connect it to select a repository.
+                          </p>
+                          <Button asChild disabled={!connectUrl}>
+                            <a href={connectUrl}>Connect GitHub Account</a>
+                          </Button>
+                        </div>
+                      ) : gitHubConnection.kind === 'error' ? (
+                        <p className="text-sm text-destructive">{gitHubConnection.message}</p>
+                      ) : gitHubRepos.kind === 'idle' || gitHubRepos.kind === 'loading' ? (
+                        <p className="text-sm text-muted-foreground">Loading repositories…</p>
+                      ) : gitHubRepos.kind === 'unavailable' ? (
+                        <p className="text-sm text-muted-foreground">Repository listing is not available.</p>
+                      ) : gitHubRepos.kind === 'error' ? (
+                        <p className="text-sm text-destructive">{gitHubRepos.message}</p>
+                      ) : gitHubRepos.repos.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No repositories found.</p>
+                      ) : (
+                        <Select
+                          value={selectedRepoKey}
+                          onValueChange={(v) => {
+                            setSelectedRepoKey(v)
+                            const repo = gitHubRepos.repos.find((r) => r.key === v) ?? null
+                            if (repo?.url) setRepositoryUrl(repo.url)
+                            if (!name.trim() && repo?.name) setName(repo.name)
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a repository" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {gitHubRepos.repos.map((repo) => (
+                              <SelectItem key={repo.key} value={repo.key}>
+                                {repo.owner}/{repo.name}{repo.isPrivate ? ' (private)' : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Label htmlFor="projectRepoUrl">Local path (optional)</Label>
+                      <Input
+                        id="projectRepoUrl"
+                        value={repositoryUrl}
+                        onChange={(e) => setRepositoryUrl(e.target.value)}
+                        placeholder="C:\\path\\to\\project"
+                      />
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-between rounded-lg border border-border p-3">
                     <div>
@@ -372,7 +574,7 @@ export default function ProjectsPage() {
                   </Badge>
                 </div>
 
-                <div className="grid grid-cols-3 gap-4 mt-6">
+                <div className="grid grid-cols-2 gap-4 mt-6">
                   <div>
                     <p className="text-xs text-muted-foreground">Type</p>
                     <p className="text-sm font-semibold text-foreground mt-1">
@@ -383,12 +585,6 @@ export default function ProjectsPage() {
                     <p className="text-xs text-muted-foreground">Source</p>
                     <p className="text-sm font-semibold text-foreground mt-1">
                       {getProvider(project)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Tech stack</p>
-                    <p className="text-sm font-semibold text-foreground mt-1">
-                      {getDefaultBranch(project)}
                     </p>
                   </div>
                 </div>

@@ -1,5 +1,5 @@
 export type ProjectType = 'WEB' | 'MOBILE' | 'API' | 'DESKTOP' | 'OTHER'
-export type SourceType = 'GIT' | 'URL'
+export type SourceType = 'GIT' | 'LOCAL'
 
 export type Project = {
   id: number
@@ -7,8 +7,6 @@ export type Project = {
   projectType: ProjectType
   sourceType: SourceType
   repositoryUrl: string | null
-  gitTokenId: string | null
-  technologyStack: string | null
   deployed: boolean
   createdAt?: string | null
 }
@@ -18,8 +16,6 @@ export type CreateProjectPayload = {
   projectType: ProjectType
   sourceType: SourceType
   repositoryUrl?: string | null
-  gitTokenId?: string | null
-  technologyStack?: string | null
   deployed: boolean
 }
 
@@ -257,7 +253,7 @@ export async function createProject(payload: CreateProjectPayload): Promise<Proj
   const normalizedPayload = {
     ...payload,
     projectType: normalizeEnum(payload.projectType, ['WEB', 'MOBILE', 'API', 'DESKTOP', 'OTHER'] as const),
-    sourceType: normalizeEnum(payload.sourceType, ['GIT', 'URL'] as const),
+    sourceType: normalizeEnum(payload.sourceType, ['GIT', 'LOCAL'] as const),
   }
 
   return requestJson<Project>('/api/projects', {
