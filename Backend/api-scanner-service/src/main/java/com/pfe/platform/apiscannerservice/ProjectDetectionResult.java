@@ -1,4 +1,4 @@
-package com.pfe.platform.apiscannerservice.Model;
+package com.pfe.platform.apiscannerservice;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

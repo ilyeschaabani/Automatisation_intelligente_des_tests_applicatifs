@@ -2,7 +2,6 @@ package com.pfe.platform.apiscannerservice.Service;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
 
 /**
  * Optional default Git authentication.
@@ -11,7 +10,6 @@ import org.springframework.stereotype.Component;
  * Prefer providing a token per request for private repos.
  */
 @Data
-@Component
 @ConfigurationProperties(prefix = "scanner.git")
 public class GitAuthProperties {
     /** GitHub/GitLab Personal Access Token (PAT). */
@@ -23,3 +21,4 @@ public class GitAuthProperties {
     /** Optional basic auth password. */
     private String password;
 }
+

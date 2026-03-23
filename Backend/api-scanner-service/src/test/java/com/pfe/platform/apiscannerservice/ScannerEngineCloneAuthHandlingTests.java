@@ -1,11 +1,5 @@
 package com.pfe.platform.apiscannerservice;
 
-import com.pfe.platform.apiscannerservice.Model.ApiContract;
-import com.pfe.platform.apiscannerservice.Model.ProjectDetectionResult;
-import com.pfe.platform.apiscannerservice.Model.ProjectMetadata;
-import com.pfe.platform.apiscannerservice.Scanner.FrameworkScanner;
-import com.pfe.platform.apiscannerservice.Service.*;
-import com.pfe.platform.apiscannerservice.Util.ProjectCloner;
 import org.eclipse.jgit.errors.TransportException;
 import org.junit.jupiter.api.Test;
 
@@ -38,7 +32,15 @@ public class ScannerEngineCloneAuthHandlingTests {
         GitAuthProperties props = new GitAuthProperties();
         List<FrameworkScanner> scanners = List.of();
 
-        ScannerEngine engine = new ScannerEngine(cloner, detector, scanners, Optional.empty(), props);
+        ScannerEngine engine = new ScannerEngine(
+                cloner,
+                detector,
+                scanners,
+                Optional.empty(),
+                props,
+                ScannerEngine.DetectionMode.HEURISTIC_ONLY,
+                true
+        );
 
         ApiContract res = engine.scan(null, "https://github.com/example/private-repo");
         assertNotNull(res);

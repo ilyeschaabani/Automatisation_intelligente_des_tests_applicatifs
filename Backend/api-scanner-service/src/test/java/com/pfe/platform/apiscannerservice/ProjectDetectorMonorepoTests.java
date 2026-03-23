@@ -1,8 +1,5 @@
 package com.pfe.platform.apiscannerservice;
 
-import com.pfe.platform.apiscannerservice.Model.ProjectDetectionResult;
-import com.pfe.platform.apiscannerservice.Model.ProjectMetadata;
-import com.pfe.platform.apiscannerservice.Service.ProjectDetector;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

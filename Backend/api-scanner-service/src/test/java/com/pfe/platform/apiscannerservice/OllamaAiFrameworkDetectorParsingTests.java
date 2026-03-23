@@ -1,8 +1,6 @@
 package com.pfe.platform.apiscannerservice;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.pfe.platform.apiscannerservice.Model.ProjectMetadata;
-import com.pfe.platform.apiscannerservice.Service.OllamaAiFrameworkDetector;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -10,7 +8,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 public class OllamaAiFrameworkDetectorParsingTests {
@@ -54,4 +51,3 @@ public class OllamaAiFrameworkDetectorParsingTests {
         assertEquals(ProjectMetadata.Framework.SPRING_BOOT, fw);
     }
 }
-

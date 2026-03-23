@@ -1,4 +1,4 @@
-package com.pfe.platform.apiscannerservice.Model;
+package com.pfe.platform.apiscannerservice;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -20,6 +20,12 @@ public class ProjectMetadata {
         FASTAPI,
         DJANGO,
         FLASK,
+        LARAVEL,
+        SYMFONY,
+        RAILS,
+        GIN,
+        QUARKUS,
+        MICRONAUT,
         UNKNOWN
     }
 
@@ -29,4 +35,3 @@ public class ProjectMetadata {
     @Builder.Default
     private Map<String, String> hints = new HashMap<>();
 }
-
