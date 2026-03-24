@@ -120,7 +120,7 @@ class Pipeline:
             self.logger.info("Starting pipeline", repo_url=repo_url, branch=branch)
 
             # Step 1: Clone repository
-            repo_path, was_cached = self.repo_manager.clone_repository(repo_url, branch)
+            repo_path, was_cached, repo_id = self.repo_manager.clone_repository(repo_url, branch, keep_repo=keep_repo)
             self.file_scanner.repo_path = repo_path
             self.route_resolver.repo_path = repo_path
             self.route_resolver.file_scanner = self.file_scanner
@@ -158,13 +158,13 @@ class Pipeline:
             self.logger.info("Generating OpenAPI specification")
             openapi_spec = OpenAPISpec.from_endpoints(
                 endpoints=final_endpoints,
-                title=f"API Specification - {repo_path.name}",
+                title=f"API Specification - {repo_id}",
                 description=f"Auto-generated from repository {repo_url}",
                 version="1.0.0"
             )
 
             # Step 8: Save outputs
-            self._save_outputs(openapi_spec, all_endpoints, repo_path.name)
+            self._save_outputs(openapi_spec, all_endpoints, repo_id)
 
             # Return results (cleanup happens in finally block)
             result = {
@@ -194,7 +194,7 @@ class Pipeline:
         finally:
             # Ensure cleanup happens in all cases (success or failure)
             # Keep repo only if explicitly requested OR if it was cached (to reuse later)
-            should_cleanup = repo_path and not keep_repo and not was_cached
+            should_cleanup = repo_path and not keep_repo
             
             if should_cleanup:
                 self.logger.info("Cleaning up repository", repo_path=str(repo_path))
@@ -290,7 +290,7 @@ class Pipeline:
                 file_path = Path(parse_result.file_path) if isinstance(parse_result.file_path, str) else parse_result.file_path
                 language = self.file_scanner.get_language_from_extension(file_path)
                 
-                if language not in ['javascript', 'typescript', 'js', 'ts', 'jsx', 'tsx', 'python', 'py', 'java']:
+                if language not in ['javascript', 'typescript', 'js', 'ts', 'jsx', 'tsx', 'python', 'py', 'java', 'php']:
                     continue
                 
                 # Read file content

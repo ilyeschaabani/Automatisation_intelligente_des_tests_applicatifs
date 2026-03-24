@@ -252,6 +252,219 @@ class RegexExtractor:
 
         return endpoints
 
+    def extract_from_php(self, code: str, file_path: Path) -> List[Endpoint]:
+        """Extract endpoints from PHP code (Symfony routes via attributes/annotations)."""
+        endpoints: List[Endpoint] = []
+        lines = code.split("\n")
+
+        class_prefix: str = ""
+
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+
+            # ========== PHP 8 attributes: #[Route(...)] ==========
+            if "#[" in line and "Route" in line:
+                attr_block, end_index = self._collect_php_attribute_block(lines, i)
+                if attr_block and self._looks_like_symfony_route_attr(attr_block):
+                    route_info = self._parse_symfony_route_args(attr_block)
+                    if route_info:
+                        target_kind, target_name = self._peek_php_next_definition(lines, end_index + 1)
+                        if target_kind == "class" and route_info.get("path"):
+                            class_prefix = route_info["path"]
+                        else:
+                            endpoints.extend(
+                                self._symfony_route_to_endpoints(
+                                    route_info=route_info,
+                                    file_path=file_path,
+                                    line_number=i + 1,
+                                    router_prefix=class_prefix,
+                                    function_name=target_name if target_kind == "function" else None,
+                                    source_pattern="symfony_attribute",
+                                )
+                            )
+                i = max(i + 1, end_index + 1)
+                continue
+
+            # ========== Docblock annotations: @Route(...) ==========
+            if "@Route" in line:
+                ann_block, end_index = self._collect_php_annotation_block(lines, i)
+                if ann_block and "@Route" in ann_block:
+                    route_info = self._parse_symfony_route_args(ann_block)
+                    if route_info and route_info.get("path"):
+                        target_kind, target_name = self._peek_php_next_definition(lines, end_index + 1)
+                        if target_kind == "class":
+                            class_prefix = route_info["path"]
+                        else:
+                            endpoints.extend(
+                                self._symfony_route_to_endpoints(
+                                    route_info=route_info,
+                                    file_path=file_path,
+                                    line_number=i + 1,
+                                    router_prefix=class_prefix,
+                                    function_name=target_name if target_kind == "function" else None,
+                                    source_pattern="symfony_annotation",
+                                )
+                            )
+                i = max(i + 1, end_index + 1)
+                continue
+
+            i += 1
+
+        return endpoints
+
+    def _collect_php_attribute_block(self, lines: List[str], start_index: int) -> tuple[Optional[str], int]:
+        """Collect a PHP attribute block starting at start_index."""
+        collected: List[str] = []
+        i = start_index
+        while i < len(lines):
+            collected.append(lines[i])
+            if "]" in lines[i]:
+                return "\n".join(collected), i
+            i += 1
+        return None, start_index
+
+    def _collect_php_annotation_block(self, lines: List[str], start_index: int) -> tuple[Optional[str], int]:
+        """Collect a PHP annotation line (may span multiple lines until a closing ')')."""
+        collected: List[str] = []
+        i = start_index
+        open_parens = 0
+        while i < len(lines):
+            chunk = lines[i]
+            collected.append(chunk)
+            open_parens += chunk.count("(")
+            open_parens -= chunk.count(")")
+            if "@Route" in "\n".join(collected) and open_parens <= 0 and ")" in chunk:
+                return "\n".join(collected), i
+            # In practice @Route(...) usually ends on same line; cap lookahead to avoid runaway
+            if i - start_index >= 10:
+                break
+            i += 1
+        return "\n".join(collected), min(i, len(lines) - 1)
+
+    def _looks_like_symfony_route_attr(self, attr_block: str) -> bool:
+        # Match #[Route(...)] or #[\Symfony\Component\Routing\Annotation\Route(...)]
+        return bool(re.search(r"#\[\s*(?:\\?[\\\w]+\\)*Route\s*\(", attr_block))
+
+    def _peek_php_next_definition(self, lines: List[str], start_index: int) -> tuple[str, Optional[str]]:
+        """Find the next class or function declaration after a route definition."""
+        for j in range(start_index, min(len(lines), start_index + 15)):
+            l = lines[j].strip()
+            if not l:
+                continue
+            if l.startswith("//"):
+                continue
+            if l.startswith("*") or l.startswith("/*") or l.startswith("*/"):
+                continue
+
+            class_match = re.search(r"\bclass\s+(\w+)", l)
+            if class_match:
+                return "class", class_match.group(1)
+
+            fn_match = re.search(r"\bfunction\s+(\w+)\s*\(", l)
+            if fn_match:
+                return "function", fn_match.group(1)
+
+        return "unknown", None
+
+    def _parse_symfony_route_args(self, route_block: str) -> Optional[Dict[str, object]]:
+        """Parse Symfony Route arguments from an attribute/annotation block."""
+        # Extract the parentheses content
+        paren_match = re.search(r"Route\s*\((.*)\)", route_block, flags=re.DOTALL)
+        if not paren_match:
+            paren_match = re.search(r"@Route\s*\((.*)\)", route_block, flags=re.DOTALL)
+        if not paren_match:
+            return None
+
+        args = paren_match.group(1)
+
+        # Remove trailing attribute/annotation noise
+        args = args.strip()
+
+        # Path: first positional string OR named path: "..." / path="..."
+        path: Optional[str] = None
+        pos_path = re.search(r"^\s*['\"]([^'\"]+)['\"]", args)
+        if pos_path:
+            path = pos_path.group(1)
+        else:
+            named_path = re.search(r"\bpath\s*[:=]\s*['\"]([^'\"]+)['\"]", args)
+            if named_path:
+                path = named_path.group(1)
+
+        # Methods: methods: ['GET', 'POST'] or methods={"GET"} etc.
+        methods: Optional[List[str]] = None
+        methods_match = re.search(r"\bmethods\s*[:=]\s*(\[[^\]]*\]|\{[^}]*\}|['\"][^'\"]+['\"])", args, flags=re.DOTALL)
+        if methods_match:
+            raw = methods_match.group(1).strip()
+            methods = self._parse_methods_list(raw)
+
+        return {
+            "path": path,
+            "methods": methods,
+        }
+
+    def _parse_methods_list(self, raw: str) -> List[str]:
+        """Parse methods from Symfony Route syntax into lowercase HTTP method strings."""
+        # Normalize wrappers
+        raw = raw.strip()
+        if (raw.startswith("'") and raw.endswith("'")) or (raw.startswith('"') and raw.endswith('"')):
+            raw = raw[1:-1]
+            items = [raw]
+        else:
+            # Strip [] or {}
+            if (raw.startswith("[") and raw.endswith("]")) or (raw.startswith("{") and raw.endswith("}")):
+                raw = raw[1:-1]
+            # Split on commas
+            items = [p.strip() for p in raw.split(",") if p.strip()]
+
+        normalized: List[str] = []
+        for item in items:
+            # Strip quotes
+            item = item.strip()
+            item = item.strip("'\"")
+            item_upper = item.upper()
+            if item_upper:
+                normalized.append(item_upper.lower())
+        # Filter to supported methods
+        return [m for m in normalized if m in self.http_methods]
+
+    def _symfony_route_to_endpoints(
+        self,
+        route_info: Dict[str, object],
+        file_path: Path,
+        line_number: int,
+        router_prefix: str,
+        function_name: Optional[str],
+        source_pattern: str,
+    ) -> List[Endpoint]:
+        path = str(route_info.get("path") or "")
+        methods = route_info.get("methods")
+        if not path:
+            return []
+
+        method_list: List[str]
+        if isinstance(methods, list) and methods:
+            method_list = [m for m in methods if isinstance(m, str)]
+        else:
+            method_list = ["get"]
+
+        results: List[Endpoint] = []
+        for method in method_list:
+            results.append(
+                Endpoint(
+                    method=HTTPMethod(method),
+                    path=path,
+                    file_path=str(file_path),
+                    line_number=line_number,
+                    router_prefix=router_prefix or None,
+                    function_name=function_name,
+                    confidence=0.88 if method_list != ["get"] else 0.80,
+                    source="regex",
+                    metadata={"pattern": source_pattern},
+                )
+            )
+        return results
+
     def _combine_paths_java(self, prefix: str, path: str) -> str:
         """Combine class-level and method-level paths in Java"""
         if not prefix:
@@ -281,6 +494,8 @@ class RegexExtractor:
             return self.extract_from_python(code, file_path)
         elif language in ['java']:
             return self.extract_from_java(code, file_path)
+        elif language in ['php']:
+            return self.extract_from_php(code, file_path)
         else:
             self.logger.debug("Regex extraction not supported for language", language=language)
             return []
