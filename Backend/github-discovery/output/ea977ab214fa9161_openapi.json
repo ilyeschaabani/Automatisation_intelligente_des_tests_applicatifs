@@ -4,8 +4,8 @@
     "title": "API Specification - ea977ab214fa9161",
     "version": "1.0.0",
     "description": "Auto-generated from repository https://github.com/ilyeschaabani/sopport-pro-.git",
-    "x-generated": "2026-03-24T09:45:34.645970Z",
-    "x-endpoint-count": 57
+    "x-generated": "2026-03-24T13:20:51.144479Z",
+    "x-endpoint-count": 60
   },
   "servers": [
     {
@@ -99,8 +99,8 @@
       "post": {
         "summary": "refreshToken",
         "tags": [
-          "refresh",
-          "authentication"
+          "authentication",
+          "refresh"
         ],
         "responses": {
           "200": {
@@ -140,8 +140,8 @@
       "get": {
         "summary": "getProfile",
         "tags": [
-          "get",
-          "authentication"
+          "authentication",
+          "get"
         ],
         "responses": {
           "200": {
@@ -222,8 +222,8 @@
       "get": {
         "summary": "getProfileById",
         "tags": [
-          "get",
-          "authentication"
+          "authentication",
+          "get"
         ],
         "responses": {
           "200": {
@@ -263,8 +263,8 @@
       "get": {
         "summary": "getAllUsers",
         "tags": [
-          "get",
-          "authentication"
+          "authentication",
+          "get"
         ],
         "responses": {
           "200": {
@@ -466,8 +466,8 @@
       "put": {
         "summary": "changePassword",
         "tags": [
-          "change",
-          "authentication"
+          "authentication",
+          "change"
         ],
         "responses": {
           "200": {
@@ -507,8 +507,8 @@
       "get": {
         "summary": "getUserPermissions",
         "tags": [
-          "get",
-          "authentication"
+          "authentication",
+          "get"
         ],
         "responses": {
           "200": {
@@ -868,8 +868,8 @@
       "delete": {
         "summary": "delete",
         "tags": [
-          "delete",
-          "category"
+          "category",
+          "delete"
         ],
         "responses": {
           "200": {
@@ -991,8 +991,8 @@
       "put": {
         "summary": "reactToComment",
         "tags": [
-          "comment",
-          "react"
+          "react",
+          "comment"
         ],
         "responses": {
           "200": {
@@ -1032,8 +1032,8 @@
       "post": {
         "summary": "debugMultipart",
         "tags": [
-          "comment",
-          "debug"
+          "debug",
+          "comment"
         ],
         "responses": {
           "200": {
@@ -1073,8 +1073,8 @@
       "put": {
         "summary": "updateComment",
         "tags": [
-          "comment",
-          "update"
+          "update",
+          "comment"
         ],
         "responses": {
           "200": {
@@ -1153,8 +1153,8 @@
       "get": {
         "summary": "getUserNotifications",
         "tags": [
-          "notification",
-          "get"
+          "get",
+          "notification"
         ],
         "responses": {
           "200": {
@@ -1194,8 +1194,8 @@
       "patch": {
         "summary": "markNotificationRead",
         "tags": [
-          "notification",
-          "mark"
+          "mark",
+          "notification"
         ],
         "responses": {
           "200": {
@@ -1235,8 +1235,8 @@
       "get": {
         "summary": "streamNotifications",
         "tags": [
-          "notification",
-          "stream"
+          "stream",
+          "notification"
         ],
         "responses": {
           "200": {
@@ -1354,8 +1354,8 @@
       "delete": {
         "summary": "deletePriority",
         "tags": [
-          "delete",
-          "priority"
+          "priority",
+          "delete"
         ],
         "responses": {
           "200": {
@@ -1557,8 +1557,8 @@
       "put": {
         "summary": "updateStatus",
         "tags": [
-          "status",
-          "update"
+          "update",
+          "status"
         ],
         "responses": {
           "200": {
@@ -1596,8 +1596,8 @@
       "delete": {
         "summary": "deleteStatus",
         "tags": [
-          "status",
-          "delete"
+          "delete",
+          "status"
         ],
         "responses": {
           "200": {
@@ -1678,8 +1678,8 @@
       "put": {
         "summary": "setAsDefault",
         "tags": [
-          "status",
-          "set"
+          "set",
+          "status"
         ],
         "responses": {
           "200": {
@@ -2252,8 +2252,8 @@
       "put": {
         "summary": "update",
         "tags": [
-          "ticket_type",
-          "update"
+          "update",
+          "ticket_type"
         ],
         "responses": {
           "200": {
@@ -2327,6 +2327,126 @@
         "x-confidence": 0.87,
         "x-source": "ast"
       }
+    },
+    "/AuthenticationMicroService/**": {
+      "get": {
+        "summary": "GET /AuthenticationMicroService/**",
+        "tags": [
+          "gate_way_application"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "pattern": "spring_cloud_gateway_route"
+        },
+        "x-confidence": 0.6,
+        "x-source": "regex"
+      }
+    },
+    "/TicketMicroService/**": {
+      "get": {
+        "summary": "GET /TicketMicroService/**",
+        "tags": [
+          "gate_way_application"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "pattern": "spring_cloud_gateway_route"
+        },
+        "x-confidence": 0.6,
+        "x-source": "regex"
+      }
+    },
+    "/api/auth/users": {
+      "get": {
+        "summary": "GET /api/auth/users",
+        "tags": [
+          "authentication"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "pattern": "method_path"
+        },
+        "x-confidence": 0.25,
+        "x-source": "universal"
+      }
     }
   },
   "components": {
@@ -2373,6 +2493,9 @@
     },
     {
       "name": "delete"
+    },
+    {
+      "name": "gate_way_application"
     },
     {
       "name": "get"

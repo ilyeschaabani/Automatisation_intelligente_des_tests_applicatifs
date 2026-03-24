@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 
 from .utils.logger import get_logger
 from .utils.errors import TechStackDetectionError
+from .registry import detect_languages_by_files, detect_frameworks_from_repo
 
 
 @dataclass
@@ -22,68 +23,6 @@ class TechStack:
 
 class TechStackDetector:
     """Detects technology stack from repository files"""
-
-    # Language detection by file presence
-    LANGUAGE_INDICATORS = {
-        "nodejs": {
-            "files": ["package.json", "yarn.lock", "package-lock.json", "pnpm-lock.yaml"],
-            "frameworks": {
-                "express": ["express", "expressjs"],
-                "fastify": ["fastify"],
-                "koa": ["koa"],
-                "nestjs": ["@nestjs"],
-                "hapi": ["@hapi"],
-            }
-        },
-        "python": {
-            "files": ["requirements.txt", "pyproject.toml", "setup.py", "Pipfile", "poetry.lock"],
-            "frameworks": {
-                "flask": ["flask"],
-                "django": ["django"],
-                "fastapi": ["fastapi"],
-                "bottle": ["bottle"],
-                "tornado": ["tornado"],
-            }
-        },
-        "java": {
-            "files": ["pom.xml", "build.gradle", "build.gradle.kts", ".gradle"],
-            "frameworks": {
-                "spring": ["org.springframework", "spring-boot", "spring-web"],
-                "jaxrs": ["javax.ws.rs", "jakarta.ws.rs"],
-            }
-        },
-        "csharp": {
-            "files": [".csproj", ".sln", ".vbproj", "packages.config"],
-            "frameworks": {
-                "aspnetcore": ["Microsoft.AspNetCore", "Microsoft.NETCore.App"],
-                "webapi": ["System.Web.Http"],
-            }
-        },
-        "go": {
-            "files": ["go.mod", "go.sum", "Gopkg.toml"],
-            "frameworks": {
-                "gin": ["github.com/gin-gonic/gin"],
-                "echo": ["github.com/labstack/echo"],
-                "mux": ["github.com/gorilla/mux"],
-                "fiber": ["github.com/gofiber/fiber"],
-            }
-        },
-        "ruby": {
-            "files": ["Gemfile", "Gemfile.lock", "Rakefile"],
-            "frameworks": {
-                "rails": ["rails"],
-                "sinatra": ["sinatra"],
-            }
-        },
-        "php": {
-            "files": ["composer.json", "composer.lock"],
-            "frameworks": {
-                "laravel": ["laravel/framework"],
-                "symfony": ["symfony"],
-                "lumen": ["lumen"],
-            }
-        }
-    }
 
     # GraphQL detection patterns
     GRAPHQL_PATTERNS = [
@@ -138,71 +77,17 @@ class TechStackDetector:
 
     def _detect_by_files(self, stack: TechStack) -> None:
         """Detect languages by presence of indicator files"""
-        for language, config in self.LANGUAGE_INDICATORS.items():
-            for indicator_file in config["files"]:
-                if (self.repo_path / indicator_file).exists():
-                    stack.languages.add(language)
-                    stack.package_managers.add(self._get_package_manager(language))
-                    self.logger.debug("Detected language", language=language, file=indicator_file)
-                    break
+        languages, package_managers = detect_languages_by_files(self.repo_path)
+        stack.languages.update(languages)
+        stack.package_managers.update(package_managers)
 
     def _detect_from_package_files(self, stack: TechStack) -> None:
         """Parse package files to detect frameworks"""
-        # Node.js: package.json
-        package_json = self.repo_path / "package.json"
-        if package_json.exists():
-            try:
-                with open(package_json, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-
-                dependencies = {**data.get("dependencies", {}), **data.get("devDependencies", {})}
-
-                for framework, keywords in self.LANGUAGE_INDICATORS["nodejs"]["frameworks"].items():
-                    if any(any(kw in dep for kw in keywords) for dep in dependencies.keys()):
-                        stack.frameworks["nodejs"] = framework
-                        self.logger.debug("Detected Node.js framework", framework=framework)
-                        break
-            except Exception as e:
-                self.logger.warning("Failed to parse package.json", error=str(e))
-
-        # Python: requirements.txt or pyproject.toml
-        requirements_txt = self.repo_path / "requirements.txt"
-        if requirements_txt.exists():
-            try:
-                content = requirements_txt.read_text(encoding="utf-8")
-                for framework, keywords in self.LANGUAGE_INDICATORS["python"]["frameworks"].items():
-                    if any(keyword in content.lower() for keyword in keywords):
-                        stack.frameworks["python"] = framework
-                        self.logger.debug("Detected Python framework", framework=framework)
-                        break
-            except Exception as e:
-                self.logger.warning("Failed to parse requirements.txt", error=str(e))
-
-        # Java: pom.xml
-        pom_xml = self.repo_path / "pom.xml"
-        if pom_xml.exists():
-            try:
-                content = pom_xml.read_text(encoding="utf-8")
-                for framework, keywords in self.LANGUAGE_INDICATORS["java"]["frameworks"].items():
-                    if any(keyword in content for keyword in keywords):
-                        stack.frameworks["java"] = framework
-                        self.logger.debug("Detected Java framework", framework=framework)
-                        break
-            except Exception as e:
-                self.logger.warning("Failed to parse pom.xml", error=str(e))
-
-        # C#: .csproj
-        csproj_files = list(self.repo_path.rglob("*.csproj"))
-        if csproj_files:
-            try:
-                content = csproj_files[0].read_text(encoding="utf-8")
-                for framework, keywords in self.LANGUAGE_INDICATORS["csharp"]["frameworks"].items():
-                    if any(keyword in content for keyword in keywords):
-                        stack.frameworks["csharp"] = framework
-                        self.logger.debug("Detected C# framework", framework=framework)
-                        break
-            except Exception as e:
-                self.logger.warning("Failed to parse .csproj", error=str(e))
+        try:
+            detected = detect_frameworks_from_repo(self.repo_path)
+            stack.frameworks.update(detected)
+        except Exception as e:
+            self.logger.warning("Framework detection failed", error=str(e))
 
     def _detect_graphql(self, stack: TechStack) -> None:
         """Detect GraphQL usage"""

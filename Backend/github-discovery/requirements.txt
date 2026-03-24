@@ -9,6 +9,7 @@ python-dotenv>=1.0.0
 cachetools>=5.0.0
 networkx>=3.0
 tqdm>=4.65.0
+pyyaml>=6.0
 
 # Async and performance
 aiohttp>=3.8.0

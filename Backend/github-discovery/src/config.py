@@ -30,8 +30,10 @@ class Config:
     cache_ttl: int = int(os.getenv("CACHE_TTL", "3600"))
 
     # Paths
-    repos_dir: str = "repos"
-    output_dir: str = "output"
+    # Allow overriding from environment to support Windows path-length mitigation.
+    # Example: set REPOS_DIR=C:\\r to shorten checkout paths.
+    repos_dir: str = os.getenv("REPOS_DIR", "repos")
+    output_dir: str = os.getenv("OUTPUT_DIR", "output")
 
     # Logging
     log_level: str = os.getenv("LOG_LEVEL", "INFO")

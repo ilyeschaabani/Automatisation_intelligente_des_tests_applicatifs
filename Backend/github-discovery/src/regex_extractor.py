@@ -57,8 +57,45 @@ class RegexExtractor:
         endpoints = []
         lines = code.split('\n')
 
+        # NestJS (TypeScript) decorators
+        # @Controller('users') class UserController { @Get(':id') ... }
+        # Keep this regex-based and best-effort.
+        controller_prefix: str = ""
+        http_decorator_map = {
+            "Get": "get",
+            "Post": "post",
+            "Put": "put",
+            "Delete": "delete",
+            "Patch": "patch",
+            "All": "get",  # treat as GET for discovery
+        }
+
         # Look for common patterns
         for line_num, line in enumerate(lines, 1):
+            # NestJS controller prefix
+            if "@Controller" in line:
+                m = re.search(r"@Controller\s*\(\s*(?:\{[^}]*path\s*:\s*)?[\"']([^\"']*)[\"']", line)
+                if m is not None:
+                    controller_prefix = m.group(1) or ""
+
+            # NestJS method decorators
+            for deco, http_method in http_decorator_map.items():
+                if f"@{deco}" in line:
+                    m = re.search(rf"@{deco}\s*\(\s*[\"']([^\"']*)[\"']\s*\)", line)
+                    subpath = m.group(1) if m else ""
+                    # NestJS treats empty string as root of controller
+                    path = subpath if subpath else "/"
+                    endpoints.append(Endpoint(
+                        method=HTTPMethod(http_method),
+                        path=path,
+                        file_path=str(file_path),
+                        line_number=line_num,
+                        router_prefix=f"/{controller_prefix}" if controller_prefix else None,
+                        confidence=0.82,
+                        source='regex',
+                        metadata={'pattern': 'nestjs_decorator'}
+                    ))
+
             # Express.js patterns
             for method in self.http_methods:
                 # app.get('/path', handler)
@@ -73,6 +110,21 @@ class RegexExtractor:
                         confidence=0.85,
                         source='regex',
                         metadata={'pattern': 'express_method'}
+                    ))
+
+            # Fastify patterns: fastify.get('/path', handler)
+            for method in self.http_methods:
+                pattern = rf'(?:fastify|app)\.{method}\s*\(\s*[\'"]([^\'"]+)[\'"]'
+                for match in re.finditer(pattern, line):
+                    path = match.group(1)
+                    endpoints.append(Endpoint(
+                        method=HTTPMethod(method),
+                        path=path,
+                        file_path=str(file_path),
+                        line_number=line_num,
+                        confidence=0.82,
+                        source='regex',
+                        metadata={'pattern': 'fastify_method'}
                     ))
 
             # .route() style
@@ -100,7 +152,7 @@ class RegexExtractor:
                 for match in re.finditer(pattern, line):
                     path = match.group(1)
                     endpoints.append(Endpoint(
-                        method=HTTPMethod.get,  # Default to GET
+                        method=HTTPMethod.GET,  # Default to GET
                         path=path,
                         file_path=str(file_path),
                         line_number=line_num,
@@ -139,7 +191,7 @@ class RegexExtractor:
                 if match:
                     path = match.group(1)
                     endpoints.append(Endpoint(
-                        method=HTTPMethod.get,  # Django handlers handle all methods
+                        method=HTTPMethod.GET,  # Django handlers handle all methods
                         path=path,
                         file_path=str(file_path),
                         line_number=line_num,
@@ -154,7 +206,7 @@ class RegexExtractor:
                 if match:
                     path = match.group(1)
                     endpoints.append(Endpoint(
-                        method=HTTPMethod.get,  # Default to GET
+                        method=HTTPMethod.GET,  # Default to GET
                         path=path,
                         file_path=str(file_path),
                         line_number=line_num,
@@ -169,7 +221,7 @@ class RegexExtractor:
                 for match in re.finditer(pattern, line):
                     path = match.group(1)
                     endpoints.append(Endpoint(
-                        method=HTTPMethod.get,  # Default to GET
+                        method=HTTPMethod.GET,  # Default to GET
                         path=path,
                         file_path=str(file_path),
                         line_number=line_num,
@@ -187,7 +239,54 @@ class RegexExtractor:
         
         class_level_prefix = ""
 
+        # Micronaut: @Controller("/api") + @Get("/users")
+        micronaut_controller_prefix = ""
+
+        # JAX-RS / Quarkus: @Path("/api") + @GET/@POST with optional method-level @Path
+        jaxrs_class_path = ""
+
+        # Spring Cloud Gateway (RouteLocatorBuilder) routes are often defined via a fluent DSL:
+        # builder.routes().route("svc", r -> r.path("/svc/**").uri("lb://svc")).build();
+        # Treat these as gateway paths (method unknown -> default GET) with lower confidence.
+        for route_match in re.finditer(r"\.route\s*\(", code):
+            snippet = code[route_match.start():route_match.start() + 600]
+            if ".path" not in snippet:
+                continue
+            path_call = re.search(r"\.path\s*\(([^\)]*)\)", snippet, flags=re.DOTALL)
+            if not path_call:
+                continue
+
+            raw_args = path_call.group(1)
+            paths = re.findall(r"[\"']([^\"']+)[\"']", raw_args)
+            if not paths:
+                continue
+
+            # Compute a best-effort line number for the first match
+            line_number = code.count("\n", 0, route_match.start()) + 1
+            for p in paths:
+                endpoints.append(Endpoint(
+                    method=HTTPMethod.GET,
+                    path=p,
+                    file_path=str(file_path),
+                    line_number=line_number,
+                    confidence=0.60,
+                    source='regex',
+                    metadata={'pattern': 'spring_cloud_gateway_route'}
+                ))
+
         for line_num, line in enumerate(lines, 1):
+            # Micronaut class/controller prefix
+            if "@Controller" in line:
+                m = re.search(r"@Controller\s*\(\s*[\"']([^\"']*)[\"']\s*\)", line)
+                if m:
+                    micronaut_controller_prefix = m.group(1)
+
+            # JAX-RS class @Path
+            if "@Path" in line:
+                m = re.search(r"@Path\s*\(\s*[\"']([^\"']+)[\"']\s*\)", line)
+                if m and ("class " in line or (line_num < len(lines) and "class " in lines[line_num])):
+                    jaxrs_class_path = m.group(1)
+
             # Check for class-level @RequestMapping
             if '@RequestMapping' in line and 'public class' in lines[min(line_num, len(lines)-1)]:
                 match = re.search(r'@RequestMapping\s*\(\s*["\']([^"\']+)["\']', line)
@@ -241,7 +340,7 @@ class RegexExtractor:
                     path = path_match.group(1)
                     full_path = self._combine_paths_java(class_level_prefix, path)
                     endpoints.append(Endpoint(
-                        method=HTTPMethod.get,
+                        method=HTTPMethod.GET,
                         path=full_path,
                         file_path=str(file_path),
                         line_number=line_num,
@@ -249,6 +348,146 @@ class RegexExtractor:
                         source='regex',
                         metadata={'pattern': 'spring_requestmapping_simple'}
                     ))
+
+            # Micronaut method mappings: @Get("/x"), @Post("/x") etc.
+            for method_annotation, http_method in [
+                ("Get", "get"),
+                ("Post", "post"),
+                ("Put", "put"),
+                ("Delete", "delete"),
+                ("Patch", "patch"),
+            ]:
+                if f"@{method_annotation}" in line:
+                    m = re.search(rf"@{method_annotation}\s*\(\s*[\"']([^\"']*)[\"']\s*\)", line)
+                    if m:
+                        path = m.group(1) or "/"
+                        full_path = self._combine_paths_java(micronaut_controller_prefix, path)
+                        endpoints.append(Endpoint(
+                            method=HTTPMethod(http_method),
+                            path=full_path,
+                            file_path=str(file_path),
+                            line_number=line_num,
+                            confidence=0.82,
+                            source='regex',
+                            metadata={'pattern': 'micronaut_mapping'}
+                        ))
+
+            # JAX-RS / Quarkus method annotations: @GET/@POST + optional @Path
+            jaxrs_http = None
+            if "@GET" in line:
+                jaxrs_http = "get"
+            elif "@POST" in line:
+                jaxrs_http = "post"
+            elif "@PUT" in line:
+                jaxrs_http = "put"
+            elif "@DELETE" in line:
+                jaxrs_http = "delete"
+            elif "@PATCH" in line:
+                jaxrs_http = "patch"
+
+            if jaxrs_http:
+                # Look ahead a few lines for a method-level @Path
+                method_path = ""
+                for k in range(line_num, min(line_num + 4, len(lines) + 1)):
+                    ll = lines[k - 1]
+                    if "@Path" in ll:
+                        mm = re.search(r"@Path\s*\(\s*[\"']([^\"']+)[\"']\s*\)", ll)
+                        if mm:
+                            method_path = mm.group(1)
+                            break
+                    if "(" in ll and ")" in ll and ("public" in ll or "Response" in ll):
+                        break
+
+                full_path = self._combine_paths_java(jaxrs_class_path, method_path or "/")
+                endpoints.append(Endpoint(
+                    method=HTTPMethod(jaxrs_http),
+                    path=full_path,
+                    file_path=str(file_path),
+                    line_number=line_num,
+                    confidence=0.78,
+                    source='regex',
+                    metadata={'pattern': 'jaxrs_mapping'}
+                ))
+
+        return endpoints
+
+    def extract_from_go(self, code: str, file_path: Path) -> List[Endpoint]:
+        """Extract endpoints from Go code (Gin/Echo style)."""
+        endpoints: List[Endpoint] = []
+        lines = code.split("\n")
+
+        # Gin/Echo commonly: r.GET("/path", ...) or e.POST("/path", ...)
+        pattern = re.compile(r"\.\s*(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s*\(\s*[\"']([^\"']+)[\"']")
+        for line_num, line in enumerate(lines, 1):
+            for m in pattern.finditer(line):
+                method = m.group(1).lower()
+                path = m.group(2)
+                try:
+                    endpoints.append(Endpoint(
+                        method=HTTPMethod(method),
+                        path=path,
+                        file_path=str(file_path),
+                        line_number=line_num,
+                        confidence=0.75,
+                        source='regex',
+                        metadata={'pattern': 'go_router_method'}
+                    ))
+                except Exception:
+                    continue
+
+        return endpoints
+
+    def extract_from_csharp(self, code: str, file_path: Path) -> List[Endpoint]:
+        """Extract endpoints from C# ASP.NET Core attributes."""
+        endpoints: List[Endpoint] = []
+        lines = code.split("\n")
+
+        class_prefix: str = ""
+        pending_route_attr: Optional[str] = None
+
+        def parse_attr_path(attr_line: str) -> Optional[str]:
+            m = re.search(r"\(\s*[\"']([^\"']*)[\"']\s*\)", attr_line)
+            if m:
+                return m.group(1)
+            return None
+
+        http_attr_map = {
+            "HttpGet": "get",
+            "HttpPost": "post",
+            "HttpPut": "put",
+            "HttpDelete": "delete",
+            "HttpPatch": "patch",
+        }
+
+        for line_num, line in enumerate(lines, 1):
+            stripped = line.strip()
+
+            if stripped.startswith("[Route"):
+                pending_route_attr = stripped
+                continue
+
+            # Class-level route
+            if "class " in stripped and pending_route_attr:
+                p = parse_attr_path(pending_route_attr)
+                if p is not None:
+                    class_prefix = p
+                pending_route_attr = None
+
+            # Method-level route and verb attributes
+            for attr, http_method in http_attr_map.items():
+                if stripped.startswith(f"[{attr}"):
+                    method_path = parse_attr_path(stripped) or "/"
+                    endpoints.append(Endpoint(
+                        method=HTTPMethod(http_method),
+                        path=method_path,
+                        file_path=str(file_path),
+                        line_number=line_num,
+                        router_prefix=class_prefix or None,
+                        confidence=0.80,
+                        source='regex',
+                        metadata={'pattern': 'aspnet_attribute'}
+                    ))
+                    break
 
         return endpoints
 
@@ -262,6 +501,26 @@ class RegexExtractor:
         i = 0
         while i < len(lines):
             line = lines[i]
+
+            # ========== Laravel: Route::get('/path', ...) etc. ==========
+            if "Route::" in line:
+                m = re.search(r"\bRoute::(get|post|put|delete|patch|options|match)\s*\(\s*['\"]([^'\"]+)['\"]", line, flags=re.IGNORECASE)
+                if m:
+                    method = m.group(1).lower()
+                    path = m.group(2)
+                    if method == "match":
+                        # Best-effort: treat as GET for discovery when via list isn't parsed
+                        method = "get"
+                    if method in self.http_methods:
+                        endpoints.append(Endpoint(
+                            method=HTTPMethod(method),
+                            path=path,
+                            file_path=str(file_path),
+                            line_number=i + 1,
+                            confidence=0.80,
+                            source="regex",
+                            metadata={"pattern": "laravel_route_facade"},
+                        ))
 
             # ========== PHP 8 attributes: #[Route(...)] ==========
             if "#[" in line and "Route" in line:
@@ -496,6 +755,10 @@ class RegexExtractor:
             return self.extract_from_java(code, file_path)
         elif language in ['php']:
             return self.extract_from_php(code, file_path)
+        elif language in ['go']:
+            return self.extract_from_go(code, file_path)
+        elif language in ['csharp', 'cs']:
+            return self.extract_from_csharp(code, file_path)
         else:
             self.logger.debug("Regex extraction not supported for language", language=language)
             return []

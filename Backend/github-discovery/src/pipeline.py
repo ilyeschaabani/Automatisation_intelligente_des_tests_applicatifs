@@ -22,6 +22,7 @@ from .endpoint_processor import EndpointProcessor, ProcessingResult
 from .route_resolver import RouteResolver
 from .models.openapi import OpenAPISpec
 from .models.endpoint import Endpoint
+from .layered_extractor import SpecFirstExtractor, ConfigRoutesExtractor, UniversalFallbackExtractor
 
 
 @dataclass
@@ -33,13 +34,19 @@ class PipelineStats:
     files_processed: int = 0
     files_failed: int = 0
     endpoints_found: int = 0
+    endpoints_from_spec: int = 0
+    endpoints_from_config: int = 0
     endpoints_from_ast: int = 0
     endpoints_from_regex: int = 0
     endpoints_from_llm: int = 0
+    endpoints_from_universal: int = 0
     duplicates_removed: int = 0
     llm_calls: int = 0
     llm_failed: int = 0
     cache_hits: int = 0
+    spec_files_found: int = 0
+    config_files_parsed: int = 0
+    universal_files_scanned: int = 0
     errors: List[Dict[str, Any]] = field(default_factory=list)
 
     def duration(self) -> Optional[float]:
@@ -58,13 +65,19 @@ class PipelineStats:
             "files_processed": self.files_processed,
             "files_failed": self.files_failed,
             "endpoints_found": self.endpoints_found,
+            "endpoints_from_spec": self.endpoints_from_spec,
+            "endpoints_from_config": self.endpoints_from_config,
             "endpoints_from_ast": self.endpoints_from_ast,
             "endpoints_from_regex": self.endpoints_from_regex,
             "endpoints_from_llm": self.endpoints_from_llm,
+            "endpoints_from_universal": self.endpoints_from_universal,
             "duplicates_removed": self.duplicates_removed,
             "llm_calls": self.llm_calls,
             "llm_failed": self.llm_failed,
             "cache_hits": self.cache_hits,
+            "spec_files_found": self.spec_files_found,
+            "config_files_parsed": self.config_files_parsed,
+            "universal_files_scanned": self.universal_files_scanned,
             "errors": self.errors,
         }
 
@@ -84,10 +97,17 @@ class Pipeline:
         self.ast_parser = TreeSitterParser()
         self.regex_extractor = RegexExtractor()
         self.chunker = ChunkingEngine(max_chunk_size=config.max_file_size // 100)  # Convert bytes to lines approx
+
+        # Layered extractors
+        self.spec_first_extractor = SpecFirstExtractor()
+        self.config_routes_extractor = ConfigRoutesExtractor()
+        self.universal_fallback_extractor = UniversalFallbackExtractor()
         
         # Initialize LLM extractor (supports both OpenRouter and OpenAI)
         try:
             self.llm_extractor = LLMExtractor(config)
+            # Share pipeline cache with the LLM extractor (it implements optional caching).
+            self.llm_extractor.cache = self.cache
             self.logger.info("LLM extractor initialized")
         except Exception as e:
             self.logger.warning("LLM extractor not available", error=str(e))
@@ -130,6 +150,59 @@ class Pipeline:
             tech_detector = TechStackDetector(repo_path)
             tech_stack = tech_detector.detect()
 
+            # Layer 1: Spec-first short-circuit
+            self.logger.info("Layer 1: Spec-first import")
+            spec_result = self.spec_first_extractor.try_extract(repo_path)
+            if spec_result and spec_result.short_circuit:
+                self.stats.spec_files_found = 1
+                self.stats.endpoints_from_spec = len(spec_result.endpoints)
+
+                # Process endpoints (normalize/dedupe) even in spec-first mode
+                processing_result = self.endpoint_processor.process(spec_result.endpoints, {})
+                final_endpoints = processing_result.endpoints
+
+                self.stats.total_files = 0
+                self.stats.files_processed = 0
+                self.stats.files_failed = 0
+                self.stats.endpoints_found = len(final_endpoints)
+                self.stats.duplicates_removed = processing_result.duplicates_removed
+                self.stats.end_time = datetime.utcnow()
+
+                # If we imported an OpenAPI/Swagger file, output it directly.
+                # For Postman/Insomnia, generate OpenAPI from extracted endpoints.
+                if spec_result.openapi and isinstance(spec_result.openapi, dict):
+                    openapi_out: Dict[str, Any] = spec_result.openapi
+                else:
+                    openapi_spec = OpenAPISpec.from_endpoints(
+                        endpoints=final_endpoints,
+                        title=f"API Specification - {repo_id}",
+                        description=f"Auto-generated from repository {repo_url}",
+                        version="1.0.0",
+                    )
+                    openapi_out = openapi_spec.to_dict()
+
+                # Save outputs
+                self._save_outputs(openapi_out, spec_result.endpoints, repo_id)
+
+                result = {
+                    "success": True,
+                    "repo_url": repo_url,
+                    "repo_cached": was_cached,
+                    "openapi": openapi_out,
+                    "raw_endpoints": [e.to_dict() for e in spec_result.endpoints],
+                    "final_endpoints": [e.to_dict() for e in final_endpoints],
+                    "stats": self.stats.to_dict(),
+                    "tech_stack": {
+                        "languages": list(tech_stack.languages),
+                        "frameworks": tech_stack.frameworks,
+                        "has_graphql": tech_stack.has_graphql,
+                        "has_rest": tech_stack.has_rest,
+                    },
+                }
+
+                self.logger.info("Pipeline completed via spec-first", endpoints=len(final_endpoints))
+                return result
+
             # Step 3: Scan files
             self.logger.info("Scanning files")
             candidate_files = self.file_scanner.scan_files()
@@ -141,7 +214,26 @@ class Pipeline:
 
             # Step 5: Parse files (AST → Regex → LLM)
             self.logger.info("Parsing files for endpoints")
-            all_endpoints = self._parse_files(candidate_files, tech_stack, prefix_mapping)
+            # Layer 2: Config routes
+            self.logger.info("Layer 2: Config routes")
+            config_endpoints, config_files_parsed = self.config_routes_extractor.extract(repo_path)
+            self.stats.config_files_parsed = config_files_parsed
+            self.stats.endpoints_from_config = len(config_endpoints)
+
+            all_endpoints = []
+            all_endpoints.extend(config_endpoints)
+
+            # Layer 3: Code routes (AST → Regex → LLM)
+            all_endpoints.extend(self._parse_files(candidate_files, tech_stack, prefix_mapping))
+
+            # Layer 4: Universal fallback
+            self.logger.info("Layer 4: Universal fallback")
+            universal_endpoints, universal_files_scanned = self.universal_fallback_extractor.extract(repo_path)
+            self.stats.universal_files_scanned = universal_files_scanned
+
+            # Add universal endpoints that aren't obvious duplicates (final dedupe happens later)
+            all_endpoints.extend(universal_endpoints)
+            self.stats.endpoints_from_universal = len(universal_endpoints)
 
             # Step 6: Process endpoints (normalize, deduplicate)
             self.logger.info("Processing endpoints")
@@ -290,7 +382,7 @@ class Pipeline:
                 file_path = Path(parse_result.file_path) if isinstance(parse_result.file_path, str) else parse_result.file_path
                 language = self.file_scanner.get_language_from_extension(file_path)
                 
-                if language not in ['javascript', 'typescript', 'js', 'ts', 'jsx', 'tsx', 'python', 'py', 'java', 'php']:
+                if language not in ['javascript', 'typescript', 'js', 'ts', 'jsx', 'tsx', 'python', 'py', 'java', 'php', 'go', 'csharp', 'cs']:
                     continue
                 
                 # Read file content
@@ -360,8 +452,8 @@ class Pipeline:
                     
                     # Call LLM
                     self.logger.debug("Calling LLM for file", file=file_path.name)
-                    llm_result = self.llm_extractor.extract_endpoints(code, file_path, language, router_prefix)
                     self.stats.llm_calls += 1
+                    llm_result = self.llm_extractor.extract_endpoints(code, file_path, language, router_prefix)
                     
                     # Add high-confidence LLM endpoints
                     for ep in llm_result.endpoints:
@@ -397,14 +489,18 @@ class Pipeline:
         self.stats.files_processed = len(file_infos) - self.stats.files_failed
         return all_endpoints
 
-    def _save_outputs(self, openapi_spec: OpenAPISpec, endpoints: List[Endpoint], repo_name: str) -> None:
+    def _save_outputs(self, openapi_spec: Any, endpoints: List[Endpoint], repo_name: str) -> None:
         """Save outputs to files"""
         output_dir = Path(self.config.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Save OpenAPI JSON
         openapi_path = output_dir / f"{repo_name}_openapi.json"
-        openapi_spec.save(str(openapi_path))
+        if isinstance(openapi_spec, OpenAPISpec):
+            openapi_spec.save(str(openapi_path))
+        else:
+            with open(openapi_path, "w", encoding="utf-8") as f:
+                json.dump(openapi_spec, f, indent=2, ensure_ascii=False, default=str)
         self.logger.info("OpenAPI spec saved", path=str(openapi_path))
 
         # Save raw endpoints

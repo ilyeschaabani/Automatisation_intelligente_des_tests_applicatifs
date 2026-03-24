@@ -1,11 +1,12 @@
 """Command-line interface"""
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
 from .config import Config
-from .pipeline import Pipeline, run_pipeline
+from .pipeline import Pipeline
 from .utils.logger import get_logger, setup_logger
 
 
@@ -53,6 +54,16 @@ Examples:
     )
 
     parser.add_argument(
+        "--repos-dir",
+        type=str,
+        default=Config().repos_dir,
+        help=(
+            "Directory for cloned repositories (default: %(default)s). "
+            "Tip (Windows): use a short path like C:\\r to avoid 'Filename too long'."
+        )
+    )
+
+    parser.add_argument(
         "--max-workers",
         type=int,
         default=Config().max_workers,
@@ -75,15 +86,21 @@ Examples:
         # Update config with CLI args
         config = Config()
         config.output_dir = args.output_dir
+        config.repos_dir = args.repos_dir
         config.max_workers = args.max_workers
+
+        # Ensure overridden directories exist (Config.__post_init__ ran before overrides)
+        os.makedirs(config.output_dir, exist_ok=True)
+        os.makedirs(config.repos_dir, exist_ok=True)
 
         # Run pipeline
         logger.info("Starting GitHub API Discovery", repo_url=args.repo_url, branch=args.branch)
 
-        result = run_pipeline(
+        pipeline = Pipeline(config)
+        result = pipeline.run(
             repo_url=args.repo_url,
             branch=args.branch,
-            keep_repo=args.keep_repo
+            keep_repo=args.keep_repo,
         )
 
         # Print summary
@@ -96,9 +113,9 @@ Examples:
         print(f"Duplicates removed: {result['stats']['duplicates_removed']}")
         print(f"Duration: {result['stats']['duration_seconds']:.2f}s")
         print("\nOutput files:")
-        print(f"  OpenAPI: {config.output_dir}/<repo>_openapi.json")
-        print(f"  Raw endpoints: {config.output_dir}/<repo>_endpoints.json")
-        print(f"  Stats: {config.output_dir}/<repo>_stats.json")
+        print(f"  OpenAPI: {config.output_dir}/<repo_id>_openapi.json")
+        print(f"  Raw endpoints: {config.output_dir}/<repo_id>_endpoints.json")
+        print(f"  Stats: {config.output_dir}/<repo_id>_stats.json")
         print("="*60)
 
         return 0

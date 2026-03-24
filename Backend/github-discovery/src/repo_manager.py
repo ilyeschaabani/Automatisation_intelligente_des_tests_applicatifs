@@ -1,9 +1,11 @@
 """Repository cloning and management"""
 
 import hashlib
+import os
 import shutil
 import stat
 import time
+import tempfile
 import uuid
 from pathlib import Path
 from typing import Optional, Tuple
@@ -72,12 +74,34 @@ class RepositoryManager:
             CloneError: If cloning fails after retries
         """
         repo_id = self._generate_repo_id(url)
-        # If we're keeping the repo, clone into a stable folder for debugging.
-        # Otherwise, use a unique temp folder for this run to avoid collisions and stale partial clones.
-        if keep_repo:
-            repo_path = self.repos_dir / repo_id
-        else:
-            repo_path = self.repos_dir / f"{repo_id}_tmp_{uuid.uuid4().hex[:8]}"
+        tmp_suffix = uuid.uuid4().hex[:8]
+
+        def _build_repo_path(base_dir: Path) -> Path:
+            # If we're keeping the repo, clone into a stable folder for debugging.
+            # Otherwise, use a unique temp folder for this run to avoid collisions and stale partial clones.
+            return (base_dir / repo_id) if keep_repo else (base_dir / f"{repo_id}_tmp_{tmp_suffix}")
+
+        repo_path = _build_repo_path(self.repos_dir)
+        longpaths_fallback_used: Optional[str] = None
+
+        def _choose_short_repos_dir() -> Optional[Path]:
+            """Pick a shorter clone base directory for Windows path-length issues."""
+            candidates: list[Path] = []
+            system_drive = (os.environ.get("SYSTEMDRIVE") or "C:").rstrip("\\/")
+            candidates.append(Path(system_drive + "\\r"))
+            candidates.append(Path(tempfile.gettempdir()) / "gd_repos")
+
+            for base in candidates:
+                try:
+                    base.mkdir(parents=True, exist_ok=True)
+                    # Basic writability check
+                    probe = base / ".__gd_probe__"
+                    probe.write_text("ok", encoding="utf-8")
+                    probe.unlink(missing_ok=True)
+                    return base
+                except Exception:
+                    continue
+            return None
 
         # Check cache first
         cache_key = f"repo_clone:{url}"
@@ -128,11 +152,41 @@ class RepositoryManager:
                 return repo_path, False, repo_id
 
             except git.GitCommandError as e:
+                error_text = str(e)
+                hint: Optional[str] = None
+
+                # Windows path-length issues commonly show up as checkout failures with:
+                # "error: unable to create file ...: Filename too long"
+                if ("Filename too long" in error_text) or ("filename too long" in error_text):
+                    hint = (
+                        "Windows path length limit hit during checkout. "
+                        "Use a shorter clone directory via --repos-dir (e.g., C:\\r) "
+                        "or set REPOS_DIR to a short path, or enable git core.longpaths."
+                    )
+
+                    # If user didn't already choose an explicit absolute short repos_dir,
+                    # retry the clone under a shorter fallback base directory.
+                    try:
+                        import os
+
+                        repos_dir_is_relative = not Path(self.config.repos_dir).is_absolute()
+                        if repos_dir_is_relative and longpaths_fallback_used is None:
+                            short_base = _choose_short_repos_dir()
+                            if short_base is not None:
+                                longpaths_fallback_used = str(short_base)
+                                repo_path = _build_repo_path(short_base)
+                    except Exception:
+                        # Best-effort only; keep original behavior if anything goes wrong.
+                        pass
+
                 self.logger.warning(
                     "Clone attempt failed",
                     url=url,
                     attempt=attempt,
-                    error=str(e)
+                    error=error_text,
+                    hint=hint,
+                    repos_dir=str(self.repos_dir),
+                    fallback_repos_dir=longpaths_fallback_used,
                 )
 
                 if attempt < self.config.git_retries:
@@ -147,7 +201,13 @@ class RepositoryManager:
                 else:
                     raise CloneError(
                         f"Failed to clone repository after {self.config.git_retries} attempts",
-                        details={"url": url, "final_error": str(e)}
+                        details={
+                            "url": url,
+                            "final_error": error_text,
+                            "hint": hint,
+                            "repos_dir": str(self.repos_dir),
+                            "fallback_repos_dir": longpaths_fallback_used,
+                        }
                     ) from e
 
             except Exception as e:
