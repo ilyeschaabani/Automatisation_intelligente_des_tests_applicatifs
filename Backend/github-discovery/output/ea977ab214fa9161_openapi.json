@@ -4,7 +4,7 @@
     "title": "API Specification - ea977ab214fa9161",
     "version": "1.0.0",
     "description": "Auto-generated from repository https://github.com/ilyeschaabani/sopport-pro-.git",
-    "x-generated": "2026-03-24T13:20:51.144479Z",
+    "x-generated": "2026-03-24T14:14:29.485781Z",
     "x-endpoint-count": 60
   },
   "servers": [
@@ -17,8 +17,8 @@
       "post": {
         "summary": "signUp",
         "tags": [
-          "sign",
-          "authentication"
+          "authentication",
+          "sign"
         ],
         "responses": {
           "200": {
@@ -58,8 +58,8 @@
       "post": {
         "summary": "signIn",
         "tags": [
-          "sign",
-          "authentication"
+          "authentication",
+          "sign"
         ],
         "responses": {
           "200": {
@@ -99,8 +99,8 @@
       "post": {
         "summary": "refreshToken",
         "tags": [
-          "authentication",
-          "refresh"
+          "refresh",
+          "authentication"
         ],
         "responses": {
           "200": {
@@ -140,8 +140,8 @@
       "get": {
         "summary": "getProfile",
         "tags": [
-          "authentication",
-          "get"
+          "get",
+          "authentication"
         ],
         "responses": {
           "200": {
@@ -222,8 +222,8 @@
       "get": {
         "summary": "getProfileById",
         "tags": [
-          "authentication",
-          "get"
+          "get",
+          "authentication"
         ],
         "responses": {
           "200": {
@@ -263,8 +263,8 @@
       "get": {
         "summary": "getAllUsers",
         "tags": [
-          "authentication",
-          "get"
+          "get",
+          "authentication"
         ],
         "responses": {
           "200": {
@@ -507,8 +507,8 @@
       "get": {
         "summary": "getUserPermissions",
         "tags": [
-          "authentication",
-          "get"
+          "get",
+          "authentication"
         ],
         "responses": {
           "200": {
@@ -548,8 +548,8 @@
       "get": {
         "summary": "getRoleById",
         "tags": [
-          "role",
-          "get"
+          "get",
+          "role"
         ],
         "responses": {
           "200": {
@@ -667,8 +667,8 @@
       "get": {
         "summary": "getRecentActivity",
         "tags": [
-          "get",
-          "activity"
+          "activity",
+          "get"
         ],
         "responses": {
           "200": {
@@ -749,8 +749,8 @@
       "get": {
         "summary": "getTicketActivities",
         "tags": [
-          "get",
-          "activity"
+          "activity",
+          "get"
         ],
         "responses": {
           "200": {
@@ -868,8 +868,8 @@
       "delete": {
         "summary": "delete",
         "tags": [
-          "category",
-          "delete"
+          "delete",
+          "category"
         ],
         "responses": {
           "200": {
@@ -909,8 +909,8 @@
       "post": {
         "summary": "assignCategoriesToType",
         "tags": [
-          "assign",
-          "category"
+          "category",
+          "assign"
         ],
         "responses": {
           "200": {
@@ -1032,8 +1032,8 @@
       "post": {
         "summary": "debugMultipart",
         "tags": [
-          "debug",
-          "comment"
+          "comment",
+          "debug"
         ],
         "responses": {
           "200": {
@@ -1112,8 +1112,8 @@
       "delete": {
         "summary": "deleteComment",
         "tags": [
-          "comment",
-          "delete"
+          "delete",
+          "comment"
         ],
         "responses": {
           "200": {
@@ -1194,8 +1194,8 @@
       "patch": {
         "summary": "markNotificationRead",
         "tags": [
-          "mark",
-          "notification"
+          "notification",
+          "mark"
         ],
         "responses": {
           "200": {
@@ -1235,8 +1235,8 @@
       "get": {
         "summary": "streamNotifications",
         "tags": [
-          "stream",
-          "notification"
+          "notification",
+          "stream"
         ],
         "responses": {
           "200": {
@@ -1354,8 +1354,8 @@
       "delete": {
         "summary": "deletePriority",
         "tags": [
-          "priority",
-          "delete"
+          "delete",
+          "priority"
         ],
         "responses": {
           "200": {
@@ -1557,8 +1557,8 @@
       "put": {
         "summary": "updateStatus",
         "tags": [
-          "update",
-          "status"
+          "status",
+          "update"
         ],
         "responses": {
           "200": {
@@ -1596,8 +1596,8 @@
       "delete": {
         "summary": "deleteStatus",
         "tags": [
-          "delete",
-          "status"
+          "status",
+          "delete"
         ],
         "responses": {
           "200": {
@@ -2252,8 +2252,8 @@
       "put": {
         "summary": "update",
         "tags": [
-          "update",
-          "ticket_type"
+          "ticket_type",
+          "update"
         ],
         "responses": {
           "200": {

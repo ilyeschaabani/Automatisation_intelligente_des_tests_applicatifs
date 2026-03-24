@@ -306,8 +306,13 @@ All errors are collected in `stats.errors` for review.
 ## Configuration
 
 Environment variables (`.env`):
-- `OPENAI_API_KEY` - OpenAI API key
-- `LLM_MODEL` - Model to use (default: gpt-4)
+- `LLM_PROVIDER` - LLM provider selection: `auto` (default) | `local` | `openrouter` | `openai` | `none`
+- `LLM_BASE_URL` - Base URL for local OpenAI-compatible server (required for `LLM_PROVIDER=local`), e.g. `http://localhost:11434/v1`
+- `LLM_API_KEY` - API key for local server (often any non-empty value works)
+- `OPENROUTER_API_KEY` - OpenRouter API key (cloud)
+- `OPENROUTER_MODEL` - OpenRouter model name
+- `OPENAI_API_KEY` - OpenAI API key (cloud)
+- `LLM_MODEL` - Model to use for OpenAI/local providers (default: gpt-4)
 - `MAX_FILE_SIZE` - Chunking threshold (bytes)
 - `MAX_WORKERS` - Parallel workers
 - `CACHE_TTL` - Cache TTL (seconds)

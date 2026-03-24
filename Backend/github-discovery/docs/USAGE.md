@@ -7,11 +7,29 @@
    pip install -r requirements.txt
    ```
 
-2. **Set up OpenAI API key (optional for LLM augmentation):**
-   ```bash
-   cp .env.example .env
-   # Edit .env and add your OPENAI_API_KEY
-   ```
+2. **Optional: enable LLM augmentation (cloud or local):**
+
+    The pipeline can optionally call an LLM to improve extraction for tricky/dynamic patterns.
+
+    **Option A — Local (recommended for "Option C", e.g. Ollama/vLLM/TGI):**
+    - Start a local OpenAI-compatible server.
+       - Ollama: typically `http://localhost:11434/v1`
+       - vLLM: typically `http://localhost:8000/v1`
+    - Configure environment variables:
+       ```bash
+       cp .env.example .env
+       # Edit .env:
+       #   LLM_PROVIDER=local
+       #   LLM_BASE_URL=http://localhost:11434/v1
+       #   LLM_MODEL=qwen2.5-coder:7b
+       #   LLM_API_KEY=local
+       ```
+
+    **Option B — OpenRouter (cloud):**
+    - Set `OPENROUTER_API_KEY` (and optionally `OPENROUTER_MODEL`).
+
+    **Option C — OpenAI (cloud):**
+    - Set `OPENAI_API_KEY` (and optionally `LLM_MODEL`).
 
 3. **Run the pipeline:**
    ```bash
@@ -22,7 +40,7 @@
 
 ```
 usage: github-api-discovery [-h] [-b BRANCH] [--keep-repo] [--log-level {DEBUG,INFO,WARNING,ERROR}]
-                            [--output-dir OUTPUT_DIR] [--max-workers MAX_WORKERS]
+                            [--output-dir OUTPUT_DIR] [--repos-dir REPOS_DIR] [--max-workers MAX_WORKERS]
                             repo_url
 
 positional arguments:
@@ -37,6 +55,7 @@ optional arguments:
                         Logging level (default: INFO)
   --output-dir OUTPUT_DIR
                         Output directory for results (default: output/)
+   --repos-dir REPOS_DIR  Directory for cloned repositories (default: repos/)
   --max-workers MAX_WORKERS
                         Number of parallel workers (default: 4)
   --version             show program's version number and exit
@@ -110,7 +129,7 @@ The pipeline consists of the following components:
 
 ## Limitations
 
-- LLM extraction requires OpenAI API key (optional)
+- LLM extraction is optional and requires either a cloud key (OpenRouter/OpenAI) or a local OpenAI-compatible endpoint
 - Some dynamic route patterns may be missed
 - Very large repositories may require more memory
 - GraphQL support is limited to detection

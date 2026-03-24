@@ -471,6 +471,8 @@ class JavaVisitor(NodeVisitor):
                     identifier_node = node.child_by_field_name("name")
                     function_name = identifier_node.text.decode("utf8") if identifier_node else None
 
+                    parameters = self._extract_parameters(node)
+
                     line_number = node.start_point[0] + 1
 
                     # Combine with class-level prefix if exists
@@ -481,6 +483,7 @@ class JavaVisitor(NodeVisitor):
                         path=full_path,
                         line_number=line_number,
                         function_name=function_name,
+                        parameters=parameters,
                         confidence=0.87,
                         metadata={"annotation": match.group(0)[:50]}
                     )
@@ -494,6 +497,43 @@ class JavaVisitor(NodeVisitor):
                 "error": str(e),
                 "type": "java_method_processing"
             })
+
+    def _extract_parameters(self, node: tree_sitter.Node) -> List[str]:
+        """Extract parameter names from a Java method declaration."""
+        parameters: List[str] = []
+        try:
+            # Tree-sitter Java uses formal_parameters under field 'parameters'.
+            params_node = node.child_by_field_name("parameters")
+            candidates = []
+            if params_node is not None:
+                candidates.append(params_node)
+            # Fallback: find any parameters/formal_parameters child.
+            for child in node.children:
+                if child.type in {"formal_parameters", "parameters"}:
+                    candidates.append(child)
+
+            for pn in candidates:
+                for ch in pn.children:
+                    # formal_parameter nodes usually contain an identifier as name.
+                    name_node = ch.child_by_field_name("name") if hasattr(ch, "child_by_field_name") else None
+                    if name_node and name_node.type == "identifier":
+                        parameters.append(name_node.text.decode("utf8"))
+                        continue
+                    # Fallback: first identifier within the parameter node.
+                    for grand in ch.children:
+                        if grand.type == "identifier":
+                            parameters.append(grand.text.decode("utf8"))
+                            break
+        except Exception as e:
+            self.logger.debug("Error extracting Java parameters", error=str(e))
+        # Unique preserve order
+        seen = set()
+        ordered: List[str] = []
+        for p in parameters:
+            if p not in seen:
+                ordered.append(p)
+                seen.add(p)
+        return ordered
 
     def _combine_paths(self, prefix: str, path: str) -> str:
         """Combine prefix and path"""
@@ -551,13 +591,16 @@ class CSharpVisitor(NodeVisitor):
                         identifier_node = node.child_by_field_name("name")
                         function_name = identifier_node.text.decode("utf8") if identifier_node else None
 
+                        parameters = self._extract_parameters(node)
+
                         line_number = node.start_point[0] + 1
 
                         self.add_endpoint(
                             method=method,
                             path=path,
                             line_number=line_number,
-                            function_name=function_name
+                            function_name=function_name,
+                            parameters=parameters
                         )
 
         except Exception as e:
@@ -567,6 +610,39 @@ class CSharpVisitor(NodeVisitor):
                 "error": str(e),
                 "type": "method_declaration_processing"
             })
+
+    def _extract_parameters(self, node: tree_sitter.Node) -> List[str]:
+        """Extract parameter names from a C# method declaration."""
+        parameters: List[str] = []
+        try:
+            params_node = node.child_by_field_name("parameters")
+            candidates = []
+            if params_node is not None:
+                candidates.append(params_node)
+            for child in node.children:
+                if child.type in {"parameter_list", "parameters"}:
+                    candidates.append(child)
+
+            for pn in candidates:
+                for ch in pn.children:
+                    name_node = ch.child_by_field_name("name") if hasattr(ch, "child_by_field_name") else None
+                    if name_node and name_node.type in {"identifier", "variable_identifier"}:
+                        parameters.append(name_node.text.decode("utf8"))
+                        continue
+                    for grand in ch.children:
+                        if grand.type in {"identifier", "variable_identifier"}:
+                            parameters.append(grand.text.decode("utf8"))
+                            break
+        except Exception as e:
+            self.logger.debug("Error extracting C# parameters", error=str(e))
+
+        seen = set()
+        ordered: List[str] = []
+        for p in parameters:
+            if p not in seen:
+                ordered.append(p)
+                seen.add(p)
+        return ordered
 
 
 class GoVisitor(NodeVisitor):

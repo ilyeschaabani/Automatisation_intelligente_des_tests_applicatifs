@@ -1,0 +1,1946 @@
+[
+  {
+    "method": "post",
+    "path": "/api/projects/generate-topics",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\PFEProjectController.java",
+    "line_number": 33,
+    "router_prefix": "/api/projects",
+    "full_path": "/api/projects/api/projects/generate-topics",
+    "function_name": "generatePfeTopics",
+    "parameters": [
+      "studentProfile"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/generate-topics\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/projects/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\PFEProjectController.java",
+    "line_number": 39,
+    "router_prefix": "/api/projects",
+    "full_path": "/api/projects/api/projects/{id}",
+    "function_name": "getProjectById",
+    "parameters": [
+      "id"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "put",
+    "path": "/api/projects/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\PFEProjectController.java",
+    "line_number": 57,
+    "router_prefix": "/api/projects",
+    "full_path": "/api/projects/api/projects/{id}",
+    "function_name": "updateProject",
+    "parameters": [
+      "id",
+      "project"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PutMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "delete",
+    "path": "/api/projects/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\PFEProjectController.java",
+    "line_number": 68,
+    "router_prefix": "/api/projects",
+    "full_path": "/api/projects/api/projects/{id}",
+    "function_name": "deleteProject",
+    "parameters": [
+      "id"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@DeleteMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "put",
+    "path": "/api/projects/{id}/stage",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\PFEProjectController.java",
+    "line_number": 78,
+    "router_prefix": "/api/projects",
+    "full_path": "/api/projects/api/projects/{id}/stage",
+    "function_name": "updateProjectStage",
+    "parameters": [
+      "id",
+      "stage"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PutMapping(\"/{id}/stage\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/api/projects/{id}/document",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\PFEProjectController.java",
+    "line_number": 87,
+    "router_prefix": "/api/projects",
+    "full_path": "/api/projects/api/projects/{id}/document",
+    "function_name": "addDocument",
+    "parameters": [
+      "id",
+      "file"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/{id}/document\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/api/projects/{id}/evaluate",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\PFEProjectController.java",
+    "line_number": 109,
+    "router_prefix": "/api/projects",
+    "full_path": "/api/projects/api/projects/{id}/evaluate",
+    "function_name": "evaluateProject",
+    "parameters": [
+      "id",
+      "evaluation"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/{id}/evaluate\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/api/projects/{projectId}/comment",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\PFEProjectController.java",
+    "line_number": 115,
+    "router_prefix": "/api/projects",
+    "full_path": "/api/projects/api/projects/{projectId}/comment",
+    "function_name": "addCommentToProject",
+    "parameters": [
+      "projectId",
+      "comment"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/{projectId}/comment\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/users/role/{role}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\UserController.java",
+    "line_number": 32,
+    "router_prefix": "/api/users",
+    "full_path": "/api/users/api/users/role/{role}",
+    "function_name": "getUsersByRole",
+    "parameters": [
+      "role"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/role/{role}\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/api/auth/signup",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\AuthentificationRestAPI.java",
+    "line_number": 31,
+    "router_prefix": "/api/auth",
+    "full_path": "/api/auth/api/auth/signup",
+    "function_name": "signUp",
+    "parameters": [
+      "signUpRequest"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/signup\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/api/auth/signin",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\AuthentificationRestAPI.java",
+    "line_number": 35,
+    "router_prefix": "/api/auth",
+    "full_path": "/api/auth/api/auth/signin",
+    "function_name": "signIn",
+    "parameters": [
+      "signInRequest"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/signin\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/api/auth/refreshToken",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\AuthentificationRestAPI.java",
+    "line_number": 39,
+    "router_prefix": "/api/auth",
+    "full_path": "/api/auth/api/auth/refreshToken",
+    "function_name": "refreshToken",
+    "parameters": [
+      "refreshTokenrequest"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/refreshToken\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/auth/me",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\AuthentificationRestAPI.java",
+    "line_number": 43,
+    "router_prefix": "/api/auth",
+    "full_path": "/api/auth/api/auth/me",
+    "function_name": "getCurrentUser",
+    "parameters": [
+      "token"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/me\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/auth/encadrants",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\AuthentificationRestAPI.java",
+    "line_number": 47,
+    "router_prefix": "/api/auth",
+    "full_path": "/api/auth/api/auth/encadrants",
+    "function_name": "getEncadrants",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/encadrants\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/auth/getuser",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\AuthentificationRestAPI.java",
+    "line_number": 52,
+    "router_prefix": "/api/auth",
+    "full_path": "/api/auth/api/auth/getuser",
+    "function_name": "getAllUsers",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/getuser\""
+    }
+  },
+  {
+    "method": "put",
+    "path": "/api/auth/update/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\AuthentificationRestAPI.java",
+    "line_number": 56,
+    "router_prefix": "/api/auth",
+    "full_path": "/api/auth/api/auth/update/{id}",
+    "function_name": "updateUser",
+    "parameters": [
+      "id",
+      "updatedUser"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PutMapping(\"/update/{id}\""
+    }
+  },
+  {
+    "method": "delete",
+    "path": "/api/auth/delete/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\AuthentificationRestAPI.java",
+    "line_number": 60,
+    "router_prefix": "/api/auth",
+    "full_path": "/api/auth/api/auth/delete/{id}",
+    "function_name": "deleteUser",
+    "parameters": [
+      "id"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@DeleteMapping(\"/delete/{id}\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/forgotPassword/verifyMail/{email}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\ForgotPasswordController.java",
+    "line_number": 39,
+    "router_prefix": "/forgotPassword",
+    "full_path": "/forgotPassword/forgotPassword/verifyMail/{email}",
+    "function_name": "verifyEmail",
+    "parameters": [
+      "email"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/verifyMail/{email}\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/forgotPassword/verifyOTP/{otp}/{email}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\ForgotPasswordController.java",
+    "line_number": 61,
+    "router_prefix": "/forgotPassword",
+    "full_path": "/forgotPassword/forgotPassword/verifyOTP/{otp}/{email}",
+    "function_name": "verifyOTP",
+    "parameters": [
+      "otp",
+      "email"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/verifyOTP/{otp}/{email}\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/forgotPassword/changePassword/{email}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\ForgotPasswordController.java",
+    "line_number": 75,
+    "router_prefix": "/forgotPassword",
+    "full_path": "/forgotPassword/forgotPassword/changePassword/{email}",
+    "function_name": "changePasswordHandler",
+    "parameters": [
+      "changePassword",
+      "email"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/changePassword/{email}\""
+    }
+  },
+  {
+    "method": "put",
+    "path": "/api/certif/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\CertifController.java",
+    "line_number": 30,
+    "router_prefix": "/api/certif",
+    "full_path": "/api/certif/api/certif/{id}",
+    "function_name": "updateCertif",
+    "parameters": [
+      "id",
+      "certif"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PutMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "delete",
+    "path": "/api/certif/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\CertifController.java",
+    "line_number": 35,
+    "router_prefix": "/api/certif",
+    "full_path": "/api/certif/api/certif/{id}",
+    "function_name": "deleteCertif",
+    "parameters": [
+      "id"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@DeleteMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/certif/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\CertifController.java",
+    "line_number": 40,
+    "router_prefix": "/api/certif",
+    "full_path": "/api/certif/api/certif/{id}",
+    "function_name": "getCertifById",
+    "parameters": [
+      "id"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/certif/download/{idCertif}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\CertifController.java",
+    "line_number": 51,
+    "router_prefix": "/api/certif",
+    "full_path": "/api/certif/api/certif/download/{idCertif}",
+    "function_name": "downloadCertif",
+    "parameters": [
+      "idCertif"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/download/{idCertif}\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/evaluations/add",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\EvaluationController.java",
+    "line_number": 27,
+    "router_prefix": "/evaluations",
+    "full_path": "/evaluations/evaluations/add",
+    "function_name": "createEvaluation",
+    "parameters": [
+      "evaluation"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/add\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/evaluations/listeval",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\EvaluationController.java",
+    "line_number": 34,
+    "router_prefix": "/evaluations",
+    "full_path": "/evaluations/evaluations/listeval",
+    "function_name": "getAllEvaluations",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/listeval\""
+    }
+  },
+  {
+    "method": "put",
+    "path": "/evaluations/{idEvaluation}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\EvaluationController.java",
+    "line_number": 48,
+    "router_prefix": "/evaluations",
+    "full_path": "/evaluations/evaluations/{idEvaluation}",
+    "function_name": "updateEvaluation",
+    "parameters": [
+      "id",
+      "evaluation"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PutMapping(\"/{idEvaluation}\""
+    }
+  },
+  {
+    "method": "delete",
+    "path": "/evaluations/{idEvaluation}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\EvaluationController.java",
+    "line_number": 56,
+    "router_prefix": "/evaluations",
+    "full_path": "/evaluations/evaluations/{idEvaluation}",
+    "function_name": "deleteEvaluation",
+    "parameters": [
+      "idEvaluation"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@DeleteMapping(\"/{idEvaluation}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/evaluations/{idEvaluation}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\EvaluationController.java",
+    "line_number": 62,
+    "router_prefix": "/evaluations",
+    "full_path": "/evaluations/evaluations/{idEvaluation}",
+    "function_name": "getEvaluationById",
+    "parameters": [
+      "idEvaluation"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/{idEvaluation}\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/evaluations/{idEvaluation}/submit",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\EvaluationController.java",
+    "line_number": 68,
+    "router_prefix": "/evaluations",
+    "full_path": "/evaluations/evaluations/{idEvaluation}/submit",
+    "function_name": "submitEvaluationAnswers",
+    "parameters": [
+      "idEvaluation",
+      "payload"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/{idEvaluation}/submit\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/evaluations/{idEvaluation}/questions",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\EvaluationController.java",
+    "line_number": 79,
+    "router_prefix": "/evaluations",
+    "full_path": "/evaluations/evaluations/{idEvaluation}/questions",
+    "function_name": "addQuestionsToEvaluation",
+    "parameters": [
+      "idEvaluation",
+      "quesIds"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/{idEvaluation}/questions\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/gamification/process-quiz/{idUser}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\GamificationController.java",
+    "line_number": 24,
+    "router_prefix": "/gamification",
+    "full_path": "/gamification/gamification/process-quiz/{idUser}",
+    "function_name": "processQuizResults",
+    "parameters": [
+      "idUser",
+      "quizRecord"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/process-quiz/{idUser}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/gamification/user/{idUser}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\GamificationController.java",
+    "line_number": 43,
+    "router_prefix": "/gamification",
+    "full_path": "/gamification/gamification/user/{idUser}",
+    "function_name": "getUserGamification",
+    "parameters": [
+      "idUser"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/user/{idUser}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/gamification/badges/{userId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\GamificationController.java",
+    "line_number": 56,
+    "router_prefix": "/gamification",
+    "full_path": "/gamification/gamification/badges/{userId}",
+    "function_name": "getUserBadges",
+    "parameters": [
+      "idUser"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/badges/{userId}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/gamification/level-up/{idUser}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\GamificationController.java",
+    "line_number": 69,
+    "router_prefix": "/gamification",
+    "full_path": "/gamification/gamification/level-up/{idUser}",
+    "function_name": "checkLevelUp",
+    "parameters": [
+      "User"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/level-up/{idUser}\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/questions/addquestion",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuestionController.java",
+    "line_number": 28,
+    "router_prefix": "/questions",
+    "full_path": "/questions/questions/addquestion",
+    "function_name": "createQuestion",
+    "parameters": [
+      "question"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"addquestion\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/questions/listquestion",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuestionController.java",
+    "line_number": 32,
+    "router_prefix": "/questions",
+    "full_path": "/questions/questions/listquestion",
+    "function_name": "getAllQuestions",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"listquestion\""
+    }
+  },
+  {
+    "method": "put",
+    "path": "/questions/{quesId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuestionController.java",
+    "line_number": 37,
+    "router_prefix": "/questions",
+    "full_path": "/questions/questions/{quesId}",
+    "function_name": "updateQuestion",
+    "parameters": [
+      "quesId",
+      "question"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PutMapping(\"/{quesId}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/questions/by-evaluation/{idEvaluation}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuestionController.java",
+    "line_number": 51,
+    "router_prefix": "/questions",
+    "full_path": "/questions/questions/by-evaluation/{idEvaluation}",
+    "function_name": "getQuestionsByEvaluation",
+    "parameters": [
+      "idEvaluation"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/by-evaluation/{idEvaluation}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/questions/{quesId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuestionController.java",
+    "line_number": 61,
+    "router_prefix": "/questions",
+    "full_path": "/questions/questions/{quesId}",
+    "function_name": "getQuestionById",
+    "parameters": [
+      "quesId"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/{quesId}\""
+    }
+  },
+  {
+    "method": "delete",
+    "path": "/questions/{quesId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuestionController.java",
+    "line_number": 71,
+    "router_prefix": "/questions",
+    "full_path": "/questions/questions/{quesId}",
+    "function_name": "deleteQuestion",
+    "parameters": [
+      "quesId"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@DeleteMapping(\"/{quesId}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/quiz-results/user/{idUser}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuizResultController.java",
+    "line_number": 30,
+    "router_prefix": "/quiz-results",
+    "full_path": "/quiz-results/quiz-results/user/{idUser}",
+    "function_name": "getUserResults",
+    "parameters": [
+      "idUser"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/user/{idUser}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/quiz-results/by-evaluation/{evaluationId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuizResultController.java",
+    "line_number": 34,
+    "router_prefix": "/quiz-results",
+    "full_path": "/quiz-results/quiz-results/by-evaluation/{evaluationId}",
+    "function_name": "getResultsByEvaluation",
+    "parameters": [
+      "idEvaluation"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/by-evaluation/{evaluationId}\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/quiz-results/submit",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuizResultController.java",
+    "line_number": 43,
+    "router_prefix": "/quiz-results",
+    "full_path": "/quiz-results/quiz-results/submit",
+    "function_name": "submitQuiz",
+    "parameters": [
+      "submission"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/submit\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/user-activities/",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\RecordsController.java",
+    "line_number": 21,
+    "router_prefix": "/user-activities",
+    "full_path": "/user-activities/user-activities/",
+    "function_name": "add",
+    "parameters": [
+      "record"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/\""
+    }
+  },
+  {
+    "method": "put",
+    "path": "/user-activities/",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\RecordsController.java",
+    "line_number": 27,
+    "router_prefix": "/user-activities",
+    "full_path": "/user-activities/user-activities/",
+    "function_name": "update",
+    "parameters": [
+      "record"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PutMapping(\"/\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/user-activities/",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\RecordsController.java",
+    "line_number": 33,
+    "router_prefix": "/user-activities",
+    "full_path": "/user-activities/user-activities/",
+    "function_name": "records",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/user-activities/{aId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\RecordsController.java",
+    "line_number": 39,
+    "router_prefix": "/user-activities",
+    "full_path": "/user-activities/user-activities/{aId}",
+    "function_name": "getRecord",
+    "parameters": [
+      "aId"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/{aId}\""
+    }
+  },
+  {
+    "method": "delete",
+    "path": "/user-activities/{aId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\RecordsController.java",
+    "line_number": 45,
+    "router_prefix": "/user-activities",
+    "full_path": "/user-activities/user-activities/{aId}",
+    "function_name": "delete",
+    "parameters": [
+      "aId"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@DeleteMapping(\"/{aId}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/user-activities/quiz/{qId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\RecordsController.java",
+    "line_number": 51,
+    "router_prefix": "/user-activities",
+    "full_path": "/user-activities/user-activities/quiz/{qId}",
+    "function_name": "getRecordsOfQuiz",
+    "parameters": [
+      "idEvaluation"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/quiz/{qId}\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/api/formations/add",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\FormationMicroService\\src\\main\\java\\tn\\esprit\\formationmicroservice\\Controllers\\FormationController.java",
+    "line_number": 19,
+    "router_prefix": "/api/formations",
+    "full_path": "/api/formations/api/formations/add",
+    "function_name": "addFormation",
+    "parameters": [
+      "formation"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/add\""
+    }
+  },
+  {
+    "method": "put",
+    "path": "/api/formations/update/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\FormationMicroService\\src\\main\\java\\tn\\esprit\\formationmicroservice\\Controllers\\FormationController.java",
+    "line_number": 24,
+    "router_prefix": "/api/formations",
+    "full_path": "/api/formations/api/formations/update/{id}",
+    "function_name": "updateFormation",
+    "parameters": [
+      "id",
+      "formation"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PutMapping(\"/update/{id}\""
+    }
+  },
+  {
+    "method": "delete",
+    "path": "/api/formations/delete/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\FormationMicroService\\src\\main\\java\\tn\\esprit\\formationmicroservice\\Controllers\\FormationController.java",
+    "line_number": 29,
+    "router_prefix": "/api/formations",
+    "full_path": "/api/formations/api/formations/delete/{id}",
+    "function_name": "deleteFormation",
+    "parameters": [
+      "id"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@DeleteMapping(\"/delete/{id}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/formations/all",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\FormationMicroService\\src\\main\\java\\tn\\esprit\\formationmicroservice\\Controllers\\FormationController.java",
+    "line_number": 34,
+    "router_prefix": "/api/formations",
+    "full_path": "/api/formations/api/formations/all",
+    "function_name": "getAllFormations",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/all\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/formations/get/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\FormationMicroService\\src\\main\\java\\tn\\esprit\\formationmicroservice\\Controllers\\FormationController.java",
+    "line_number": 39,
+    "router_prefix": "/api/formations",
+    "full_path": "/api/formations/api/formations/get/{id}",
+    "function_name": "getFormationById",
+    "parameters": [
+      "id"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/get/{id}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/comments/byTopicId/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\CommentController.java",
+    "line_number": 33,
+    "router_prefix": "/api/comments",
+    "full_path": "/api/comments/api/comments/byTopicId/{id}",
+    "function_name": "getAllComments",
+    "parameters": [
+      "id"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/byTopicId/{id}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/comments/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\CommentController.java",
+    "line_number": 40,
+    "router_prefix": "/api/comments",
+    "full_path": "/api/comments/api/comments/{id}",
+    "function_name": "getCommentById",
+    "parameters": [
+      "id"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "put",
+    "path": "/api/comments/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\CommentController.java",
+    "line_number": 48,
+    "router_prefix": "/api/comments",
+    "full_path": "/api/comments/api/comments/{id}",
+    "function_name": "updateComment",
+    "parameters": [
+      "id",
+      "updatedComment"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PutMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "delete",
+    "path": "/api/comments/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\CommentController.java",
+    "line_number": 59,
+    "router_prefix": "/api/comments",
+    "full_path": "/api/comments/api/comments/{id}",
+    "function_name": "deleteComment",
+    "parameters": [
+      "id"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@DeleteMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/events-topics/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\EventTopicController.java",
+    "line_number": 23,
+    "router_prefix": "/api/events-topics",
+    "full_path": "/api/events-topics/api/events-topics/{id}",
+    "function_name": "getById",
+    "parameters": [
+      "id"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "put",
+    "path": "/api/events-topics/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\EventTopicController.java",
+    "line_number": 35,
+    "router_prefix": "/api/events-topics",
+    "full_path": "/api/events-topics/api/events-topics/{id}",
+    "function_name": "update",
+    "parameters": [
+      "id",
+      "eventTopic"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PutMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "delete",
+    "path": "/api/events-topics/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\EventTopicController.java",
+    "line_number": 40,
+    "router_prefix": "/api/events-topics",
+    "full_path": "/api/events-topics/api/events-topics/{id}",
+    "function_name": "delete",
+    "parameters": [
+      "id"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@DeleteMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/api/files/upload",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\FileUploadController.java",
+    "line_number": 29,
+    "router_prefix": "/api/files",
+    "full_path": "/api/files/api/files/upload",
+    "function_name": "uploadImage",
+    "parameters": [
+      "file",
+      "fileType"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/upload\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/files/download/{fileType}/{fileName}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\FileUploadController.java",
+    "line_number": 39,
+    "router_prefix": "/api/files",
+    "full_path": "/api/files/api/files/download/{fileType}/{fileName}",
+    "function_name": "downloadFile",
+    "parameters": [
+      "fileType",
+      "fileName"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/download/{fileType}/{fileName}\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/api/reactions/add",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\ReactionController.java",
+    "line_number": 19,
+    "router_prefix": "/api/reactions",
+    "full_path": "/api/reactions/api/reactions/add",
+    "function_name": "addReaction",
+    "parameters": [
+      "reaction"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/add\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/api/reactions/remove",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\ReactionController.java",
+    "line_number": 30,
+    "router_prefix": "/api/reactions",
+    "full_path": "/api/reactions/api/reactions/remove",
+    "function_name": "removeReaction",
+    "parameters": [
+      "reaction"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/remove\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/reports/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\ReportController.java",
+    "line_number": 25,
+    "router_prefix": "/api/reports",
+    "full_path": "/api/reports/api/reports/{id}",
+    "function_name": "getReportById",
+    "parameters": [
+      "id"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/reports/status/{status}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\ReportController.java",
+    "line_number": 37,
+    "router_prefix": "/api/reports",
+    "full_path": "/api/reports/api/reports/status/{status}",
+    "function_name": "getReportsByStatus",
+    "parameters": [
+      "status"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/status/{status}\""
+    }
+  },
+  {
+    "method": "put",
+    "path": "/api/reports/{id}/status",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\ReportController.java",
+    "line_number": 43,
+    "router_prefix": "/api/reports",
+    "full_path": "/api/reports/api/reports/{id}/status",
+    "function_name": "updateReportStatus",
+    "parameters": [
+      "id",
+      "status"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PutMapping(\"/{id}/status\""
+    }
+  },
+  {
+    "method": "delete",
+    "path": "/api/reports/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\ReportController.java",
+    "line_number": 49,
+    "router_prefix": "/api/reports",
+    "full_path": "/api/reports/api/reports/{id}",
+    "function_name": "deleteReport",
+    "parameters": [
+      "id"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@DeleteMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/formations/get/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\PanierMicroService\\src\\main\\java\\tn\\esprit\\paniermicroservice\\Client\\FormationClient.java",
+    "line_number": 10,
+    "router_prefix": "",
+    "full_path": "/api/formations/get/{id}",
+    "function_name": "getFormationById",
+    "parameters": [
+      "id"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/api/formations/get/{id}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/panier/{userId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\PanierMicroService\\src\\main\\java\\tn\\esprit\\paniermicroservice\\Controllers\\PanierController.java",
+    "line_number": 17,
+    "router_prefix": "/api/panier",
+    "full_path": "/api/panier/api/panier/{userId}",
+    "function_name": "getPanier",
+    "parameters": [
+      "userId"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/{userId}\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/api/panier/{userId}/add/{formationId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\PanierMicroService\\src\\main\\java\\tn\\esprit\\paniermicroservice\\Controllers\\PanierController.java",
+    "line_number": 22,
+    "router_prefix": "/api/panier",
+    "full_path": "/api/panier/api/panier/{userId}/add/{formationId}",
+    "function_name": "addFormationById",
+    "parameters": [
+      "userId",
+      "formationId"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/{userId}/add/{formationId}\""
+    }
+  },
+  {
+    "method": "delete",
+    "path": "/api/panier/{userId}/remove/{formationId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\PanierMicroService\\src\\main\\java\\tn\\esprit\\paniermicroservice\\Controllers\\PanierController.java",
+    "line_number": 28,
+    "router_prefix": "/api/panier",
+    "full_path": "/api/panier/api/panier/{userId}/remove/{formationId}",
+    "function_name": "removeFormation",
+    "parameters": [
+      "userId",
+      "formationId"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@DeleteMapping(\"/{userId}/remove/{formationId}\""
+    }
+  },
+  {
+    "method": "delete",
+    "path": "/api/panier/{userId}/clear",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\PanierMicroService\\src\\main\\java\\tn\\esprit\\paniermicroservice\\Controllers\\PanierController.java",
+    "line_number": 33,
+    "router_prefix": "/api/panier",
+    "full_path": "/api/panier/api/panier/{userId}/clear",
+    "function_name": "clearPanier",
+    "parameters": [
+      "userId"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@DeleteMapping(\"/{userId}/clear\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/checkout",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\PanierMicroService\\src\\main\\java\\tn\\esprit\\paniermicroservice\\Controllers\\PaymentController.java",
+    "line_number": 18,
+    "router_prefix": "",
+    "full_path": "/checkout",
+    "function_name": "createCheckout",
+    "parameters": [
+      "panier"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/checkout\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/api/files/upload/{projectId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\FileController.java",
+    "line_number": 32,
+    "router_prefix": "/api/files",
+    "full_path": "/api/files/api/files/upload/{projectId}",
+    "function_name": "uploadFile",
+    "parameters": [
+      "projectId",
+      "file"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/upload/{projectId}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/files/download/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\FileController.java",
+    "line_number": 54,
+    "router_prefix": "/api/files",
+    "full_path": "/api/files/api/files/download/{id}",
+    "function_name": "downloadFile",
+    "parameters": [
+      "id"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/download/{id}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/files/project/{projectId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\FileController.java",
+    "line_number": 63,
+    "router_prefix": "/api/files",
+    "full_path": "/api/files/api/files/project/{projectId}",
+    "function_name": "getProjectFiles",
+    "parameters": [
+      "projectId"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/project/{projectId}\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/api/projets/add",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "line_number": 33,
+    "router_prefix": "/api/projets",
+    "full_path": "/api/projets/api/projets/add",
+    "function_name": "addProjet",
+    "parameters": [
+      "projet"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/add\""
+    }
+  },
+  {
+    "method": "put",
+    "path": "/api/projets/update/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "line_number": 39,
+    "router_prefix": "/api/projets",
+    "full_path": "/api/projets/api/projets/update/{id}",
+    "function_name": "updateProjet",
+    "parameters": [
+      "id",
+      "projet"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PutMapping(\"/update/{id}\""
+    }
+  },
+  {
+    "method": "delete",
+    "path": "/api/projets/delete/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "line_number": 44,
+    "router_prefix": "/api/projets",
+    "full_path": "/api/projets/api/projets/delete/{id}",
+    "function_name": "deleteProjet",
+    "parameters": [
+      "id"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@DeleteMapping(\"/delete/{id}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/projets/all",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "line_number": 49,
+    "router_prefix": "/api/projets",
+    "full_path": "/api/projets/api/projets/all",
+    "function_name": "getAllProjets",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/all\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/projets/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "line_number": 54,
+    "router_prefix": "/api/projets",
+    "full_path": "/api/projets/api/projets/{id}",
+    "function_name": "getProjetById",
+    "parameters": [
+      "id"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "put",
+    "path": "/api/projets/validate-or-reject/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "line_number": 59,
+    "router_prefix": "/api/projets",
+    "full_path": "/api/projets/api/projets/validate-or-reject/{id}",
+    "function_name": "validateOrRejectProjet",
+    "parameters": [
+      "id",
+      "isValid",
+      "rejectionMotif"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PutMapping(\"/validate-or-reject/{id}\""
+    }
+  },
+  {
+    "method": "put",
+    "path": "/api/projets/assignEncadrant/{projetId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "line_number": 67,
+    "router_prefix": "/api/projets",
+    "full_path": "/api/projets/api/projets/assignEncadrant/{projetId}",
+    "function_name": "assignEncadrant",
+    "parameters": [
+      "projetId",
+      "encadrant"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PutMapping(\"/assignEncadrant/{projetId}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/projets/{projectId}/tasks",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "line_number": 80,
+    "router_prefix": "/api/projets",
+    "full_path": "/api/projets/api/projets/{projectId}/tasks",
+    "function_name": "getProjectTasks",
+    "parameters": [
+      "projectId"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/{projectId}/tasks\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/api/projets/{projectId}/tasks",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "line_number": 85,
+    "router_prefix": "/api/projets",
+    "full_path": "/api/projets/api/projets/{projectId}/tasks",
+    "function_name": "createTask",
+    "parameters": [
+      "projectId",
+      "task"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/{projectId}/tasks\""
+    }
+  },
+  {
+    "method": "put",
+    "path": "/api/projets/tasks/{taskId}/status",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "line_number": 94,
+    "router_prefix": "/api/projets",
+    "full_path": "/api/projets/api/projets/tasks/{taskId}/status",
+    "function_name": "updateTaskStatus",
+    "parameters": [
+      "taskId",
+      "body"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PutMapping(\"/tasks/{taskId}/status\""
+    }
+  },
+  {
+    "method": "put",
+    "path": "/api/projets/tasks/{taskId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "line_number": 100,
+    "router_prefix": "/api/projets",
+    "full_path": "/api/projets/api/projets/tasks/{taskId}",
+    "function_name": "updateTask",
+    "parameters": [
+      "taskId",
+      "task"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PutMapping(\"/tasks/{taskId}\""
+    }
+  },
+  {
+    "method": "delete",
+    "path": "/api/projets/tasks/{taskId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "line_number": 105,
+    "router_prefix": "/api/projets",
+    "full_path": "/api/projets/api/projets/tasks/{taskId}",
+    "function_name": "deleteTask",
+    "parameters": [
+      "taskId"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@DeleteMapping(\"/tasks/{taskId}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/projets/{projectId}/milestones",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "line_number": 110,
+    "router_prefix": "/api/projets",
+    "full_path": "/api/projets/api/projets/{projectId}/milestones",
+    "function_name": "getProjectMilestones",
+    "parameters": [
+      "projectId"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/{projectId}/milestones\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/api/projets/{projectId}/milestones",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "line_number": 115,
+    "router_prefix": "/api/projets",
+    "full_path": "/api/projets/api/projets/{projectId}/milestones",
+    "function_name": "addMilestone",
+    "parameters": [
+      "projectId",
+      "milestone"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/{projectId}/milestones\""
+    }
+  },
+  {
+    "method": "put",
+    "path": "/api/projets/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "line_number": 120,
+    "router_prefix": "/api/projets",
+    "full_path": "/api/projets/api/projets/{id}",
+    "function_name": "updateMilestone",
+    "parameters": [
+      "id",
+      "milestone"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PutMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "delete",
+    "path": "/api/projets/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "line_number": 125,
+    "router_prefix": "/api/projets",
+    "full_path": "/api/projets/api/projets/{id}",
+    "function_name": "deleteMilestone",
+    "parameters": [
+      "id"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@DeleteMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "patch",
+    "path": "/api/projets/milestones/{id}/complete",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "line_number": 133,
+    "router_prefix": "/api/projets",
+    "full_path": "/api/projets/api/projets/milestones/{id}/complete",
+    "function_name": "markAsCompleted",
+    "parameters": [
+      "id"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PatchMapping(\"/milestones/{id}/complete\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/users/encadrants",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\UserController.java",
+    "line_number": 21,
+    "router_prefix": "/api/users",
+    "full_path": "/api/users/api/users/encadrants",
+    "function_name": "getEncadrants",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/encadrants\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/download/{type}/{fileName}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\RessourceMicroService\\src\\main\\java\\tn\\esprit\\ressourcemicroservice\\Controller\\DownloadFileController.java",
+    "line_number": 21,
+    "router_prefix": "",
+    "full_path": "/api/download/{type}/{fileName}",
+    "function_name": "downloadFile",
+    "parameters": [
+      "type",
+      "fileName",
+      "preview"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/api/download/{type}/{fileName}\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/api/upload/{typeRessource}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\RessourceMicroService\\src\\main\\java\\tn\\esprit\\ressourcemicroservice\\Controller\\FileUploadController.java",
+    "line_number": 25,
+    "router_prefix": "/api/upload",
+    "full_path": "/api/upload/api/upload/{typeRessource}",
+    "function_name": "uploadResource",
+    "parameters": [
+      "typeRessource",
+      "file"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/{typeRessource}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/ressources/resume/{fileName}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\RessourceMicroService\\src\\main\\java\\tn\\esprit\\ressourcemicroservice\\Controller\\RessourcesController.java",
+    "line_number": 48,
+    "router_prefix": "/api/ressources",
+    "full_path": "/api/ressources/api/ressources/resume/{fileName}",
+    "function_name": "getResume",
+    "parameters": [
+      "fileName"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/resume/{fileName}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/ressources/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\RessourceMicroService\\src\\main\\java\\tn\\esprit\\ressourcemicroservice\\Controller\\RessourcesController.java",
+    "line_number": 71,
+    "router_prefix": "/api/ressources",
+    "full_path": "/api/ressources/api/ressources/{id}",
+    "function_name": "getRessourceById",
+    "parameters": [
+      "id"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "put",
+    "path": "/api/ressources/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\RessourceMicroService\\src\\main\\java\\tn\\esprit\\ressourcemicroservice\\Controller\\RessourcesController.java",
+    "line_number": 77,
+    "router_prefix": "/api/ressources",
+    "full_path": "/api/ressources/api/ressources/{id}",
+    "function_name": "updateRessource",
+    "parameters": [
+      "id",
+      "updatedRessource"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PutMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "delete",
+    "path": "/api/ressources/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\RessourceMicroService\\src\\main\\java\\tn\\esprit\\ressourcemicroservice\\Controller\\RessourcesController.java",
+    "line_number": 83,
+    "router_prefix": "/api/ressources",
+    "full_path": "/api/ressources/api/ressources/{id}",
+    "function_name": "deleteRessource",
+    "parameters": [
+      "id"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@DeleteMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/ressources/search",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\RessourceMicroService\\src\\main\\java\\tn\\esprit\\ressourcemicroservice\\Controller\\RessourcesController.java",
+    "line_number": 89,
+    "router_prefix": "/api/ressources",
+    "full_path": "/api/ressources/api/ressources/search",
+    "function_name": "searchRessources",
+    "parameters": [
+      "keyword",
+      "type"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/search\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/ressources/sort",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\RessourceMicroService\\src\\main\\java\\tn\\esprit\\ressourcemicroservice\\Controller\\RessourcesController.java",
+    "line_number": 97,
+    "router_prefix": "/api/ressources",
+    "full_path": "/api/ressources/api/ressources/sort",
+    "function_name": "sortRessources",
+    "parameters": [
+      "sortBy",
+      "direction"
+    ],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/sort\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/role/{role}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\UserController.java",
+    "line_number": 32,
+    "router_prefix": null,
+    "full_path": "/role/{role}",
+    "function_name": null,
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "regex",
+    "metadata": {
+      "pattern": "spring_GetMapping"
+    }
+  },
+  {
+    "method": "get",
+    "path": "/AuthenticationMicroService/**",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\Gateway\\src\\main\\java\\tn\\esprit\\gateway\\GatewayApplication.java",
+    "line_number": 23,
+    "router_prefix": null,
+    "full_path": "/AuthenticationMicroService/**",
+    "function_name": null,
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.6,
+    "source": "regex",
+    "metadata": {
+      "pattern": "spring_cloud_gateway_route"
+    }
+  }
+]

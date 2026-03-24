@@ -433,6 +433,38 @@ class Pipeline:
                     low_confidence_by_file[file_key].append(ep)
             
             self.logger.info("Files with low-confidence endpoints", count=len(low_confidence_by_file))
+
+            # Optional: force a few LLM calls for validation/testing.
+            # This makes it possible to test the local LLM integration even when
+            # earlier stages found no low-confidence endpoints.
+            if self.config.llm_force and not low_confidence_by_file:
+                allowed_langs = {
+                    'javascript', 'typescript', 'js', 'ts', 'jsx', 'tsx',
+                    'python', 'py',
+                    'java',
+                    'php',
+                    'go',
+                    'csharp', 'cs',
+                }
+                max_files = max(1, int(self.config.llm_force_max_files or 1))
+                forced: List[str] = []
+                for info in file_infos:
+                    try:
+                        fp = info.get('path')
+                        lang = (info.get('language') or '').lower()
+                        if not fp or lang not in allowed_langs:
+                            continue
+                        forced.append(str(fp))
+                        if len(forced) >= max_files:
+                            break
+                    except Exception:
+                        continue
+
+                if forced:
+                    low_confidence_by_file = {p: [] for p in forced}
+                    self.logger.info("LLM_FORCE enabled: forcing LLM calls", count=len(forced))
+                else:
+                    self.logger.info("LLM_FORCE enabled but no candidate files found")
             
             # Process files with low-confidence endpoints using LLM
             for file_path_str, low_conf_endpoints in low_confidence_by_file.items():

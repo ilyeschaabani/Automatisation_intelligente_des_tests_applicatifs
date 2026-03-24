@@ -12,6 +12,20 @@ load_dotenv()
 class Config:
     """Application configuration"""
 
+    # LLM Provider selection
+    # - auto (default): prefer LLM_BASE_URL, then OPENROUTER_API_KEY, then OPENAI_API_KEY
+    # - local: OpenAI-compatible server at LLM_BASE_URL (Ollama/vLLM/TGI/etc.)
+    # - openrouter: use OpenRouter only
+    # - openai: use OpenAI only
+    # - none: disable LLM
+    llm_provider: str = os.getenv("LLM_PROVIDER", "auto")
+    llm_base_url: Optional[str] = os.getenv("LLM_BASE_URL")
+    llm_api_key: Optional[str] = os.getenv("LLM_API_KEY")
+
+    # Debug/testing: force Stage 3 (LLM) to run even if no low-confidence endpoints exist.
+    llm_force: bool = os.getenv("LLM_FORCE", "false").strip().lower() in {"1", "true", "yes", "y", "on"}
+    llm_force_max_files: int = int(os.getenv("LLM_FORCE_MAX_FILES", "3"))
+
     # OpenRouter (preferred for LLM with multiple model options)
     openrouter_api_key: Optional[str] = os.getenv("OPENROUTER_API_KEY")
     openrouter_model: str = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")

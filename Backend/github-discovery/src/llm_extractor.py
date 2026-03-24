@@ -76,23 +76,54 @@ Extract all endpoints following the specified JSON format."""
         self.logger = get_logger(__name__)
         self.client = None
         self.use_openrouter = False
+        self.provider = None
 
         if not OPENAI_AVAILABLE:
             raise LLMError("OpenAI package not installed. Install with: pip install openai")
 
-        # Prefer OpenRouter over OpenAI
-        if config.openrouter_api_key:
-            self.client = OpenAI(
-                api_key=config.openrouter_api_key,
-                base_url=config.openrouter_base_url
+        provider = (config.llm_provider or "auto").strip().lower()
+
+        if provider == "auto":
+            if config.llm_base_url:
+                provider = "local"
+            elif config.openrouter_api_key:
+                provider = "openrouter"
+            elif config.openai_api_key:
+                provider = "openai"
+            else:
+                provider = "none"
+
+        if provider == "local":
+            if not config.llm_base_url:
+                raise LLMError("LLM_PROVIDER=local requires LLM_BASE_URL (e.g., http://localhost:11434/v1)")
+            api_key = config.llm_api_key or "local"
+            self.client = OpenAI(api_key=api_key, base_url=config.llm_base_url)
+            self.provider = "local"
+            self.logger.info(
+                "LLM Extractor initialized with local OpenAI-compatible endpoint",
+                model=config.llm_model,
+                base_url=config.llm_base_url,
             )
-            self.use_openrouter = True
-            self.logger.info("LLM Extractor initialized with OpenRouter", model=config.openrouter_model)
-        elif config.openai_api_key:
-            self.client = OpenAI(api_key=config.openai_api_key)
-            self.logger.info("LLM Extractor initialized with OpenAI", model=config.llm_model)
+        elif provider == "openrouter":
+            if config.openrouter_api_key:
+                self.client = OpenAI(
+                    api_key=config.openrouter_api_key,
+                    base_url=config.openrouter_base_url
+                )
+                self.use_openrouter = True
+                self.provider = "openrouter"
+                self.logger.info("LLM Extractor initialized with OpenRouter", model=config.openrouter_model)
+            else:
+                self.logger.warning("OPENROUTER_API_KEY not set - LLM extraction disabled")
+        elif provider == "openai":
+            if config.openai_api_key:
+                self.client = OpenAI(api_key=config.openai_api_key)
+                self.provider = "openai"
+                self.logger.info("LLM Extractor initialized with OpenAI", model=config.llm_model)
+            else:
+                self.logger.warning("OPENAI_API_KEY not set - LLM extraction disabled")
         else:
-            self.logger.warning("No LLM API key provided - LLM extraction disabled")
+            self.logger.warning("LLM extraction disabled")
 
         self.cache = None  # Will be set by pipeline if needed
 
@@ -182,7 +213,10 @@ Extract all endpoints following the specified JSON format."""
                         parameters=ep_data.get("parameters", []),
                         confidence=ep_data.get("confidence", 0.5),
                         source="llm",
-                        metadata={"llm_model": model, "llm_provider": "openrouter" if self.use_openrouter else "openai"}
+                        metadata={
+                            "llm_model": model,
+                            "llm_provider": (self.provider or ("openrouter" if self.use_openrouter else "openai")),
+                        }
                     )
                     endpoints.append(endpoint)
                 except Exception as e:

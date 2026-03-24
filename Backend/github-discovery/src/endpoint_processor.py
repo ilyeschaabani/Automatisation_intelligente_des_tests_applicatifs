@@ -24,6 +24,21 @@ class EndpointProcessor:
     def __init__(self):
         self.logger = get_logger(__name__)
 
+        # Parameters that are usually framework objects, not request inputs.
+        self._ignored_param_names = {
+            "self",
+            "cls",
+            "request",
+            "req",
+            "res",
+            "resp",
+            "response",
+            "next",
+            "args",
+            "kwargs",
+            "context",
+        }
+
     def process(
         self,
         endpoints: List[Endpoint],
@@ -150,6 +165,11 @@ class EndpointProcessor:
             else:
                 full_path = endpoint.path
 
+            merged_parameters = self._merge_parameters(
+                existing=endpoint.parameters,
+                full_path=full_path,
+            )
+
             # Create new endpoint with resolved path
             resolved_endpoint = Endpoint(
                 method=endpoint.method,
@@ -159,7 +179,7 @@ class EndpointProcessor:
                 router_prefix=prefix,
                 full_path=full_path,
                 function_name=endpoint.function_name,
-                parameters=endpoint.parameters,
+                parameters=merged_parameters,
                 middleware=endpoint.middleware,
                 confidence=endpoint.confidence,
                 source=endpoint.source,
@@ -168,6 +188,80 @@ class EndpointProcessor:
             resolved.append(resolved_endpoint)
 
         return resolved
+
+    def _merge_parameters(self, existing: List[str], full_path: str) -> List[str]:
+        """Merge existing parameters with parameters extracted from the route path."""
+        existing = existing or []
+        extracted = self._extract_path_parameters(full_path)
+
+        cleaned_existing: List[str] = []
+        for p in existing:
+            if not p:
+                continue
+            name = str(p).strip()
+            if not name:
+                continue
+            # If stored as name:type, keep name part for filtering.
+            name_only = name.split(":", 1)[0].strip()
+            if name_only.lower() in self._ignored_param_names:
+                continue
+            cleaned_existing.append(name)
+
+        merged: List[str] = []
+        seen = set()
+
+        for p in extracted:
+            if p not in seen:
+                merged.append(p)
+                seen.add(p)
+
+        for p in cleaned_existing:
+            # compare by name part to avoid duplicates when type info exists
+            name_only = p.split(":", 1)[0].strip()
+            if name_only not in seen:
+                merged.append(p)
+                seen.add(name_only)
+
+        return merged
+
+    def _extract_path_parameters(self, path: str) -> List[str]:
+        """Extract path parameter names from common syntaxes.
+
+        Supports:
+        - OpenAPI: /users/{id}
+        - Express: /users/:id
+        - Flask: /users/<id> or /users/<int:id>
+        - Django: /users/(?P<id>\\d+)
+        """
+        if not path:
+            return []
+
+        params: List[str] = []
+
+        # {id} or {id:regex}
+        for m in re.finditer(r"\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?::[^}]+)?\}", path):
+            params.append(m.group(1))
+
+        # :id
+        for m in re.finditer(r"(?<![A-Za-z0-9_]):([A-Za-z_][A-Za-z0-9_]*)", path):
+            params.append(m.group(1))
+
+        # <id> or <int:id>
+        for m in re.finditer(r"<\s*(?:[A-Za-z_][A-Za-z0-9_]*:)?\s*([A-Za-z_][A-Za-z0-9_]*)\s*>", path):
+            params.append(m.group(1))
+
+        # (?P<id>...)
+        for m in re.finditer(r"\(\?P<([A-Za-z_][A-Za-z0-9_]*)>", path):
+            params.append(m.group(1))
+
+        # Stable unique order
+        seen = set()
+        ordered: List[str] = []
+        for p in params:
+            if p not in seen:
+                ordered.append(p)
+                seen.add(p)
+        return ordered
 
     def _combine_paths(self, prefix: str, path: str) -> str:
         """Combine prefix and path"""
