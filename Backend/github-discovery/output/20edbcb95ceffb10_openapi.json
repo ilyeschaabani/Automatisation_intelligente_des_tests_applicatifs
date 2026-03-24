@@ -1,0 +1,1474 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "API Specification - 20edbcb95ceffb10",
+    "version": "1.0.0",
+    "description": "Auto-generated from repository https://github.com/ilyeschaabani/microservice.git",
+    "x-generated": "2026-03-23T16:12:12.162345Z",
+    "x-endpoint-count": 34
+  },
+  "servers": [
+    {
+      "url": "https://api.example.com"
+    }
+  ],
+  "paths": {
+    "/api/auth/api/auth/signup": {
+      "post": {
+        "summary": "signUp",
+        "tags": [
+          "sign",
+          "authentification_rest_a_p_i"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@PostMapping(\"/signup\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/api/auth/api/auth/signin": {
+      "post": {
+        "summary": "signIn",
+        "tags": [
+          "sign",
+          "authentification_rest_a_p_i"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@PostMapping(\"/signin\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/api/auth/api/auth/refreshToken": {
+      "post": {
+        "summary": "refreshToken",
+        "tags": [
+          "refresh",
+          "authentification_rest_a_p_i"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@PostMapping(\"/refreshToken\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/forgotPassword/forgotPassword/verifyMail/{email}": {
+      "post": {
+        "summary": "verifyEmail",
+        "tags": [
+          "verify",
+          "forgot_password"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@PostMapping(\"/verifyMail/{email}\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/forgotPassword/forgotPassword/verifyOTP/{otp}/{email}": {
+      "post": {
+        "summary": "verifyOTP",
+        "tags": [
+          "verify",
+          "forgot_password"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@PostMapping(\"/verifyOTP/{otp}/{email}\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/forgotPassword/forgotPassword/changePassword/{email}": {
+      "post": {
+        "summary": "changePasswordHandler",
+        "tags": [
+          "change",
+          "forgot_password"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@PostMapping(\"/changePassword/{email}\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/api/formations/api/formations/add": {
+      "post": {
+        "summary": "addFormation",
+        "tags": [
+          "add"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@PostMapping(\"/add\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/api/formations/api/formations/update/{id}": {
+      "put": {
+        "summary": "updateFormation",
+        "tags": [
+          "update"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@PutMapping(\"/update/{id}\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/api/formations/api/formations/delete/{id}": {
+      "delete": {
+        "summary": "deleteFormation",
+        "tags": [
+          "delete"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@DeleteMapping(\"/delete/{id}\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/api/formations/api/formations/all": {
+      "get": {
+        "summary": "getAllFormations",
+        "tags": [
+          "get"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@GetMapping(\"/all\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/api/formations/api/formations/get/{id}": {
+      "get": {
+        "summary": "getFormationById",
+        "tags": [
+          "get"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@GetMapping(\"/get/{id}\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/evaluations/evaluations/add": {
+      "post": {
+        "summary": "createEvaluation",
+        "tags": [
+          "create",
+          "evaluation"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@PostMapping(\"/add\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/evaluations/evaluations/listeval": {
+      "get": {
+        "summary": "getAllEvaluations",
+        "tags": [
+          "get",
+          "evaluation"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@GetMapping(\"/listeval\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/evaluations/evaluations/{idEvaluation}": {
+      "put": {
+        "summary": "updateEvaluation",
+        "tags": [
+          "update",
+          "evaluation"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@PutMapping(\"/{idEvaluation}\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      },
+      "delete": {
+        "summary": "deleteEvaluation",
+        "tags": [
+          "delete",
+          "evaluation"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@DeleteMapping(\"/{idEvaluation}\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      },
+      "get": {
+        "summary": "getEvaluationById",
+        "tags": [
+          "get",
+          "evaluation"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@GetMapping(\"/{idEvaluation}\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/evaluations/evaluations/{idEvaluation}/questions": {
+      "post": {
+        "summary": "addQuestionsToEvaluation",
+        "tags": [
+          "add",
+          "evaluation"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@PostMapping(\"/{idEvaluation}/questions\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/questions/questions/{quesId}": {
+      "put": {
+        "summary": "updateQuestion",
+        "tags": [
+          "update",
+          "question"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@PutMapping(\"/{quesId}\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      },
+      "delete": {
+        "summary": "deleteQuestion",
+        "tags": [
+          "question",
+          "delete"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@DeleteMapping(\"/{quesId}\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/questions/questions/by-evaluation/{idEvaluation}": {
+      "get": {
+        "summary": "getQuestionsByEvaluation",
+        "tags": [
+          "get",
+          "question"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@GetMapping(\"/by-evaluation/{idEvaluation}\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/api/quiz/api/quiz/questions": {
+      "get": {
+        "summary": "getQuestions",
+        "tags": [
+          "get",
+          "quiz"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@GetMapping(\"/questions\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/api/quiz/api/quiz/evaluate": {
+      "post": {
+        "summary": "evaluateQuiz",
+        "tags": [
+          "evaluate",
+          "quiz"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@PostMapping(\"/evaluate\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/api/download/api/download/{type}/{fileName}": {
+      "get": {
+        "summary": "downloadFile",
+        "tags": [
+          "download_file",
+          "download"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@GetMapping(\"/{type}/{fileName}\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/api/upload/api/upload/{typeRessource}": {
+      "post": {
+        "summary": "uploadResource",
+        "tags": [
+          "file_upload",
+          "upload"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@PostMapping(\"/{typeRessource}\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/api/ressources/api/ressources/{id}": {
+      "get": {
+        "summary": "getRessourceById",
+        "tags": [
+          "get",
+          "ressources"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@GetMapping(\"/{id}\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      },
+      "put": {
+        "summary": "updateRessource",
+        "tags": [
+          "update",
+          "ressources"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@PutMapping(\"/{id}\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      },
+      "delete": {
+        "summary": "deleteRessource",
+        "tags": [
+          "ressources",
+          "delete"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@DeleteMapping(\"/{id}\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/api/events-topics/api/events-topics/{id}": {
+      "get": {
+        "summary": "getById",
+        "tags": [
+          "get",
+          "event_topic"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@GetMapping(\"/{id}\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      },
+      "put": {
+        "summary": "update",
+        "tags": [
+          "event_topic",
+          "update"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@PutMapping(\"/{id}\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      },
+      "delete": {
+        "summary": "delete",
+        "tags": [
+          "event_topic",
+          "delete"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@DeleteMapping(\"/{id}\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/api/events-topics/api/events-topics/upcoming": {
+      "get": {
+        "summary": "getUpcomingEvents",
+        "tags": [
+          "get",
+          "event_topic"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@GetMapping(\"/upcoming\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/api/events-topics/api/events-topics/notify-upcoming": {
+      "get": {
+        "summary": "notifyUpcomingEvents",
+        "tags": [
+          "notify",
+          "event_topic"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@GetMapping(\"/notify-upcoming\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/api/events-topics/api/events-topics/statistics": {
+      "get": {
+        "summary": "getStatistics",
+        "tags": [
+          "get",
+          "event_topic"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@GetMapping(\"/statistics\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    },
+    "/api/events-topics/api/events-topics/statistics/pdf": {
+      "get": {
+        "summary": "downloadStatisticsPdf",
+        "tags": [
+          "download",
+          "event_topic"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "annotation": "@GetMapping(\"/statistics/pdf\""
+        },
+        "x-confidence": 0.87,
+        "x-source": "ast"
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "add"
+    },
+    {
+      "name": "authentification_rest_a_p_i"
+    },
+    {
+      "name": "change"
+    },
+    {
+      "name": "create"
+    },
+    {
+      "name": "delete"
+    },
+    {
+      "name": "download"
+    },
+    {
+      "name": "download_file"
+    },
+    {
+      "name": "evaluate"
+    },
+    {
+      "name": "evaluation"
+    },
+    {
+      "name": "event_topic"
+    },
+    {
+      "name": "file_upload"
+    },
+    {
+      "name": "forgot_password"
+    },
+    {
+      "name": "get"
+    },
+    {
+      "name": "notify"
+    },
+    {
+      "name": "question"
+    },
+    {
+      "name": "quiz"
+    },
+    {
+      "name": "refresh"
+    },
+    {
+      "name": "ressources"
+    },
+    {
+      "name": "sign"
+    },
+    {
+      "name": "update"
+    },
+    {
+      "name": "upload"
+    },
+    {
+      "name": "verify"
+    }
+  ]
+}

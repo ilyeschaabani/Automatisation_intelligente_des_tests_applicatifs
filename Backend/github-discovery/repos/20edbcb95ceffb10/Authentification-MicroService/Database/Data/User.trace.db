@@ -1,0 +1,226 @@
+2025-02-14 22:32:18.539057+01:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Erreur de syntaxe dans l'instruction SQL "create table [*]user (id_user varchar(255) not null, adresse varchar(255), email varchar(255), nom varchar(255), password varchar(255), photo varchar(255), prenom varchar(255), role tinyint check (role between 0 and 3), telephone varchar(255), primary key (id_user))"; attendu "identifier"
+Syntax error in SQL statement "create table [*]user (id_user varchar(255) not null, adresse varchar(255), email varchar(255), nom varchar(255), password varchar(255), photo varchar(255), prenom varchar(255), role tinyint check (role between 0 and 3), telephone varchar(255), primary key (id_user))"; expected "identifier"; SQL statement:
+create table user (id_user varchar(255) not null, adresse varchar(255), email varchar(255), nom varchar(255), password varchar(255), photo varchar(255), prenom varchar(255), role tinyint check (role between 0 and 3), telephone varchar(255), primary key (id_user)) [42001-232]
+2025-02-14 22:33:14.311869+01:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Erreur de syntaxe dans l'instruction SQL "create table [*]user (id_user varchar(255) not null, adresse varchar(255), email varchar(255), nom varchar(255), password varchar(255), photo varchar(255), prenom varchar(255), role tinyint check (role between 0 and 3), telephone varchar(255), primary key (id_user))"; attendu "identifier"
+Syntax error in SQL statement "create table [*]user (id_user varchar(255) not null, adresse varchar(255), email varchar(255), nom varchar(255), password varchar(255), photo varchar(255), prenom varchar(255), role tinyint check (role between 0 and 3), telephone varchar(255), primary key (id_user))"; expected "identifier"; SQL statement:
+create table user (id_user varchar(255) not null, adresse varchar(255), email varchar(255), nom varchar(255), password varchar(255), photo varchar(255), prenom varchar(255), role tinyint check (role between 0 and 3), telephone varchar(255), primary key (id_user)) [42001-232]
+2025-02-14 22:36:21.657592+01:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Erreur de syntaxe dans l'instruction SQL "create table [*]user (id_user varchar(255) not null, adresse varchar(255), email varchar(255), nom varchar(255), password varchar(255), photo varchar(255), prenom varchar(255), role tinyint check (role between 0 and 3), telephone varchar(255), primary key (id_user))"; attendu "identifier"
+Syntax error in SQL statement "create table [*]user (id_user varchar(255) not null, adresse varchar(255), email varchar(255), nom varchar(255), password varchar(255), photo varchar(255), prenom varchar(255), role tinyint check (role between 0 and 3), telephone varchar(255), primary key (id_user))"; expected "identifier"; SQL statement:
+create table user (id_user varchar(255) not null, adresse varchar(255), email varchar(255), nom varchar(255), password varchar(255), photo varchar(255), prenom varchar(255), role tinyint check (role between 0 and 3), telephone varchar(255), primary key (id_user)) [42001-232]
+2025-02-14 22:37:01.659228+01:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Erreur de syntaxe dans l'instruction SQL "create table [*]user (id_user varchar(255) not null, adresse varchar(255), email varchar(255), nom varchar(255), password varchar(255), photo varchar(255), prenom varchar(255), role tinyint check (role between 0 and 3), telephone varchar(255), primary key (id_user))"; attendu "identifier"
+Syntax error in SQL statement "create table [*]user (id_user varchar(255) not null, adresse varchar(255), email varchar(255), nom varchar(255), password varchar(255), photo varchar(255), prenom varchar(255), role tinyint check (role between 0 and 3), telephone varchar(255), primary key (id_user))"; expected "identifier"; SQL statement:
+create table user (id_user varchar(255) not null, adresse varchar(255), email varchar(255), nom varchar(255), password varchar(255), photo varchar(255), prenom varchar(255), role tinyint check (role between 0 and 3), telephone varchar(255), primary key (id_user)) [42001-232]
+2025-02-14 22:37:06.984614+01:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Erreur de syntaxe dans l'instruction SQL "select u1_0.id_user,u1_0.adresse,u1_0.email,u1_0.nom,u1_0.password,u1_0.photo,u1_0.prenom,u1_0.role,u1_0.telephone from [*]user u1_0 where u1_0.role=?"; attendu "identifier"
+Syntax error in SQL statement "select u1_0.id_user,u1_0.adresse,u1_0.email,u1_0.nom,u1_0.password,u1_0.photo,u1_0.prenom,u1_0.role,u1_0.telephone from [*]user u1_0 where u1_0.role=?"; expected "identifier"; SQL statement:
+select u1_0.id_user,u1_0.adresse,u1_0.email,u1_0.nom,u1_0.password,u1_0.photo,u1_0.prenom,u1_0.role,u1_0.telephone from user u1_0 where u1_0.role=? [42001-232]
+2025-02-14 22:39:32.021877+01:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Erreur de syntaxe dans l'instruction SQL "create table [*]user (id_user varchar(255) not null, adresse varchar(255), email varchar(255), nom varchar(255), password varchar(255), photo varchar(255), prenom varchar(255), role tinyint check (role between 0 and 3), telephone varchar(255), primary key (id_user))"; attendu "identifier"
+Syntax error in SQL statement "create table [*]user (id_user varchar(255) not null, adresse varchar(255), email varchar(255), nom varchar(255), password varchar(255), photo varchar(255), prenom varchar(255), role tinyint check (role between 0 and 3), telephone varchar(255), primary key (id_user))"; expected "identifier"; SQL statement:
+create table user (id_user varchar(255) not null, adresse varchar(255), email varchar(255), nom varchar(255), password varchar(255), photo varchar(255), prenom varchar(255), role tinyint check (role between 0 and 3), telephone varchar(255), primary key (id_user)) [42001-232]
+2025-02-14 22:39:35.776002+01:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Erreur de syntaxe dans l'instruction SQL "select u1_0.id_user,u1_0.adresse,u1_0.email,u1_0.nom,u1_0.password,u1_0.photo,u1_0.prenom,u1_0.role,u1_0.telephone from [*]user u1_0 where u1_0.role=?"; attendu "identifier"
+Syntax error in SQL statement "select u1_0.id_user,u1_0.adresse,u1_0.email,u1_0.nom,u1_0.password,u1_0.photo,u1_0.prenom,u1_0.role,u1_0.telephone from [*]user u1_0 where u1_0.role=?"; expected "identifier"; SQL statement:
+select u1_0.id_user,u1_0.adresse,u1_0.email,u1_0.nom,u1_0.password,u1_0.photo,u1_0.prenom,u1_0.role,u1_0.telephone from user u1_0 where u1_0.role=? [42001-232]
+2025-02-14 22:41:14.017971+01:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Erreur de syntaxe dans l'instruction SQL "create table [*]user (id_user varchar(255) not null, adresse varchar(255), email varchar(255), nom varchar(255), password varchar(255), photo varchar(255), prenom varchar(255), role tinyint check (role between 0 and 3), telephone varchar(255), primary key (id_user))"; attendu "identifier"
+Syntax error in SQL statement "create table [*]user (id_user varchar(255) not null, adresse varchar(255), email varchar(255), nom varchar(255), password varchar(255), photo varchar(255), prenom varchar(255), role tinyint check (role between 0 and 3), telephone varchar(255), primary key (id_user))"; expected "identifier"; SQL statement:
+create table user (id_user varchar(255) not null, adresse varchar(255), email varchar(255), nom varchar(255), password varchar(255), photo varchar(255), prenom varchar(255), role tinyint check (role between 0 and 3), telephone varchar(255), primary key (id_user)) [42001-232]
+2025-02-14 22:41:17.769641+01:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Erreur de syntaxe dans l'instruction SQL "select u1_0.id_user,u1_0.adresse,u1_0.email,u1_0.nom,u1_0.password,u1_0.photo,u1_0.prenom,u1_0.role,u1_0.telephone from [*]user u1_0 where u1_0.role=?"; attendu "identifier"
+Syntax error in SQL statement "select u1_0.id_user,u1_0.adresse,u1_0.email,u1_0.nom,u1_0.password,u1_0.photo,u1_0.prenom,u1_0.role,u1_0.telephone from [*]user u1_0 where u1_0.role=?"; expected "identifier"; SQL statement:
+select u1_0.id_user,u1_0.adresse,u1_0.email,u1_0.nom,u1_0.password,u1_0.photo,u1_0.prenom,u1_0.role,u1_0.telephone from user u1_0 where u1_0.role=? [42001-232]
+2025-02-14 22:47:21.821520+01:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLFeatureNotSupportedException: Fonctionnalité non supportée: "CHARACTER VARYING(255)"
+Feature not supported: "CHARACTER VARYING(255)"; SQL statement:
+create table app_user (adresse varchar(255), email varchar(255), id_user varchar(255) generated by default as identity, nom varchar(255), password varchar(255), photo varchar(255), prenom varchar(255), telephone varchar(255), role enum ('ADMIN','CONSULTANT','ENCADRANT','ETUDIANT'), primary key (id_user)) [50100-232]
+	at org.h2.message.DbException.getJdbcSQLException(DbException.java:568)
+	at org.h2.message.DbException.getJdbcSQLException(DbException.java:489)
+	at org.h2.message.DbException.get(DbException.java:223)
+	at org.h2.message.DbException.get(DbException.java:199)
+	at org.h2.message.DbException.getUnsupportedException(DbException.java:287)
+	at org.h2.command.ddl.SequenceOptions.getBounds(SequenceOptions.java:316)
+	at org.h2.command.ddl.SequenceOptions.getBounds(SequenceOptions.java:244)
+	at org.h2.schema.Sequence.<init>(Sequence.java:100)
+	at org.h2.table.Column.initializeSequence(Column.java:502)
+	at org.h2.command.ddl.CommandWithColumns.generateSequences(CommandWithColumns.java:103)
+	at org.h2.command.ddl.CreateTable.update(CreateTable.java:113)
+	at org.h2.command.CommandContainer.update(CommandContainer.java:139)
+	at org.h2.command.Command.executeUpdate(Command.java:304)
+	at org.h2.command.Command.executeUpdate(Command.java:248)
+	at org.h2.jdbc.JdbcStatement.executeInternal(JdbcStatement.java:262)
+	at org.h2.jdbc.JdbcStatement.execute(JdbcStatement.java:231)
+	at com.zaxxer.hikari.pool.ProxyStatement.execute(ProxyStatement.java:94)
+	at com.zaxxer.hikari.pool.HikariProxyStatement.execute(HikariProxyStatement.java)
+	at org.hibernate.tool.schema.internal.exec.GenerationTargetToDatabase.accept(GenerationTargetToDatabase.java:80)
+	at org.hibernate.tool.schema.internal.Helper.applySqlString(Helper.java:233)
+	at org.hibernate.tool.schema.internal.Helper.applySqlStrings(Helper.java:217)
+	at org.hibernate.tool.schema.internal.SchemaCreatorImpl.createTables(SchemaCreatorImpl.java:428)
+	at org.hibernate.tool.schema.internal.SchemaCreatorImpl.createSequencesTablesConstraints(SchemaCreatorImpl.java:344)
+	at org.hibernate.tool.schema.internal.SchemaCreatorImpl.createFromMetadata(SchemaCreatorImpl.java:239)
+	at org.hibernate.tool.schema.internal.SchemaCreatorImpl.performCreation(SchemaCreatorImpl.java:172)
+	at org.hibernate.tool.schema.internal.SchemaCreatorImpl.doCreation(SchemaCreatorImpl.java:142)
+	at org.hibernate.tool.schema.internal.SchemaCreatorImpl.doCreation(SchemaCreatorImpl.java:118)
+	at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.performDatabaseAction(SchemaManagementToolCoordinator.java:250)
+	at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.lambda$process$5(SchemaManagementToolCoordinator.java:144)
+	at java.base/java.util.HashMap.forEach(HashMap.java:1421)
+	at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.process(SchemaManagementToolCoordinator.java:141)
+	at org.hibernate.boot.internal.SessionFactoryObserverForSchemaExport.sessionFactoryCreated(SessionFactoryObserverForSchemaExport.java:37)
+	at org.hibernate.internal.SessionFactoryObserverChain.sessionFactoryCreated(SessionFactoryObserverChain.java:35)
+	at org.hibernate.internal.SessionFactoryImpl.<init>(SessionFactoryImpl.java:324)
+	at org.hibernate.boot.internal.SessionFactoryBuilderImpl.build(SessionFactoryBuilderImpl.java:463)
+	at org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl.build(EntityManagerFactoryBuilderImpl.java:1506)
+	at org.springframework.orm.jpa.vendor.SpringHibernateJpaPersistenceProvider.createContainerEntityManagerFactory(SpringHibernateJpaPersistenceProvider.java:66)
+	at org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean.createNativeEntityManagerFactory(LocalContainerEntityManagerFactoryBean.java:390)
+	at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.buildNativeEntityManagerFactory(AbstractEntityManagerFactoryBean.java:419)
+	at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.afterPropertiesSet(AbstractEntityManagerFactoryBean.java:400)
+	at org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean.afterPropertiesSet(LocalContainerEntityManagerFactoryBean.java:366)
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.invokeInitMethods(AbstractAutowireCapableBeanFactory.java:1859)
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.initializeBean(AbstractAutowireCapableBeanFactory.java:1808)
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.doCreateBean(AbstractAutowireCapableBeanFactory.java:601)
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.createBean(AbstractAutowireCapableBeanFactory.java:523)
+	at org.springframework.beans.factory.support.AbstractBeanFactory.lambda$doGetBean$0(AbstractBeanFactory.java:336)
+	at org.springframework.beans.factory.support.DefaultSingletonBeanRegistry.getSingleton(DefaultSingletonBeanRegistry.java:307)
+	at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:334)
+	at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:204)
+	at org.springframework.context.support.AbstractApplicationContext.finishBeanFactoryInitialization(AbstractApplicationContext.java:970)
+	at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:627)
+	at org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext.refresh(ServletWebServerApplicationContext.java:146)
+	at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:752)
+	at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:439)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:318)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1361)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1350)
+	at tn.esprit.authentificationmicroservice.AuthentificationMicroServiceApplication.main(AuthentificationMicroServiceApplication.java:20)
+2025-02-14 22:47:25.577237+01:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "APP_USER" not found (this database is empty); SQL statement:
+select u1_0.id_user,u1_0.adresse,u1_0.email,u1_0.nom,u1_0.password,u1_0.photo,u1_0.prenom,u1_0.role,u1_0.telephone from app_user u1_0 where u1_0.role=? [42104-232]
+2025-02-14 22:50:01.613441+01:00 database: wrong user or password; user: "SA"
+org.h2.message.DbException: Mauvais nom d'utilisateur ou mot de passe
+Wrong user name or password [28000-232]
+	at org.h2.message.DbException.get(DbException.java:223)
+	at org.h2.message.DbException.get(DbException.java:199)
+	at org.h2.message.DbException.get(DbException.java:188)
+	at org.h2.engine.Engine.openSession(Engine.java:154)
+	at org.h2.engine.Engine.openSession(Engine.java:222)
+	at org.h2.engine.Engine.createSession(Engine.java:201)
+	at org.h2.engine.SessionRemote.connectEmbeddedOrServer(SessionRemote.java:344)
+	at org.h2.jdbc.JdbcConnection.<init>(JdbcConnection.java:124)
+	at org.h2.Driver.connect(Driver.java:59)
+	at com.zaxxer.hikari.util.DriverDataSource.getConnection(DriverDataSource.java:137)
+	at com.zaxxer.hikari.pool.PoolBase.newConnection(PoolBase.java:360)
+	at com.zaxxer.hikari.pool.PoolBase.newPoolEntry(PoolBase.java:202)
+	at com.zaxxer.hikari.pool.HikariPool.createPoolEntry(HikariPool.java:461)
+	at com.zaxxer.hikari.pool.HikariPool.checkFailFast(HikariPool.java:550)
+	at com.zaxxer.hikari.pool.HikariPool.<init>(HikariPool.java:98)
+	at com.zaxxer.hikari.HikariDataSource.getConnection(HikariDataSource.java:111)
+	at org.hibernate.engine.jdbc.connections.internal.DatasourceConnectionProviderImpl.getConnection(DatasourceConnectionProviderImpl.java:126)
+	at org.hibernate.engine.jdbc.env.internal.JdbcEnvironmentInitiator$ConnectionProviderJdbcConnectionAccess.obtainConnection(JdbcEnvironmentInitiator.java:467)
+	at org.hibernate.resource.transaction.backend.jdbc.internal.JdbcIsolationDelegate.delegateWork(JdbcIsolationDelegate.java:61)
+	at org.hibernate.engine.jdbc.env.internal.JdbcEnvironmentInitiator.getJdbcEnvironmentUsingJdbcMetadata(JdbcEnvironmentInitiator.java:320)
+	at org.hibernate.engine.jdbc.env.internal.JdbcEnvironmentInitiator.initiateService(JdbcEnvironmentInitiator.java:129)
+	at org.hibernate.engine.jdbc.env.internal.JdbcEnvironmentInitiator.initiateService(JdbcEnvironmentInitiator.java:81)
+	at org.hibernate.boot.registry.internal.StandardServiceRegistryImpl.initiateService(StandardServiceRegistryImpl.java:130)
+	at org.hibernate.service.internal.AbstractServiceRegistryImpl.createService(AbstractServiceRegistryImpl.java:263)
+	at org.hibernate.service.internal.AbstractServiceRegistryImpl.initializeService(AbstractServiceRegistryImpl.java:238)
+	at org.hibernate.service.internal.AbstractServiceRegistryImpl.getService(AbstractServiceRegistryImpl.java:215)
+	at org.hibernate.boot.model.relational.Database.<init>(Database.java:45)
+	at org.hibernate.boot.internal.InFlightMetadataCollectorImpl.getDatabase(InFlightMetadataCollectorImpl.java:226)
+	at org.hibernate.boot.internal.InFlightMetadataCollectorImpl.<init>(InFlightMetadataCollectorImpl.java:194)
+	at org.hibernate.boot.model.process.spi.MetadataBuildingProcess.complete(MetadataBuildingProcess.java:171)
+	at org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl.metadata(EntityManagerFactoryBuilderImpl.java:1431)
+	at org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl.build(EntityManagerFactoryBuilderImpl.java:1502)
+	at org.springframework.orm.jpa.vendor.SpringHibernateJpaPersistenceProvider.createContainerEntityManagerFactory(SpringHibernateJpaPersistenceProvider.java:66)
+	at org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean.createNativeEntityManagerFactory(LocalContainerEntityManagerFactoryBean.java:390)
+	at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.buildNativeEntityManagerFactory(AbstractEntityManagerFactoryBean.java:419)
+	at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.afterPropertiesSet(AbstractEntityManagerFactoryBean.java:400)
+	at org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean.afterPropertiesSet(LocalContainerEntityManagerFactoryBean.java:366)
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.invokeInitMethods(AbstractAutowireCapableBeanFactory.java:1859)
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.initializeBean(AbstractAutowireCapableBeanFactory.java:1808)
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.doCreateBean(AbstractAutowireCapableBeanFactory.java:601)
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.createBean(AbstractAutowireCapableBeanFactory.java:523)
+	at org.springframework.beans.factory.support.AbstractBeanFactory.lambda$doGetBean$0(AbstractBeanFactory.java:336)
+	at org.springframework.beans.factory.support.DefaultSingletonBeanRegistry.getSingleton(DefaultSingletonBeanRegistry.java:307)
+	at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:334)
+	at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:204)
+	at org.springframework.context.support.AbstractApplicationContext.finishBeanFactoryInitialization(AbstractApplicationContext.java:970)
+	at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:627)
+	at org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext.refresh(ServletWebServerApplicationContext.java:146)
+	at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:752)
+	at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:439)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:318)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1361)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1350)
+	at tn.esprit.authentificationmicroservice.AuthentificationMicroServiceApplication.main(AuthentificationMicroServiceApplication.java:20)
+Caused by: org.h2.jdbc.JdbcSQLInvalidAuthorizationSpecException: Mauvais nom d'utilisateur ou mot de passe
+Wrong user name or password [28000-232]
+	at org.h2.message.DbException.getJdbcSQLException(DbException.java:522)
+	at org.h2.message.DbException.getJdbcSQLException(DbException.java:489)
+	... 54 more
+2025-02-14 22:50:29.425495+01:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLFeatureNotSupportedException: Fonctionnalité non supportée: "CHARACTER VARYING(255)"
+Feature not supported: "CHARACTER VARYING(255)"; SQL statement:
+create table app_user (id_user varchar(255) generated by default as identity, adresse varchar(255), email varchar(255), nom varchar(255), password varchar(255), photo varchar(255), prenom varchar(255), role enum ('ADMIN','CONSULTANT','ENCADRANT','ETUDIANT'), telephone varchar(255), primary key (id_user)) [50100-232]
+	at org.h2.message.DbException.getJdbcSQLException(DbException.java:568)
+	at org.h2.message.DbException.getJdbcSQLException(DbException.java:489)
+	at org.h2.message.DbException.get(DbException.java:223)
+	at org.h2.message.DbException.get(DbException.java:199)
+	at org.h2.message.DbException.getUnsupportedException(DbException.java:287)
+	at org.h2.command.ddl.SequenceOptions.getBounds(SequenceOptions.java:316)
+	at org.h2.command.ddl.SequenceOptions.getBounds(SequenceOptions.java:244)
+	at org.h2.schema.Sequence.<init>(Sequence.java:100)
+	at org.h2.table.Column.initializeSequence(Column.java:502)
+	at org.h2.command.ddl.CommandWithColumns.generateSequences(CommandWithColumns.java:103)
+	at org.h2.command.ddl.CreateTable.update(CreateTable.java:113)
+	at org.h2.command.CommandContainer.update(CommandContainer.java:139)
+	at org.h2.command.Command.executeUpdate(Command.java:304)
+	at org.h2.command.Command.executeUpdate(Command.java:248)
+	at org.h2.jdbc.JdbcStatement.executeInternal(JdbcStatement.java:262)
+	at org.h2.jdbc.JdbcStatement.execute(JdbcStatement.java:231)
+	at com.zaxxer.hikari.pool.ProxyStatement.execute(ProxyStatement.java:94)
+	at com.zaxxer.hikari.pool.HikariProxyStatement.execute(HikariProxyStatement.java)
+	at org.hibernate.tool.schema.internal.exec.GenerationTargetToDatabase.accept(GenerationTargetToDatabase.java:80)
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.applySqlString(AbstractSchemaMigrator.java:576)
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.applySqlStrings(AbstractSchemaMigrator.java:516)
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.createTable(AbstractSchemaMigrator.java:316)
+	at org.hibernate.tool.schema.internal.GroupedSchemaMigratorImpl.performTablesMigration(GroupedSchemaMigratorImpl.java:80)
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.performMigration(AbstractSchemaMigrator.java:233)
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.doMigration(AbstractSchemaMigrator.java:112)
+	at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.performDatabaseAction(SchemaManagementToolCoordinator.java:280)
+	at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.lambda$process$5(SchemaManagementToolCoordinator.java:144)
+	at java.base/java.util.HashMap.forEach(HashMap.java:1421)
+	at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.process(SchemaManagementToolCoordinator.java:141)
+	at org.hibernate.boot.internal.SessionFactoryObserverForSchemaExport.sessionFactoryCreated(SessionFactoryObserverForSchemaExport.java:37)
+	at org.hibernate.internal.SessionFactoryObserverChain.sessionFactoryCreated(SessionFactoryObserverChain.java:35)
+	at org.hibernate.internal.SessionFactoryImpl.<init>(SessionFactoryImpl.java:324)
+	at org.hibernate.boot.internal.SessionFactoryBuilderImpl.build(SessionFactoryBuilderImpl.java:463)
+	at org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl.build(EntityManagerFactoryBuilderImpl.java:1506)
+	at org.springframework.orm.jpa.vendor.SpringHibernateJpaPersistenceProvider.createContainerEntityManagerFactory(SpringHibernateJpaPersistenceProvider.java:66)
+	at org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean.createNativeEntityManagerFactory(LocalContainerEntityManagerFactoryBean.java:390)
+	at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.buildNativeEntityManagerFactory(AbstractEntityManagerFactoryBean.java:419)
+	at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.afterPropertiesSet(AbstractEntityManagerFactoryBean.java:400)
+	at org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean.afterPropertiesSet(LocalContainerEntityManagerFactoryBean.java:366)
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.invokeInitMethods(AbstractAutowireCapableBeanFactory.java:1859)
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.initializeBean(AbstractAutowireCapableBeanFactory.java:1808)
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.doCreateBean(AbstractAutowireCapableBeanFactory.java:601)
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.createBean(AbstractAutowireCapableBeanFactory.java:523)
+	at org.springframework.beans.factory.support.AbstractBeanFactory.lambda$doGetBean$0(AbstractBeanFactory.java:336)
+	at org.springframework.beans.factory.support.DefaultSingletonBeanRegistry.getSingleton(DefaultSingletonBeanRegistry.java:307)
+	at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:334)
+	at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:204)
+	at org.springframework.context.support.AbstractApplicationContext.finishBeanFactoryInitialization(AbstractApplicationContext.java:970)
+	at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:627)
+	at org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext.refresh(ServletWebServerApplicationContext.java:146)
+	at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:752)
+	at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:439)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:318)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1361)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1350)
+	at tn.esprit.authentificationmicroservice.AuthentificationMicroServiceApplication.main(AuthentificationMicroServiceApplication.java:20)
+2025-02-14 22:50:33.145125+01:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "APP_USER" not found (this database is empty); SQL statement:
+select u1_0.id_user,u1_0.adresse,u1_0.email,u1_0.nom,u1_0.password,u1_0.photo,u1_0.prenom,u1_0.role,u1_0.telephone from app_user u1_0 where u1_0.role=? [42104-232]

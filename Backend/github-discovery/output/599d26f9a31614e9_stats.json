@@ -1,0 +1,13 @@
+{
+  "start_time": "2026-03-23T15:28:29.335117",
+  "end_time": "2026-03-23T15:28:34.029677",
+  "duration_seconds": 4.69456,
+  "total_files": 5,
+  "files_processed": 5,
+  "files_failed": 0,
+  "endpoints_found": 21,
+  "duplicates_removed": 2,
+  "llm_calls": 0,
+  "cache_hits": 0,
+  "errors": []
+}

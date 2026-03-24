@@ -1,0 +1,711 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "API Specification - a0facaf9736c7aed",
+    "version": "1.0.0",
+    "description": "Auto-generated from repository https://github.com/DavideViolante/Angular-Full-Stack.git",
+    "x-generated": "2026-03-23T15:56:55.467359Z",
+    "x-endpoint-count": 17
+  },
+  "servers": [
+    {
+      "url": "https://api.example.com"
+    }
+  ],
+  "paths": {
+    "/{splat}": {
+      "get": {
+        "summary": "GET /{splat}",
+        "tags": [
+          "app"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "pattern": "express_method"
+        },
+        "x-confidence": 0.85,
+        "x-source": "regex"
+      }
+    },
+    "/port": {
+      "get": {
+        "summary": "GET /port",
+        "tags": [
+          "app"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "pattern": "express_method"
+        },
+        "x-confidence": 0.85,
+        "x-source": "regex"
+      }
+    },
+    "/api/cats": {
+      "get": {
+        "summary": "GET /api/cats",
+        "tags": [
+          "api"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "pattern": "express_route"
+        },
+        "x-confidence": 0.8,
+        "x-source": "regex"
+      }
+    },
+    "/api/cats/count": {
+      "get": {
+        "summary": "GET /api/cats/count",
+        "tags": [
+          "api"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "pattern": "express_route"
+        },
+        "x-confidence": 0.8,
+        "x-source": "regex"
+      }
+    },
+    "/api/cat": {
+      "post": {
+        "summary": "POST /api/cat",
+        "tags": [
+          "api"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "pattern": "express_route"
+        },
+        "x-confidence": 0.8,
+        "x-source": "regex"
+      }
+    },
+    "/api/cat/{id}": {
+      "get": {
+        "summary": "GET /api/cat/{id}",
+        "tags": [
+          "api"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "pattern": "express_route"
+        },
+        "x-confidence": 0.8,
+        "x-source": "regex"
+      },
+      "put": {
+        "summary": "PUT /api/cat/{id}",
+        "tags": [
+          "api"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "pattern": "express_route"
+        },
+        "x-confidence": 0.8,
+        "x-source": "regex"
+      },
+      "delete": {
+        "summary": "DELETE /api/cat/{id}",
+        "tags": [
+          "api"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "pattern": "express_route"
+        },
+        "x-confidence": 0.8,
+        "x-source": "regex"
+      }
+    },
+    "/api/login": {
+      "post": {
+        "summary": "POST /api/login",
+        "tags": [
+          "api"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "pattern": "express_route"
+        },
+        "x-confidence": 0.8,
+        "x-source": "regex"
+      }
+    },
+    "/api/users": {
+      "get": {
+        "summary": "GET /api/users",
+        "tags": [
+          "api"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "pattern": "express_route"
+        },
+        "x-confidence": 0.8,
+        "x-source": "regex"
+      }
+    },
+    "/api/users/count": {
+      "get": {
+        "summary": "GET /api/users/count",
+        "tags": [
+          "api"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "pattern": "express_route"
+        },
+        "x-confidence": 0.8,
+        "x-source": "regex"
+      }
+    },
+    "/api/user": {
+      "post": {
+        "summary": "POST /api/user",
+        "tags": [
+          "api"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "pattern": "express_route"
+        },
+        "x-confidence": 0.8,
+        "x-source": "regex"
+      }
+    },
+    "/api/user/{id}": {
+      "get": {
+        "summary": "GET /api/user/{id}",
+        "tags": [
+          "api"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "pattern": "express_route"
+        },
+        "x-confidence": 0.8,
+        "x-source": "regex"
+      },
+      "put": {
+        "summary": "PUT /api/user/{id}",
+        "tags": [
+          "api"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "pattern": "express_route"
+        },
+        "x-confidence": 0.8,
+        "x-source": "regex"
+      },
+      "delete": {
+        "summary": "DELETE /api/user/{id}",
+        "tags": [
+          "api"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "pattern": "express_route"
+        },
+        "x-confidence": 0.8,
+        "x-source": "regex"
+      }
+    },
+    "/api/cats/delete": {
+      "delete": {
+        "summary": "DELETE /api/cats/delete",
+        "tags": [
+          "api"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "pattern": "express_route"
+        },
+        "x-confidence": 0.8,
+        "x-source": "regex"
+      }
+    },
+    "/api/users/delete": {
+      "delete": {
+        "summary": "DELETE /api/users/delete",
+        "tags": [
+          "api"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "x-metadata": {
+          "pattern": "express_route"
+        },
+        "x-confidence": 0.8,
+        "x-source": "regex"
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "api"
+    },
+    {
+      "name": "app"
+    }
+  ]
+}

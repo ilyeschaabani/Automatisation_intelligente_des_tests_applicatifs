@@ -1,0 +1,150 @@
+# GitHub API Discovery Pipeline - Usage Guide
+
+## Quick Start
+
+1. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Set up OpenAI API key (optional for LLM augmentation):**
+   ```bash
+   cp .env.example .env
+   # Edit .env and add your OPENAI_API_KEY
+   ```
+
+3. **Run the pipeline:**
+   ```bash
+   python -m src.cli https://github.com/owner/repository
+   ```
+
+## Command-Line Options
+
+```
+usage: github-api-discovery [-h] [-b BRANCH] [--keep-repo] [--log-level {DEBUG,INFO,WARNING,ERROR}]
+                            [--output-dir OUTPUT_DIR] [--max-workers MAX_WORKERS]
+                            repo_url
+
+positional arguments:
+  repo_url               GitHub repository URL
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -b BRANCH, --branch BRANCH
+                        Branch to clone (default: default branch)
+  --keep-repo           Keep cloned repository for debugging
+  --log-level {DEBUG,INFO,WARNING,ERROR}
+                        Logging level (default: INFO)
+  --output-dir OUTPUT_DIR
+                        Output directory for results (default: output/)
+  --max-workers MAX_WORKERS
+                        Number of parallel workers (default: 4)
+  --version             show program's version number and exit
+```
+
+## Output Files
+
+The pipeline generates three files in the output directory:
+
+1. **`<repo>_openapi.json`** - OpenAPI 3.0 specification
+2. **`<repo>_endpoints.json`** - Raw extracted endpoints (for debugging)
+3. **`<repo>_stats.json`** - Pipeline execution statistics
+
+## Supported Frameworks
+
+### Node.js
+- Express
+- Fastify
+- Koa
+- NestJS
+- Hapi
+
+### Python
+- Flask
+- FastAPI
+- Django
+- Bottle
+- Tornado
+
+### Java
+- Spring Boot
+- JAX-RS
+
+### C#
+- ASP.NET Core
+- Web API
+
+### Go
+- Gin
+- Echo
+- Gorilla Mux
+- Fiber
+
+## Architecture
+
+The pipeline consists of the following components:
+
+1. **Repository Manager** - Clones and manages repository lifecycle
+2. **Tech Stack Detector** - Identifies languages and frameworks
+3. **File Scanner** - Pre-filters files using regex patterns
+4. **AST Parser** - Tree-sitter based parsing for accurate extraction
+5. **Chunking Engine** - Handles large files intelligently
+6. **LLM Extractor** - Augments extraction for complex cases
+7. **Endpoint Processor** - Normalizes, deduplicates, resolves prefixes
+8. **Route Resolver** - Resolves nested router prefixes
+9. **OpenAPI Generator** - Generates valid OpenAPI 3.0 spec
+
+## Performance
+
+- Parallel file processing using ProcessPoolExecutor
+- In-memory caching of parsed files
+- Shallow git clones for speed
+- Configurable worker count
+
+## Error Handling
+
+- Graceful degradation per file (pipeline continues)
+- Comprehensive logging
+- Retry logic for git operations
+- Detailed error reporting in stats
+
+## Limitations
+
+- LLM extraction requires OpenAI API key (optional)
+- Some dynamic route patterns may be missed
+- Very large repositories may require more memory
+- GraphQL support is limited to detection
+
+## Troubleshooting
+
+### No endpoints found
+- Check that the repository contains API code
+- Verify supported framework is used
+- Increase log level to DEBUG for more details
+
+### Parser errors
+- Ensure tree-sitter-language-pack is installed
+- Check file encoding (UTF-8 required)
+
+### Slow performance
+- Reduce `--max-workers` if memory constrained
+- Use cached repositories (automatic)
+- Consider repository size
+
+## Development
+
+Run tests:
+```bash
+pytest tests/ -v
+```
+
+Run with coverage:
+```bash
+pytest tests/ --cov=src --cov-report=html
+```
+
+Lint:
+```bash
+flake8 src/
+black src/ --check
+mypy src/

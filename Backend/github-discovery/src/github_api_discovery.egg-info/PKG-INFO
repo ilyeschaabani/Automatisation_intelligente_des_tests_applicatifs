@@ -1,0 +1,72 @@
+Metadata-Version: 2.4
+Name: github-api-discovery
+Version: 1.0.0
+Summary: Production-ready pipeline for extracting OpenAPI specs from GitHub repositories
+Author-email: Your Name <your.email@example.com>
+License: MIT
+Keywords: openapi,swagger,github,api,discovery,ast,tree-sitter
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: tree-sitter>=0.20.0
+Requires-Dist: tree-sitter-language-pack>=0.5.0
+Requires-Dist: gitpython>=3.1.0
+Requires-Dist: openapi-spec-validator>=0.5.0
+Requires-Dist: jsonschema>=4.0.0
+Requires-Dist: pydantic>=2.0.0
+Requires-Dist: python-dotenv>=1.0.0
+Requires-Dist: cachetools>=5.0.0
+Requires-Dist: networkx>=3.0
+Requires-Dist: tqdm>=4.65.0
+Requires-Dist: aiohttp>=3.8.0
+Requires-Dist: structlog>=23.0.0
+Requires-Dist: colorlog>=6.0.0
+Provides-Extra: llm
+Requires-Dist: openai>=1.0.0; extra == "llm"
+Requires-Dist: langchain>=0.0.0; extra == "llm"
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.21.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0.0; extra == "dev"
+Requires-Dist: black>=23.0.0; extra == "dev"
+Requires-Dist: flake8>=6.0.0; extra == "dev"
+Requires-Dist: mypy>=1.0.0; extra == "dev"
+
+# GitHub API Discovery Pipeline
+
+A production-ready, scalable pipeline that extracts complete OpenAPI 3.0 specifications from GitHub repositories.
+
+## Features
+
+- Automatic repository cloning with retry logic
+- Multi-language tech stack detection
+- AST-based endpoint extraction (Tree-sitter)
+- Intelligent chunking for large files
+- LLM augmentation for complex cases
+- Route prefix resolution and deduplication
+- Parallel processing with caching
+- Comprehensive error handling and logging
+
+## Installation
+
+```bash
+pip install -r requirements.txt
+```
+
+## Usage
+
+```bash
+python -m src.main https://github.com/owner/repo
+```
+
+## Output
+
+- `openapi.json` - OpenAPI 3.0 specification
+- `endpoints.json` - Raw extracted endpoints
+- `pipeline.log` - Detailed execution logs

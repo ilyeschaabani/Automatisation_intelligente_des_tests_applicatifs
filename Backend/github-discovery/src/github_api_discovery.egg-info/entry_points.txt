@@ -1,0 +1,2 @@
+[console_scripts]
+github-api-discovery = src.cli:main

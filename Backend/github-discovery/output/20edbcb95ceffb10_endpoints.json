@@ -1,0 +1,546 @@
+[
+  {
+    "method": "post",
+    "path": "/api/auth/signup",
+    "file_path": "repos\\20edbcb95ceffb10\\Authentification-MicroService\\src\\main\\java\\tn\\esprit\\authentificationmicroservice\\Controller\\AuthentificationRestAPI.java",
+    "line_number": 26,
+    "router_prefix": "/api/auth",
+    "full_path": "/api/auth/api/auth/signup",
+    "function_name": "signUp",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/signup\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/api/auth/signin",
+    "file_path": "repos\\20edbcb95ceffb10\\Authentification-MicroService\\src\\main\\java\\tn\\esprit\\authentificationmicroservice\\Controller\\AuthentificationRestAPI.java",
+    "line_number": 30,
+    "router_prefix": "/api/auth",
+    "full_path": "/api/auth/api/auth/signin",
+    "function_name": "signIn",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/signin\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/api/auth/refreshToken",
+    "file_path": "repos\\20edbcb95ceffb10\\Authentification-MicroService\\src\\main\\java\\tn\\esprit\\authentificationmicroservice\\Controller\\AuthentificationRestAPI.java",
+    "line_number": 34,
+    "router_prefix": "/api/auth",
+    "full_path": "/api/auth/api/auth/refreshToken",
+    "function_name": "refreshToken",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/refreshToken\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/forgotPassword/verifyMail/{email}",
+    "file_path": "repos\\20edbcb95ceffb10\\Authentification-MicroService\\src\\main\\java\\tn\\esprit\\authentificationmicroservice\\Controller\\ForgotPasswordController.java",
+    "line_number": 38,
+    "router_prefix": "/forgotPassword",
+    "full_path": "/forgotPassword/forgotPassword/verifyMail/{email}",
+    "function_name": "verifyEmail",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/verifyMail/{email}\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/forgotPassword/verifyOTP/{otp}/{email}",
+    "file_path": "repos\\20edbcb95ceffb10\\Authentification-MicroService\\src\\main\\java\\tn\\esprit\\authentificationmicroservice\\Controller\\ForgotPasswordController.java",
+    "line_number": 60,
+    "router_prefix": "/forgotPassword",
+    "full_path": "/forgotPassword/forgotPassword/verifyOTP/{otp}/{email}",
+    "function_name": "verifyOTP",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/verifyOTP/{otp}/{email}\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/forgotPassword/changePassword/{email}",
+    "file_path": "repos\\20edbcb95ceffb10\\Authentification-MicroService\\src\\main\\java\\tn\\esprit\\authentificationmicroservice\\Controller\\ForgotPasswordController.java",
+    "line_number": 74,
+    "router_prefix": "/forgotPassword",
+    "full_path": "/forgotPassword/forgotPassword/changePassword/{email}",
+    "function_name": "changePasswordHandler",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/changePassword/{email}\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/api/formations/add",
+    "file_path": "repos\\20edbcb95ceffb10\\FormationMS\\src\\main\\java\\tn\\esprit\\microservice\\formationms\\Controller.java",
+    "line_number": 15,
+    "router_prefix": "/api/formations",
+    "full_path": "/api/formations/api/formations/add",
+    "function_name": "addFormation",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/add\""
+    }
+  },
+  {
+    "method": "put",
+    "path": "/api/formations/update/{id}",
+    "file_path": "repos\\20edbcb95ceffb10\\FormationMS\\src\\main\\java\\tn\\esprit\\microservice\\formationms\\Controller.java",
+    "line_number": 20,
+    "router_prefix": "/api/formations",
+    "full_path": "/api/formations/api/formations/update/{id}",
+    "function_name": "updateFormation",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PutMapping(\"/update/{id}\""
+    }
+  },
+  {
+    "method": "delete",
+    "path": "/api/formations/delete/{id}",
+    "file_path": "repos\\20edbcb95ceffb10\\FormationMS\\src\\main\\java\\tn\\esprit\\microservice\\formationms\\Controller.java",
+    "line_number": 25,
+    "router_prefix": "/api/formations",
+    "full_path": "/api/formations/api/formations/delete/{id}",
+    "function_name": "deleteFormation",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@DeleteMapping(\"/delete/{id}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/formations/all",
+    "file_path": "repos\\20edbcb95ceffb10\\FormationMS\\src\\main\\java\\tn\\esprit\\microservice\\formationms\\Controller.java",
+    "line_number": 30,
+    "router_prefix": "/api/formations",
+    "full_path": "/api/formations/api/formations/all",
+    "function_name": "getAllFormations",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/all\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/formations/get/{id}",
+    "file_path": "repos\\20edbcb95ceffb10\\FormationMS\\src\\main\\java\\tn\\esprit\\microservice\\formationms\\Controller.java",
+    "line_number": 35,
+    "router_prefix": "/api/formations",
+    "full_path": "/api/formations/api/formations/get/{id}",
+    "function_name": "getFormationById",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/get/{id}\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/evaluations/add",
+    "file_path": "repos\\20edbcb95ceffb10\\MIcroserviceEvaluation\\src\\main\\java\\com\\example\\microserviceevaluation\\EvaluationController.java",
+    "line_number": 21,
+    "router_prefix": "/evaluations",
+    "full_path": "/evaluations/evaluations/add",
+    "function_name": "createEvaluation",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/add\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/evaluations/listeval",
+    "file_path": "repos\\20edbcb95ceffb10\\MIcroserviceEvaluation\\src\\main\\java\\com\\example\\microserviceevaluation\\EvaluationController.java",
+    "line_number": 28,
+    "router_prefix": "/evaluations",
+    "full_path": "/evaluations/evaluations/listeval",
+    "function_name": "getAllEvaluations",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/listeval\""
+    }
+  },
+  {
+    "method": "put",
+    "path": "/evaluations/{idEvaluation}",
+    "file_path": "repos\\20edbcb95ceffb10\\MIcroserviceEvaluation\\src\\main\\java\\com\\example\\microserviceevaluation\\EvaluationController.java",
+    "line_number": 35,
+    "router_prefix": "/evaluations",
+    "full_path": "/evaluations/evaluations/{idEvaluation}",
+    "function_name": "updateEvaluation",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PutMapping(\"/{idEvaluation}\""
+    }
+  },
+  {
+    "method": "delete",
+    "path": "/evaluations/{idEvaluation}",
+    "file_path": "repos\\20edbcb95ceffb10\\MIcroserviceEvaluation\\src\\main\\java\\com\\example\\microserviceevaluation\\EvaluationController.java",
+    "line_number": 45,
+    "router_prefix": "/evaluations",
+    "full_path": "/evaluations/evaluations/{idEvaluation}",
+    "function_name": "deleteEvaluation",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@DeleteMapping(\"/{idEvaluation}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/evaluations/{idEvaluation}",
+    "file_path": "repos\\20edbcb95ceffb10\\MIcroserviceEvaluation\\src\\main\\java\\com\\example\\microserviceevaluation\\EvaluationController.java",
+    "line_number": 52,
+    "router_prefix": "/evaluations",
+    "full_path": "/evaluations/evaluations/{idEvaluation}",
+    "function_name": "getEvaluationById",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/{idEvaluation}\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/evaluations/{idEvaluation}/questions",
+    "file_path": "repos\\20edbcb95ceffb10\\MIcroserviceEvaluation\\src\\main\\java\\com\\example\\microserviceevaluation\\EvaluationController.java",
+    "line_number": 71,
+    "router_prefix": "/evaluations",
+    "full_path": "/evaluations/evaluations/{idEvaluation}/questions",
+    "function_name": "addQuestionsToEvaluation",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/{idEvaluation}/questions\""
+    }
+  },
+  {
+    "method": "put",
+    "path": "/questions/{quesId}",
+    "file_path": "repos\\20edbcb95ceffb10\\MIcroserviceEvaluation\\src\\main\\java\\com\\example\\microserviceevaluation\\QuestionController.java",
+    "line_number": 31,
+    "router_prefix": "/questions",
+    "full_path": "/questions/questions/{quesId}",
+    "function_name": "updateQuestion",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PutMapping(\"/{quesId}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/questions/by-evaluation/{idEvaluation}",
+    "file_path": "repos\\20edbcb95ceffb10\\MIcroserviceEvaluation\\src\\main\\java\\com\\example\\microserviceevaluation\\QuestionController.java",
+    "line_number": 57,
+    "router_prefix": "/questions",
+    "full_path": "/questions/questions/by-evaluation/{idEvaluation}",
+    "function_name": "getQuestionsByEvaluation",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/by-evaluation/{idEvaluation}\""
+    }
+  },
+  {
+    "method": "delete",
+    "path": "/questions/{quesId}",
+    "file_path": "repos\\20edbcb95ceffb10\\MIcroserviceEvaluation\\src\\main\\java\\com\\example\\microserviceevaluation\\QuestionController.java",
+    "line_number": 63,
+    "router_prefix": "/questions",
+    "full_path": "/questions/questions/{quesId}",
+    "function_name": "deleteQuestion",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@DeleteMapping(\"/{quesId}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/quiz/questions",
+    "file_path": "repos\\20edbcb95ceffb10\\MIcroserviceEvaluation\\src\\main\\java\\com\\example\\microserviceevaluation\\QuizController.java",
+    "line_number": 23,
+    "router_prefix": "/api/quiz",
+    "full_path": "/api/quiz/api/quiz/questions",
+    "function_name": "getQuestions",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/questions\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/api/quiz/evaluate",
+    "file_path": "repos\\20edbcb95ceffb10\\MIcroserviceEvaluation\\src\\main\\java\\com\\example\\microserviceevaluation\\QuizController.java",
+    "line_number": 37,
+    "router_prefix": "/api/quiz",
+    "full_path": "/api/quiz/api/quiz/evaluate",
+    "function_name": "evaluateQuiz",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/evaluate\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/download/{type}/{fileName}",
+    "file_path": "repos\\20edbcb95ceffb10\\RessourceMicroService\\src\\main\\java\\com\\example\\ressourcemicroservice\\Controller\\DownloadFileController.java",
+    "line_number": 20,
+    "router_prefix": "/api/download",
+    "full_path": "/api/download/api/download/{type}/{fileName}",
+    "function_name": "downloadFile",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/{type}/{fileName}\""
+    }
+  },
+  {
+    "method": "post",
+    "path": "/api/upload/{typeRessource}",
+    "file_path": "repos\\20edbcb95ceffb10\\RessourceMicroService\\src\\main\\java\\com\\example\\ressourcemicroservice\\Controller\\FileUploadController.java",
+    "line_number": 24,
+    "router_prefix": "/api/upload",
+    "full_path": "/api/upload/api/upload/{typeRessource}",
+    "function_name": "uploadResource",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PostMapping(\"/{typeRessource}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/ressources/{id}",
+    "file_path": "repos\\20edbcb95ceffb10\\RessourceMicroService\\src\\main\\java\\com\\example\\ressourcemicroservice\\Controller\\RessourcesController.java",
+    "line_number": 31,
+    "router_prefix": "/api/ressources",
+    "full_path": "/api/ressources/api/ressources/{id}",
+    "function_name": "getRessourceById",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "put",
+    "path": "/api/ressources/{id}",
+    "file_path": "repos\\20edbcb95ceffb10\\RessourceMicroService\\src\\main\\java\\com\\example\\ressourcemicroservice\\Controller\\RessourcesController.java",
+    "line_number": 36,
+    "router_prefix": "/api/ressources",
+    "full_path": "/api/ressources/api/ressources/{id}",
+    "function_name": "updateRessource",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PutMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "delete",
+    "path": "/api/ressources/{id}",
+    "file_path": "repos\\20edbcb95ceffb10\\RessourceMicroService\\src\\main\\java\\com\\example\\ressourcemicroservice\\Controller\\RessourcesController.java",
+    "line_number": 43,
+    "router_prefix": "/api/ressources",
+    "full_path": "/api/ressources/api/ressources/{id}",
+    "function_name": "deleteRessource",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@DeleteMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/events-topics/{id}",
+    "file_path": "repos\\20edbcb95ceffb10\\src\\main\\java\\tn\\esprit\\examen\\nomPrenomClasseExamen\\EventTopicController.java",
+    "line_number": 28,
+    "router_prefix": "/api/events-topics",
+    "full_path": "/api/events-topics/api/events-topics/{id}",
+    "function_name": "getById",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "put",
+    "path": "/api/events-topics/{id}",
+    "file_path": "repos\\20edbcb95ceffb10\\src\\main\\java\\tn\\esprit\\examen\\nomPrenomClasseExamen\\EventTopicController.java",
+    "line_number": 45,
+    "router_prefix": "/api/events-topics",
+    "full_path": "/api/events-topics/api/events-topics/{id}",
+    "function_name": "update",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@PutMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "delete",
+    "path": "/api/events-topics/{id}",
+    "file_path": "repos\\20edbcb95ceffb10\\src\\main\\java\\tn\\esprit\\examen\\nomPrenomClasseExamen\\EventTopicController.java",
+    "line_number": 51,
+    "router_prefix": "/api/events-topics",
+    "full_path": "/api/events-topics/api/events-topics/{id}",
+    "function_name": "delete",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@DeleteMapping(\"/{id}\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/events-topics/upcoming",
+    "file_path": "repos\\20edbcb95ceffb10\\src\\main\\java\\tn\\esprit\\examen\\nomPrenomClasseExamen\\EventTopicController.java",
+    "line_number": 58,
+    "router_prefix": "/api/events-topics",
+    "full_path": "/api/events-topics/api/events-topics/upcoming",
+    "function_name": "getUpcomingEvents",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/upcoming\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/events-topics/notify-upcoming",
+    "file_path": "repos\\20edbcb95ceffb10\\src\\main\\java\\tn\\esprit\\examen\\nomPrenomClasseExamen\\EventTopicController.java",
+    "line_number": 64,
+    "router_prefix": "/api/events-topics",
+    "full_path": "/api/events-topics/api/events-topics/notify-upcoming",
+    "function_name": "notifyUpcomingEvents",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/notify-upcoming\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/events-topics/statistics",
+    "file_path": "repos\\20edbcb95ceffb10\\src\\main\\java\\tn\\esprit\\examen\\nomPrenomClasseExamen\\EventTopicController.java",
+    "line_number": 69,
+    "router_prefix": "/api/events-topics",
+    "full_path": "/api/events-topics/api/events-topics/statistics",
+    "function_name": "getStatistics",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/statistics\""
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/events-topics/statistics/pdf",
+    "file_path": "repos\\20edbcb95ceffb10\\src\\main\\java\\tn\\esprit\\examen\\nomPrenomClasseExamen\\EventTopicController.java",
+    "line_number": 73,
+    "router_prefix": "/api/events-topics",
+    "full_path": "/api/events-topics/api/events-topics/statistics/pdf",
+    "function_name": "downloadStatisticsPdf",
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "ast",
+    "metadata": {
+      "annotation": "@GetMapping(\"/statistics/pdf\""
+    }
+  }
+]
