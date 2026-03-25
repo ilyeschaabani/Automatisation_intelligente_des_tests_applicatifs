@@ -4,8 +4,8 @@
     "title": "API Specification - 1cf4b3759f0db531",
     "version": "1.0.0",
     "description": "Auto-generated from repository https://github.com/ilyeschaabani/Pidev.git",
-    "x-generated": "2026-03-25T08:07:43.397542Z",
-    "x-endpoint-count": 107
+    "x-generated": "2026-03-25T10:29:57.704689Z",
+    "x-endpoint-count": 106
   },
   "servers": [
     {
@@ -52,10 +52,9 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "x-java-type": "String"
+                "type": "string"
               },
-              "example": {}
+              "example": "string"
             }
           }
         },
@@ -70,11 +69,11 @@
               "dto_type": "String",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
-                "type": "object",
-                "x-java-type": "String"
+                "type": "string"
               },
-              "example": {}
+              "example": "string"
             }
           }
         },
@@ -152,8 +151,8 @@
       "put": {
         "summary": "updateProject",
         "tags": [
-          "update",
-          "p_f_e_project"
+          "p_f_e_project",
+          "update"
         ],
         "responses": {
           "200": {
@@ -226,15 +225,76 @@
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "properties": {
+                        "fileName": {
+                          "type": "string"
+                        },
+                        "filePath": {
+                          "type": "string"
+                        }
+                      },
                       "x-java-type": "DocumentFile"
                     }
                   },
                   "evaluation": {
                     "type": "object",
+                    "properties": {
+                      "progressScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "finalScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "feedback": {
+                        "type": "string"
+                      }
+                    },
                     "x-java-type": "Evaluation"
                   },
                   "student": {
                     "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "username": {
+                        "type": "string"
+                      },
+                      "email": {
+                        "type": "string"
+                      },
+                      "password": {
+                        "type": "string"
+                      },
+                      "role": {
+                        "type": "object",
+                        "x-java-type": "Role"
+                      }
+                    },
+                    "x-java-type": "User"
+                  },
+                  "mentor": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "username": {
+                        "type": "string"
+                      },
+                      "email": {
+                        "type": "string"
+                      },
+                      "password": {
+                        "type": "string"
+                      },
+                      "role": {
+                        "type": "object",
+                        "x-java-type": "Role"
+                      }
+                    },
                     "x-java-type": "User"
                   }
                 }
@@ -249,10 +309,30 @@
                 "mentorId": "1",
                 "stage": {},
                 "documents": [
-                  {}
+                  {
+                    "fileName": "string",
+                    "filePath": "string"
+                  }
                 ],
-                "evaluation": {},
-                "student": {}
+                "evaluation": {
+                  "progressScore": 0,
+                  "finalScore": 0,
+                  "feedback": "string"
+                },
+                "student": {
+                  "id": "1",
+                  "username": "string",
+                  "email": "user@example.com",
+                  "password": "string",
+                  "role": {}
+                },
+                "mentor": {
+                  "id": "1",
+                  "username": "string",
+                  "email": "user@example.com",
+                  "password": "string",
+                  "role": {}
+                }
               }
             }
           }
@@ -278,6 +358,7 @@
               "dto_type": "PFEProject",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
@@ -307,15 +388,76 @@
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "properties": {
+                        "fileName": {
+                          "type": "string"
+                        },
+                        "filePath": {
+                          "type": "string"
+                        }
+                      },
                       "x-java-type": "DocumentFile"
                     }
                   },
                   "evaluation": {
                     "type": "object",
+                    "properties": {
+                      "progressScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "finalScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "feedback": {
+                        "type": "string"
+                      }
+                    },
                     "x-java-type": "Evaluation"
                   },
                   "student": {
                     "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "username": {
+                        "type": "string"
+                      },
+                      "email": {
+                        "type": "string"
+                      },
+                      "password": {
+                        "type": "string"
+                      },
+                      "role": {
+                        "type": "object",
+                        "x-java-type": "Role"
+                      }
+                    },
+                    "x-java-type": "User"
+                  },
+                  "mentor": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "username": {
+                        "type": "string"
+                      },
+                      "email": {
+                        "type": "string"
+                      },
+                      "password": {
+                        "type": "string"
+                      },
+                      "role": {
+                        "type": "object",
+                        "x-java-type": "Role"
+                      }
+                    },
                     "x-java-type": "User"
                   }
                 }
@@ -330,10 +472,30 @@
                 "mentorId": "1",
                 "stage": {},
                 "documents": [
-                  {}
+                  {
+                    "fileName": "string",
+                    "filePath": "string"
+                  }
                 ],
-                "evaluation": {},
-                "student": {}
+                "evaluation": {
+                  "progressScore": 0,
+                  "finalScore": 0,
+                  "feedback": "string"
+                },
+                "student": {
+                  "id": "1",
+                  "username": "string",
+                  "email": "user@example.com",
+                  "password": "string",
+                  "role": {}
+                },
+                "mentor": {
+                  "id": "1",
+                  "username": "string",
+                  "email": "user@example.com",
+                  "password": "string",
+                  "role": {}
+                }
               }
             }
           }
@@ -412,8 +574,8 @@
       "put": {
         "summary": "updateProjectStage",
         "tags": [
-          "update",
-          "p_f_e_project"
+          "p_f_e_project",
+          "update"
         ],
         "responses": {
           "200": {
@@ -486,6 +648,7 @@
               "dto_type": "ProjectStage",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "x-java-type": "ProjectStage"
@@ -502,8 +665,8 @@
       "post": {
         "summary": "addDocument",
         "tags": [
-          "add",
-          "p_f_e_project"
+          "p_f_e_project",
+          "add"
         ],
         "responses": {
           "200": {
@@ -541,18 +704,31 @@
               "type": "string"
             },
             "example": "1"
-          },
-          {
-            "name": "file",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "object",
-              "x-java-type": "MultipartFile"
-            },
-            "example": {}
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "x-java-type": "MultipartFile",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              },
+              "example": {
+                "file": "<binary>"
+              }
+            }
+          }
+        },
         "x-metadata": {
           "annotation": "@PostMapping(\"/{id}/document\"",
           "request": {
@@ -567,20 +743,31 @@
                 "example": "1"
               }
             ],
-            "query": [
-              {
-                "name": "file",
-                "java_type": "MultipartFile",
-                "required": true,
-                "schema": {
-                  "type": "object",
-                  "x-java-type": "MultipartFile"
-                },
-                "example": {}
-              }
-            ],
+            "query": [],
             "header": [],
-            "body": null
+            "body": {
+              "param": "file",
+              "dto_type": "MultipartFile",
+              "content_type": "multipart/form-data",
+              "required": true,
+              "multipart_field": "file",
+              "schema": {
+                "type": "object",
+                "x-java-type": "MultipartFile",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              },
+              "example": {
+                "file": "<binary>"
+              }
+            }
           }
         },
         "x-confidence": 0.87,
@@ -591,8 +778,8 @@
       "post": {
         "summary": "evaluateProject",
         "tags": [
-          "evaluate",
-          "p_f_e_project"
+          "p_f_e_project",
+          "evaluate"
         ],
         "responses": {
           "200": {
@@ -681,6 +868,7 @@
               "dto_type": "Evaluation",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
@@ -713,8 +901,8 @@
       "post": {
         "summary": "addCommentToProject",
         "tags": [
-          "add",
-          "p_f_e_project"
+          "p_f_e_project",
+          "add"
         ],
         "responses": {
           "200": {
@@ -802,6 +990,7 @@
               "dto_type": "Comment",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
@@ -997,6 +1186,7 @@
               "dto_type": "SignUpRequest",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
@@ -1117,6 +1307,7 @@
               "dto_type": "SignInRequest",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
@@ -1143,8 +1334,8 @@
       "post": {
         "summary": "refreshToken",
         "tags": [
-          "authentification_rest_a_p_i",
-          "refresh"
+          "refresh",
+          "authentification_rest_a_p_i"
         ],
         "responses": {
           "200": {
@@ -1202,6 +1393,7 @@
               "dto_type": "RefreshTokenrequest",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
@@ -1323,7 +1515,13 @@
           }
         },
         "x-metadata": {
-          "annotation": "@GetMapping(\"/encadrants\""
+          "annotation": "@GetMapping(\"/encadrants\"",
+          "request": {
+            "path": [],
+            "query": [],
+            "header": [],
+            "body": null
+          }
         },
         "x-confidence": 0.87,
         "x-source": "ast"
@@ -1364,7 +1562,13 @@
           }
         },
         "x-metadata": {
-          "annotation": "@GetMapping(\"/getuser\""
+          "annotation": "@GetMapping(\"/getuser\"",
+          "request": {
+            "path": [],
+            "query": [],
+            "header": [],
+            "body": null
+          }
         },
         "x-confidence": 0.87,
         "x-source": "ast"
@@ -1471,6 +1675,7 @@
               "dto_type": "User",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
@@ -1510,8 +1715,8 @@
       "delete": {
         "summary": "deleteUser",
         "tags": [
-          "authentification_rest_a_p_i",
-          "delete"
+          "delete",
+          "authentification_rest_a_p_i"
         ],
         "responses": {
           "200": {
@@ -1578,8 +1783,8 @@
       "post": {
         "summary": "verifyEmail",
         "tags": [
-          "forgot_password",
-          "verify"
+          "verify",
+          "forgot_password"
         ],
         "responses": {
           "200": {
@@ -1646,8 +1851,8 @@
       "post": {
         "summary": "verifyOTP",
         "tags": [
-          "forgot_password",
-          "verify"
+          "verify",
+          "forgot_password"
         ],
         "responses": {
           "200": {
@@ -1781,9 +1986,19 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "properties": {}
+                "properties": {
+                  "password": {
+                    "type": "string"
+                  },
+                  "rpeatPassword": {
+                    "type": "string"
+                  }
+                }
               },
-              "example": {}
+              "example": {
+                "password": "string",
+                "rpeatPassword": "string"
+              }
             }
           }
         },
@@ -1808,11 +2023,22 @@
               "dto_type": "ChangePassword",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
-                "properties": {}
+                "properties": {
+                  "password": {
+                    "type": "string"
+                  },
+                  "rpeatPassword": {
+                    "type": "string"
+                  }
+                }
               },
-              "example": {}
+              "example": {
+                "password": "string",
+                "rpeatPassword": "string"
+              }
             }
           }
         },
@@ -1873,32 +2099,47 @@
                 "type": "object",
                 "properties": {
                   "idCertif": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "dateObtention": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string",
+                    "format": "date-time"
                   },
                   "idFormation": {
                     "type": "string"
                   },
                   "idEtudiant": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "evaluation": {
                     "type": "object",
+                    "properties": {
+                      "progressScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "finalScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "feedback": {
+                        "type": "string"
+                      }
+                    },
                     "x-java-type": "Evaluation"
                   }
                 }
               },
               "example": {
-                "idCertif": {},
-                "dateObtention": {},
+                "idCertif": "string",
+                "dateObtention": "2020-01-01T00:00:00Z",
                 "idFormation": "string",
-                "idEtudiant": {},
-                "evaluation": {}
+                "idEtudiant": "string",
+                "evaluation": {
+                  "progressScore": 0,
+                  "finalScore": 0,
+                  "feedback": "string"
+                }
               }
             }
           }
@@ -1924,36 +2165,52 @@
               "dto_type": "Certif",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
                   "idCertif": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "dateObtention": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string",
+                    "format": "date-time"
                   },
                   "idFormation": {
                     "type": "string"
                   },
                   "idEtudiant": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "evaluation": {
                     "type": "object",
+                    "properties": {
+                      "progressScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "finalScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "feedback": {
+                        "type": "string"
+                      }
+                    },
                     "x-java-type": "Evaluation"
                   }
                 }
               },
               "example": {
-                "idCertif": {},
-                "dateObtention": {},
+                "idCertif": "string",
+                "dateObtention": "2020-01-01T00:00:00Z",
                 "idFormation": "string",
-                "idEtudiant": {},
-                "evaluation": {}
+                "idEtudiant": "string",
+                "evaluation": {
+                  "progressScore": 0,
+                  "finalScore": 0,
+                  "feedback": "string"
+                }
               }
             }
           }
@@ -1964,8 +2221,8 @@
       "delete": {
         "summary": "deleteCertif",
         "tags": [
-          "certif",
-          "delete"
+          "delete",
+          "certif"
         ],
         "responses": {
           "200": {
@@ -2030,8 +2287,8 @@
       "get": {
         "summary": "getCertifById",
         "tags": [
-          "certif",
-          "get"
+          "get",
+          "certif"
         ],
         "responses": {
           "200": {
@@ -2098,8 +2355,8 @@
       "get": {
         "summary": "downloadCertif",
         "tags": [
-          "certif",
-          "download"
+          "download",
+          "certif"
         ],
         "responses": {
           "200": {
@@ -2166,8 +2423,8 @@
       "post": {
         "summary": "createEvaluation",
         "tags": [
-          "create",
-          "evaluation"
+          "evaluation",
+          "create"
         ],
         "responses": {
           "200": {
@@ -2235,6 +2492,7 @@
               "dto_type": "Evaluation",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
@@ -2298,7 +2556,13 @@
           }
         },
         "x-metadata": {
-          "annotation": "@GetMapping(\"/listeval\""
+          "annotation": "@GetMapping(\"/listeval\"",
+          "request": {
+            "path": [],
+            "query": [],
+            "header": [],
+            "body": null
+          }
         },
         "x-confidence": 0.87,
         "x-source": "ast"
@@ -2308,8 +2572,8 @@
       "put": {
         "summary": "updateEvaluation",
         "tags": [
-          "update",
-          "evaluation"
+          "evaluation",
+          "update"
         ],
         "responses": {
           "200": {
@@ -2398,6 +2662,7 @@
               "dto_type": "Evaluation",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
@@ -2562,8 +2827,8 @@
       "post": {
         "summary": "submitEvaluationAnswers",
         "tags": [
-          "submit",
-          "evaluation"
+          "evaluation",
+          "submit"
         ],
         "responses": {
           "200": {
@@ -2609,9 +2874,14 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "x-java-type": "Map"
+                "additionalProperties": {
+                  "type": "object",
+                  "x-java-type": "Object"
+                }
               },
-              "example": {}
+              "example": {
+                "key": {}
+              }
             }
           }
         },
@@ -2636,11 +2906,17 @@
               "dto_type": "Map<String, Object>",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
-                "x-java-type": "Map"
+                "additionalProperties": {
+                  "type": "object",
+                  "x-java-type": "Object"
+                }
               },
-              "example": {}
+              "example": {
+                "key": {}
+              }
             }
           }
         },
@@ -2652,8 +2928,8 @@
       "post": {
         "summary": "addQuestionsToEvaluation",
         "tags": [
-          "add",
-          "evaluation"
+          "evaluation",
+          "add"
         ],
         "responses": {
           "200": {
@@ -2698,10 +2974,14 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "x-java-type": "Set"
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               },
-              "example": {}
+              "example": [
+                "string"
+              ]
             }
           }
         },
@@ -2726,11 +3006,16 @@
               "dto_type": "Set<String>",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
-                "type": "object",
-                "x-java-type": "Set"
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               },
-              "example": {}
+              "example": [
+                "string"
+              ]
             }
           }
         },
@@ -2791,63 +3076,205 @@
                 "type": "object",
                 "properties": {
                   "aId": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "obtainedMarks": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "number",
+                    "format": "double"
                   },
                   "totalMarks": {
                     "type": "integer",
                     "format": "int32"
                   },
                   "attemptedQuestions": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "integer",
+                    "format": "int32"
                   },
                   "correctAttempted": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "integer",
+                    "format": "int32"
                   },
                   "date": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "evaluation": {
                     "type": "object",
-                    "x-java-type": "return"
+                    "properties": {
+                      "progressScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "finalScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "feedback": {
+                        "type": "string"
+                      }
+                    },
+                    "x-java-type": "Evaluation"
+                  },
+                  "idEvaluation": {
+                    "type": "string"
                   },
                   "responses": {
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "properties": {
+                        "idReponse": {
+                          "type": "string"
+                        },
+                        "contenu": {
+                          "type": "string"
+                        },
+                        "texte": {
+                          "type": "string"
+                        },
+                        "correcte": {
+                          "type": "boolean"
+                        },
+                        "question": {
+                          "type": "object",
+                          "properties": {
+                            "quesId": {
+                              "type": "string"
+                            },
+                            "contenu": {
+                              "type": "string"
+                            },
+                            "texte": {
+                              "type": "string"
+                            },
+                            "image": {
+                              "type": "string"
+                            },
+                            "option1": {
+                              "type": "string"
+                            },
+                            "option2": {
+                              "type": "string"
+                            },
+                            "option3": {
+                              "type": "string"
+                            },
+                            "option4": {
+                              "type": "string"
+                            },
+                            "answer": {
+                              "type": "string"
+                            },
+                            "idEvaluation": {
+                              "type": "string"
+                            },
+                            "reponses": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "idReponse": {
+                                    "type": "string"
+                                  },
+                                  "contenu": {
+                                    "type": "string"
+                                  },
+                                  "texte": {
+                                    "type": "string"
+                                  },
+                                  "correcte": {
+                                    "type": "boolean"
+                                  },
+                                  "question": {
+                                    "type": "object",
+                                    "x-java-type": "Question"
+                                  }
+                                },
+                                "x-java-type": "Reponse"
+                              }
+                            },
+                            "bonneReponse": {
+                              "type": "string"
+                            },
+                            "evaluation": {
+                              "type": "object",
+                              "properties": {
+                                "progressScore": {
+                                  "type": "integer",
+                                  "format": "int32"
+                                },
+                                "finalScore": {
+                                  "type": "integer",
+                                  "format": "int32"
+                                },
+                                "feedback": {
+                                  "type": "string"
+                                }
+                              },
+                              "x-java-type": "Evaluation"
+                            }
+                          },
+                          "x-java-type": "Question"
+                        }
+                      },
                       "x-java-type": "Reponse"
                     }
                   },
                   "completionDate": {
                     "type": "string",
                     "format": "date-time"
-                  },
-                  "evaluation": {
-                    "type": "object",
-                    "x-java-type": "return"
-                  },
-                  "idEvaluation": {
-                    "type": "object",
-                    "x-java-type": "return"
                   }
                 }
               },
               "example": {
-                "aId": {},
-                "obtainedMarks": {},
+                "aId": "1",
+                "obtainedMarks": 0.0,
                 "totalMarks": 0,
-                "attemptedQuestions": {},
-                "correctAttempted": {},
-                "date": {},
+                "attemptedQuestions": 0,
+                "correctAttempted": 0,
+                "date": "2020-01-01T00:00:00Z",
+                "evaluation": {
+                  "progressScore": 0,
+                  "finalScore": 0,
+                  "feedback": "string"
+                },
+                "idEvaluation": "string",
                 "responses": [
-                  {}
+                  {
+                    "idReponse": "string",
+                    "contenu": "string",
+                    "texte": "string",
+                    "correcte": true,
+                    "question": {
+                      "quesId": "1",
+                      "contenu": "string",
+                      "texte": "string",
+                      "image": "string",
+                      "option1": "string",
+                      "option2": "string",
+                      "option3": "string",
+                      "option4": "string",
+                      "answer": "string",
+                      "idEvaluation": "string",
+                      "reponses": [
+                        {
+                          "idReponse": "string",
+                          "contenu": "string",
+                          "texte": "string",
+                          "correcte": true,
+                          "question": {}
+                        }
+                      ],
+                      "bonneReponse": "string",
+                      "evaluation": {
+                        "progressScore": 0,
+                        "finalScore": 0,
+                        "feedback": "string"
+                      }
+                    }
+                  }
                 ],
-                "completionDate": "2020-01-01T00:00:00Z",
-                "evaluation": {},
-                "idEvaluation": {}
+                "completionDate": "2020-01-01T00:00:00Z"
               }
             }
           }
@@ -2873,67 +3300,210 @@
               "dto_type": "AttemptedQuizRecords",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
                   "aId": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "obtainedMarks": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "number",
+                    "format": "double"
                   },
                   "totalMarks": {
                     "type": "integer",
                     "format": "int32"
                   },
                   "attemptedQuestions": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "integer",
+                    "format": "int32"
                   },
                   "correctAttempted": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "integer",
+                    "format": "int32"
                   },
                   "date": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "evaluation": {
                     "type": "object",
-                    "x-java-type": "return"
+                    "properties": {
+                      "progressScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "finalScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "feedback": {
+                        "type": "string"
+                      }
+                    },
+                    "x-java-type": "Evaluation"
+                  },
+                  "idEvaluation": {
+                    "type": "string"
                   },
                   "responses": {
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "properties": {
+                        "idReponse": {
+                          "type": "string"
+                        },
+                        "contenu": {
+                          "type": "string"
+                        },
+                        "texte": {
+                          "type": "string"
+                        },
+                        "correcte": {
+                          "type": "boolean"
+                        },
+                        "question": {
+                          "type": "object",
+                          "properties": {
+                            "quesId": {
+                              "type": "string"
+                            },
+                            "contenu": {
+                              "type": "string"
+                            },
+                            "texte": {
+                              "type": "string"
+                            },
+                            "image": {
+                              "type": "string"
+                            },
+                            "option1": {
+                              "type": "string"
+                            },
+                            "option2": {
+                              "type": "string"
+                            },
+                            "option3": {
+                              "type": "string"
+                            },
+                            "option4": {
+                              "type": "string"
+                            },
+                            "answer": {
+                              "type": "string"
+                            },
+                            "idEvaluation": {
+                              "type": "string"
+                            },
+                            "reponses": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "idReponse": {
+                                    "type": "string"
+                                  },
+                                  "contenu": {
+                                    "type": "string"
+                                  },
+                                  "texte": {
+                                    "type": "string"
+                                  },
+                                  "correcte": {
+                                    "type": "boolean"
+                                  },
+                                  "question": {
+                                    "type": "object",
+                                    "x-java-type": "Question"
+                                  }
+                                },
+                                "x-java-type": "Reponse"
+                              }
+                            },
+                            "bonneReponse": {
+                              "type": "string"
+                            },
+                            "evaluation": {
+                              "type": "object",
+                              "properties": {
+                                "progressScore": {
+                                  "type": "integer",
+                                  "format": "int32"
+                                },
+                                "finalScore": {
+                                  "type": "integer",
+                                  "format": "int32"
+                                },
+                                "feedback": {
+                                  "type": "string"
+                                }
+                              },
+                              "x-java-type": "Evaluation"
+                            }
+                          },
+                          "x-java-type": "Question"
+                        }
+                      },
                       "x-java-type": "Reponse"
                     }
                   },
                   "completionDate": {
                     "type": "string",
                     "format": "date-time"
-                  },
-                  "evaluation": {
-                    "type": "object",
-                    "x-java-type": "return"
-                  },
-                  "idEvaluation": {
-                    "type": "object",
-                    "x-java-type": "return"
                   }
                 }
               },
               "example": {
-                "aId": {},
-                "obtainedMarks": {},
+                "aId": "1",
+                "obtainedMarks": 0.0,
                 "totalMarks": 0,
-                "attemptedQuestions": {},
-                "correctAttempted": {},
-                "date": {},
+                "attemptedQuestions": 0,
+                "correctAttempted": 0,
+                "date": "2020-01-01T00:00:00Z",
+                "evaluation": {
+                  "progressScore": 0,
+                  "finalScore": 0,
+                  "feedback": "string"
+                },
+                "idEvaluation": "string",
                 "responses": [
-                  {}
+                  {
+                    "idReponse": "string",
+                    "contenu": "string",
+                    "texte": "string",
+                    "correcte": true,
+                    "question": {
+                      "quesId": "1",
+                      "contenu": "string",
+                      "texte": "string",
+                      "image": "string",
+                      "option1": "string",
+                      "option2": "string",
+                      "option3": "string",
+                      "option4": "string",
+                      "answer": "string",
+                      "idEvaluation": "string",
+                      "reponses": [
+                        {
+                          "idReponse": "string",
+                          "contenu": "string",
+                          "texte": "string",
+                          "correcte": true,
+                          "question": {}
+                        }
+                      ],
+                      "bonneReponse": "string",
+                      "evaluation": {
+                        "progressScore": 0,
+                        "finalScore": 0,
+                        "feedback": "string"
+                      }
+                    }
+                  }
                 ],
-                "completionDate": "2020-01-01T00:00:00Z",
-                "evaluation": {},
-                "idEvaluation": {}
+                "completionDate": "2020-01-01T00:00:00Z"
               }
             }
           }
@@ -3053,6 +3623,15 @@
               "type": "string"
             },
             "example": "string"
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
           }
         ],
         "x-metadata": {
@@ -3067,6 +3646,15 @@
                   "type": "string"
                 },
                 "example": "string"
+              },
+              {
+                "name": "userId",
+                "java_type": "String",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                },
+                "example": "1"
               }
             ],
             "query": [],
@@ -3122,6 +3710,15 @@
               "x-java-type": "User"
             },
             "example": {}
+          },
+          {
+            "name": "idUser",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
           }
         ],
         "x-metadata": {
@@ -3137,6 +3734,15 @@
                   "x-java-type": "User"
                 },
                 "example": {}
+              },
+              {
+                "name": "idUser",
+                "java_type": "String",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                },
+                "example": "string"
               }
             ],
             "query": [],
@@ -3152,8 +3758,8 @@
       "post": {
         "summary": "createQuestion",
         "tags": [
-          "create",
-          "question"
+          "question",
+          "create"
         ],
         "responses": {
           "200": {
@@ -3190,73 +3796,211 @@
                 "type": "object",
                 "properties": {
                   "quesId": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "contenu": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "texte": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "image": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "option1": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "option2": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "option3": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "option4": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "answer": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "idEvaluation": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "reponses": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "idReponse": {
+                          "type": "string"
+                        },
+                        "contenu": {
+                          "type": "string"
+                        },
+                        "texte": {
+                          "type": "string"
+                        },
+                        "correcte": {
+                          "type": "boolean"
+                        },
+                        "question": {
+                          "type": "object",
+                          "properties": {
+                            "quesId": {
+                              "type": "string"
+                            },
+                            "contenu": {
+                              "type": "string"
+                            },
+                            "texte": {
+                              "type": "string"
+                            },
+                            "image": {
+                              "type": "string"
+                            },
+                            "option1": {
+                              "type": "string"
+                            },
+                            "option2": {
+                              "type": "string"
+                            },
+                            "option3": {
+                              "type": "string"
+                            },
+                            "option4": {
+                              "type": "string"
+                            },
+                            "answer": {
+                              "type": "string"
+                            },
+                            "idEvaluation": {
+                              "type": "string"
+                            },
+                            "reponses": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "idReponse": {
+                                    "type": "string"
+                                  },
+                                  "contenu": {
+                                    "type": "string"
+                                  },
+                                  "texte": {
+                                    "type": "string"
+                                  },
+                                  "correcte": {
+                                    "type": "boolean"
+                                  },
+                                  "question": {
+                                    "type": "object",
+                                    "x-java-type": "Question"
+                                  }
+                                },
+                                "x-java-type": "Reponse"
+                              }
+                            },
+                            "bonneReponse": {
+                              "type": "string"
+                            },
+                            "evaluation": {
+                              "type": "object",
+                              "properties": {
+                                "progressScore": {
+                                  "type": "integer",
+                                  "format": "int32"
+                                },
+                                "finalScore": {
+                                  "type": "integer",
+                                  "format": "int32"
+                                },
+                                "feedback": {
+                                  "type": "string"
+                                }
+                              },
+                              "x-java-type": "Evaluation"
+                            }
+                          },
+                          "x-java-type": "Question"
+                        }
+                      },
+                      "x-java-type": "Reponse"
+                    }
                   },
                   "bonneReponse": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "evaluation": {
                     "type": "object",
-                    "x-java-type": "return"
+                    "properties": {
+                      "progressScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "finalScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "feedback": {
+                        "type": "string"
+                      }
+                    },
+                    "x-java-type": "Evaluation"
                   }
                 }
               },
               "example": {
-                "quesId": {},
-                "contenu": {},
-                "texte": {},
-                "image": {},
-                "option1": {},
-                "option2": {},
-                "option3": {},
-                "option4": {},
-                "answer": {},
-                "idEvaluation": {},
-                "reponses": {},
-                "bonneReponse": {},
-                "evaluation": {}
+                "quesId": "1",
+                "contenu": "string",
+                "texte": "string",
+                "image": "string",
+                "option1": "string",
+                "option2": "string",
+                "option3": "string",
+                "option4": "string",
+                "answer": "string",
+                "idEvaluation": "string",
+                "reponses": [
+                  {
+                    "idReponse": "string",
+                    "contenu": "string",
+                    "texte": "string",
+                    "correcte": true,
+                    "question": {
+                      "quesId": "1",
+                      "contenu": "string",
+                      "texte": "string",
+                      "image": "string",
+                      "option1": "string",
+                      "option2": "string",
+                      "option3": "string",
+                      "option4": "string",
+                      "answer": "string",
+                      "idEvaluation": "string",
+                      "reponses": [
+                        {
+                          "idReponse": "string",
+                          "contenu": "string",
+                          "texte": "string",
+                          "correcte": true,
+                          "question": {}
+                        }
+                      ],
+                      "bonneReponse": "string",
+                      "evaluation": {
+                        "progressScore": 0,
+                        "finalScore": 0,
+                        "feedback": "string"
+                      }
+                    }
+                  }
+                ],
+                "bonneReponse": "string",
+                "evaluation": {
+                  "progressScore": 0,
+                  "finalScore": 0,
+                  "feedback": "string"
+                }
               }
             }
           }
@@ -3272,77 +4016,216 @@
               "dto_type": "Question",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
                   "quesId": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "contenu": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "texte": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "image": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "option1": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "option2": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "option3": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "option4": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "answer": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "idEvaluation": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "reponses": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "idReponse": {
+                          "type": "string"
+                        },
+                        "contenu": {
+                          "type": "string"
+                        },
+                        "texte": {
+                          "type": "string"
+                        },
+                        "correcte": {
+                          "type": "boolean"
+                        },
+                        "question": {
+                          "type": "object",
+                          "properties": {
+                            "quesId": {
+                              "type": "string"
+                            },
+                            "contenu": {
+                              "type": "string"
+                            },
+                            "texte": {
+                              "type": "string"
+                            },
+                            "image": {
+                              "type": "string"
+                            },
+                            "option1": {
+                              "type": "string"
+                            },
+                            "option2": {
+                              "type": "string"
+                            },
+                            "option3": {
+                              "type": "string"
+                            },
+                            "option4": {
+                              "type": "string"
+                            },
+                            "answer": {
+                              "type": "string"
+                            },
+                            "idEvaluation": {
+                              "type": "string"
+                            },
+                            "reponses": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "idReponse": {
+                                    "type": "string"
+                                  },
+                                  "contenu": {
+                                    "type": "string"
+                                  },
+                                  "texte": {
+                                    "type": "string"
+                                  },
+                                  "correcte": {
+                                    "type": "boolean"
+                                  },
+                                  "question": {
+                                    "type": "object",
+                                    "x-java-type": "Question"
+                                  }
+                                },
+                                "x-java-type": "Reponse"
+                              }
+                            },
+                            "bonneReponse": {
+                              "type": "string"
+                            },
+                            "evaluation": {
+                              "type": "object",
+                              "properties": {
+                                "progressScore": {
+                                  "type": "integer",
+                                  "format": "int32"
+                                },
+                                "finalScore": {
+                                  "type": "integer",
+                                  "format": "int32"
+                                },
+                                "feedback": {
+                                  "type": "string"
+                                }
+                              },
+                              "x-java-type": "Evaluation"
+                            }
+                          },
+                          "x-java-type": "Question"
+                        }
+                      },
+                      "x-java-type": "Reponse"
+                    }
                   },
                   "bonneReponse": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "evaluation": {
                     "type": "object",
-                    "x-java-type": "return"
+                    "properties": {
+                      "progressScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "finalScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "feedback": {
+                        "type": "string"
+                      }
+                    },
+                    "x-java-type": "Evaluation"
                   }
                 }
               },
               "example": {
-                "quesId": {},
-                "contenu": {},
-                "texte": {},
-                "image": {},
-                "option1": {},
-                "option2": {},
-                "option3": {},
-                "option4": {},
-                "answer": {},
-                "idEvaluation": {},
-                "reponses": {},
-                "bonneReponse": {},
-                "evaluation": {}
+                "quesId": "1",
+                "contenu": "string",
+                "texte": "string",
+                "image": "string",
+                "option1": "string",
+                "option2": "string",
+                "option3": "string",
+                "option4": "string",
+                "answer": "string",
+                "idEvaluation": "string",
+                "reponses": [
+                  {
+                    "idReponse": "string",
+                    "contenu": "string",
+                    "texte": "string",
+                    "correcte": true,
+                    "question": {
+                      "quesId": "1",
+                      "contenu": "string",
+                      "texte": "string",
+                      "image": "string",
+                      "option1": "string",
+                      "option2": "string",
+                      "option3": "string",
+                      "option4": "string",
+                      "answer": "string",
+                      "idEvaluation": "string",
+                      "reponses": [
+                        {
+                          "idReponse": "string",
+                          "contenu": "string",
+                          "texte": "string",
+                          "correcte": true,
+                          "question": {}
+                        }
+                      ],
+                      "bonneReponse": "string",
+                      "evaluation": {
+                        "progressScore": 0,
+                        "finalScore": 0,
+                        "feedback": "string"
+                      }
+                    }
+                  }
+                ],
+                "bonneReponse": "string",
+                "evaluation": {
+                  "progressScore": 0,
+                  "finalScore": 0,
+                  "feedback": "string"
+                }
               }
             }
           }
@@ -3386,7 +4269,13 @@
           }
         },
         "x-metadata": {
-          "annotation": "@GetMapping(\"listquestion\""
+          "annotation": "@GetMapping(\"listquestion\"",
+          "request": {
+            "path": [],
+            "query": [],
+            "header": [],
+            "body": null
+          }
         },
         "x-confidence": 0.87,
         "x-source": "ast"
@@ -3396,8 +4285,8 @@
       "put": {
         "summary": "updateQuestion",
         "tags": [
-          "update",
-          "question"
+          "question",
+          "update"
         ],
         "responses": {
           "200": {
@@ -3445,73 +4334,211 @@
                 "type": "object",
                 "properties": {
                   "quesId": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "contenu": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "texte": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "image": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "option1": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "option2": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "option3": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "option4": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "answer": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "idEvaluation": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "reponses": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "idReponse": {
+                          "type": "string"
+                        },
+                        "contenu": {
+                          "type": "string"
+                        },
+                        "texte": {
+                          "type": "string"
+                        },
+                        "correcte": {
+                          "type": "boolean"
+                        },
+                        "question": {
+                          "type": "object",
+                          "properties": {
+                            "quesId": {
+                              "type": "string"
+                            },
+                            "contenu": {
+                              "type": "string"
+                            },
+                            "texte": {
+                              "type": "string"
+                            },
+                            "image": {
+                              "type": "string"
+                            },
+                            "option1": {
+                              "type": "string"
+                            },
+                            "option2": {
+                              "type": "string"
+                            },
+                            "option3": {
+                              "type": "string"
+                            },
+                            "option4": {
+                              "type": "string"
+                            },
+                            "answer": {
+                              "type": "string"
+                            },
+                            "idEvaluation": {
+                              "type": "string"
+                            },
+                            "reponses": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "idReponse": {
+                                    "type": "string"
+                                  },
+                                  "contenu": {
+                                    "type": "string"
+                                  },
+                                  "texte": {
+                                    "type": "string"
+                                  },
+                                  "correcte": {
+                                    "type": "boolean"
+                                  },
+                                  "question": {
+                                    "type": "object",
+                                    "x-java-type": "Question"
+                                  }
+                                },
+                                "x-java-type": "Reponse"
+                              }
+                            },
+                            "bonneReponse": {
+                              "type": "string"
+                            },
+                            "evaluation": {
+                              "type": "object",
+                              "properties": {
+                                "progressScore": {
+                                  "type": "integer",
+                                  "format": "int32"
+                                },
+                                "finalScore": {
+                                  "type": "integer",
+                                  "format": "int32"
+                                },
+                                "feedback": {
+                                  "type": "string"
+                                }
+                              },
+                              "x-java-type": "Evaluation"
+                            }
+                          },
+                          "x-java-type": "Question"
+                        }
+                      },
+                      "x-java-type": "Reponse"
+                    }
                   },
                   "bonneReponse": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "evaluation": {
                     "type": "object",
-                    "x-java-type": "return"
+                    "properties": {
+                      "progressScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "finalScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "feedback": {
+                        "type": "string"
+                      }
+                    },
+                    "x-java-type": "Evaluation"
                   }
                 }
               },
               "example": {
-                "quesId": {},
-                "contenu": {},
-                "texte": {},
-                "image": {},
-                "option1": {},
-                "option2": {},
-                "option3": {},
-                "option4": {},
-                "answer": {},
-                "idEvaluation": {},
-                "reponses": {},
-                "bonneReponse": {},
-                "evaluation": {}
+                "quesId": "1",
+                "contenu": "string",
+                "texte": "string",
+                "image": "string",
+                "option1": "string",
+                "option2": "string",
+                "option3": "string",
+                "option4": "string",
+                "answer": "string",
+                "idEvaluation": "string",
+                "reponses": [
+                  {
+                    "idReponse": "string",
+                    "contenu": "string",
+                    "texte": "string",
+                    "correcte": true,
+                    "question": {
+                      "quesId": "1",
+                      "contenu": "string",
+                      "texte": "string",
+                      "image": "string",
+                      "option1": "string",
+                      "option2": "string",
+                      "option3": "string",
+                      "option4": "string",
+                      "answer": "string",
+                      "idEvaluation": "string",
+                      "reponses": [
+                        {
+                          "idReponse": "string",
+                          "contenu": "string",
+                          "texte": "string",
+                          "correcte": true,
+                          "question": {}
+                        }
+                      ],
+                      "bonneReponse": "string",
+                      "evaluation": {
+                        "progressScore": 0,
+                        "finalScore": 0,
+                        "feedback": "string"
+                      }
+                    }
+                  }
+                ],
+                "bonneReponse": "string",
+                "evaluation": {
+                  "progressScore": 0,
+                  "finalScore": 0,
+                  "feedback": "string"
+                }
               }
             }
           }
@@ -3537,77 +4564,216 @@
               "dto_type": "Question",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
                   "quesId": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "contenu": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "texte": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "image": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "option1": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "option2": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "option3": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "option4": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "answer": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "idEvaluation": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "reponses": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "idReponse": {
+                          "type": "string"
+                        },
+                        "contenu": {
+                          "type": "string"
+                        },
+                        "texte": {
+                          "type": "string"
+                        },
+                        "correcte": {
+                          "type": "boolean"
+                        },
+                        "question": {
+                          "type": "object",
+                          "properties": {
+                            "quesId": {
+                              "type": "string"
+                            },
+                            "contenu": {
+                              "type": "string"
+                            },
+                            "texte": {
+                              "type": "string"
+                            },
+                            "image": {
+                              "type": "string"
+                            },
+                            "option1": {
+                              "type": "string"
+                            },
+                            "option2": {
+                              "type": "string"
+                            },
+                            "option3": {
+                              "type": "string"
+                            },
+                            "option4": {
+                              "type": "string"
+                            },
+                            "answer": {
+                              "type": "string"
+                            },
+                            "idEvaluation": {
+                              "type": "string"
+                            },
+                            "reponses": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "idReponse": {
+                                    "type": "string"
+                                  },
+                                  "contenu": {
+                                    "type": "string"
+                                  },
+                                  "texte": {
+                                    "type": "string"
+                                  },
+                                  "correcte": {
+                                    "type": "boolean"
+                                  },
+                                  "question": {
+                                    "type": "object",
+                                    "x-java-type": "Question"
+                                  }
+                                },
+                                "x-java-type": "Reponse"
+                              }
+                            },
+                            "bonneReponse": {
+                              "type": "string"
+                            },
+                            "evaluation": {
+                              "type": "object",
+                              "properties": {
+                                "progressScore": {
+                                  "type": "integer",
+                                  "format": "int32"
+                                },
+                                "finalScore": {
+                                  "type": "integer",
+                                  "format": "int32"
+                                },
+                                "feedback": {
+                                  "type": "string"
+                                }
+                              },
+                              "x-java-type": "Evaluation"
+                            }
+                          },
+                          "x-java-type": "Question"
+                        }
+                      },
+                      "x-java-type": "Reponse"
+                    }
                   },
                   "bonneReponse": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "evaluation": {
                     "type": "object",
-                    "x-java-type": "return"
+                    "properties": {
+                      "progressScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "finalScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "feedback": {
+                        "type": "string"
+                      }
+                    },
+                    "x-java-type": "Evaluation"
                   }
                 }
               },
               "example": {
-                "quesId": {},
-                "contenu": {},
-                "texte": {},
-                "image": {},
-                "option1": {},
-                "option2": {},
-                "option3": {},
-                "option4": {},
-                "answer": {},
-                "idEvaluation": {},
-                "reponses": {},
-                "bonneReponse": {},
-                "evaluation": {}
+                "quesId": "1",
+                "contenu": "string",
+                "texte": "string",
+                "image": "string",
+                "option1": "string",
+                "option2": "string",
+                "option3": "string",
+                "option4": "string",
+                "answer": "string",
+                "idEvaluation": "string",
+                "reponses": [
+                  {
+                    "idReponse": "string",
+                    "contenu": "string",
+                    "texte": "string",
+                    "correcte": true,
+                    "question": {
+                      "quesId": "1",
+                      "contenu": "string",
+                      "texte": "string",
+                      "image": "string",
+                      "option1": "string",
+                      "option2": "string",
+                      "option3": "string",
+                      "option4": "string",
+                      "answer": "string",
+                      "idEvaluation": "string",
+                      "reponses": [
+                        {
+                          "idReponse": "string",
+                          "contenu": "string",
+                          "texte": "string",
+                          "correcte": true,
+                          "question": {}
+                        }
+                      ],
+                      "bonneReponse": "string",
+                      "evaluation": {
+                        "progressScore": 0,
+                        "finalScore": 0,
+                        "feedback": "string"
+                      }
+                    }
+                  }
+                ],
+                "bonneReponse": "string",
+                "evaluation": {
+                  "progressScore": 0,
+                  "finalScore": 0,
+                  "feedback": "string"
+                }
               }
             }
           }
@@ -3684,8 +4850,8 @@
       "delete": {
         "summary": "deleteQuestion",
         "tags": [
-          "question",
-          "delete"
+          "delete",
+          "question"
         ],
         "responses": {
           "200": {
@@ -3927,6 +5093,15 @@
               "type": "string"
             },
             "example": "string"
+          },
+          {
+            "name": "evaluationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
           }
         ],
         "x-metadata": {
@@ -3941,6 +5116,15 @@
                   "type": "string"
                 },
                 "example": "string"
+              },
+              {
+                "name": "evaluationId",
+                "java_type": "String",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                },
+                "example": "1"
               }
             ],
             "query": [],
@@ -3956,8 +5140,8 @@
       "post": {
         "summary": "submitQuiz",
         "tags": [
-          "quiz_result",
-          "submit"
+          "submit",
+          "quiz_result"
         ],
         "responses": {
           "200": {
@@ -3994,48 +5178,65 @@
                 "type": "object",
                 "properties": {
                   "id": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "idEvaluation": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "score": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "integer",
+                    "format": "int32"
                   },
                   "completionDate": {
-                    "type": "object",
-                    "x-java-type": "return"
-                  },
-                  "answers": {
-                    "type": "object",
-                    "x-java-type": "return"
-                  },
-                  "percentage": {
-                    "type": "object",
-                    "x-java-type": "return"
-                  },
-                  "dateTaken": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string",
+                    "format": "date-time"
                   },
                   "userId": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
+                  },
+                  "answers": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "questionId": {
+                          "type": "string"
+                        },
+                        "selectedOption": {
+                          "type": "string"
+                        },
+                        "correctAnswer": {
+                          "type": "string"
+                        }
+                      },
+                      "x-java-type": "UserAnswer"
+                    }
+                  },
+                  "percentage": {
+                    "type": "integer",
+                    "format": "int32"
+                  },
+                  "dateTaken": {
+                    "type": "string",
+                    "format": "date-time"
                   }
                 }
               },
               "example": {
-                "id": {},
-                "idEvaluation": {},
-                "score": {},
-                "completionDate": {},
-                "answers": {},
-                "percentage": {},
-                "dateTaken": {},
-                "userId": {}
+                "id": "1",
+                "idEvaluation": "string",
+                "score": 0,
+                "completionDate": "2020-01-01T00:00:00Z",
+                "userId": "1",
+                "answers": [
+                  {
+                    "questionId": "1",
+                    "selectedOption": "string",
+                    "correctAnswer": "string"
+                  }
+                ],
+                "percentage": 0,
+                "dateTaken": "2020-01-01T00:00:00Z"
               }
             }
           }
@@ -4051,52 +5252,70 @@
               "dto_type": "QuizResult",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
                   "id": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "idEvaluation": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "score": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "integer",
+                    "format": "int32"
                   },
                   "completionDate": {
-                    "type": "object",
-                    "x-java-type": "return"
-                  },
-                  "answers": {
-                    "type": "object",
-                    "x-java-type": "return"
-                  },
-                  "percentage": {
-                    "type": "object",
-                    "x-java-type": "return"
-                  },
-                  "dateTaken": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string",
+                    "format": "date-time"
                   },
                   "userId": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
+                  },
+                  "answers": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "questionId": {
+                          "type": "string"
+                        },
+                        "selectedOption": {
+                          "type": "string"
+                        },
+                        "correctAnswer": {
+                          "type": "string"
+                        }
+                      },
+                      "x-java-type": "UserAnswer"
+                    }
+                  },
+                  "percentage": {
+                    "type": "integer",
+                    "format": "int32"
+                  },
+                  "dateTaken": {
+                    "type": "string",
+                    "format": "date-time"
                   }
                 }
               },
               "example": {
-                "id": {},
-                "idEvaluation": {},
-                "score": {},
-                "completionDate": {},
-                "answers": {},
-                "percentage": {},
-                "dateTaken": {},
-                "userId": {}
+                "id": "1",
+                "idEvaluation": "string",
+                "score": 0,
+                "completionDate": "2020-01-01T00:00:00Z",
+                "userId": "1",
+                "answers": [
+                  {
+                    "questionId": "1",
+                    "selectedOption": "string",
+                    "correctAnswer": "string"
+                  }
+                ],
+                "percentage": 0,
+                "dateTaken": "2020-01-01T00:00:00Z"
               }
             }
           }
@@ -4147,63 +5366,205 @@
                 "type": "object",
                 "properties": {
                   "aId": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "obtainedMarks": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "number",
+                    "format": "double"
                   },
                   "totalMarks": {
                     "type": "integer",
                     "format": "int32"
                   },
                   "attemptedQuestions": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "integer",
+                    "format": "int32"
                   },
                   "correctAttempted": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "integer",
+                    "format": "int32"
                   },
                   "date": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "evaluation": {
                     "type": "object",
-                    "x-java-type": "return"
+                    "properties": {
+                      "progressScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "finalScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "feedback": {
+                        "type": "string"
+                      }
+                    },
+                    "x-java-type": "Evaluation"
+                  },
+                  "idEvaluation": {
+                    "type": "string"
                   },
                   "responses": {
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "properties": {
+                        "idReponse": {
+                          "type": "string"
+                        },
+                        "contenu": {
+                          "type": "string"
+                        },
+                        "texte": {
+                          "type": "string"
+                        },
+                        "correcte": {
+                          "type": "boolean"
+                        },
+                        "question": {
+                          "type": "object",
+                          "properties": {
+                            "quesId": {
+                              "type": "string"
+                            },
+                            "contenu": {
+                              "type": "string"
+                            },
+                            "texte": {
+                              "type": "string"
+                            },
+                            "image": {
+                              "type": "string"
+                            },
+                            "option1": {
+                              "type": "string"
+                            },
+                            "option2": {
+                              "type": "string"
+                            },
+                            "option3": {
+                              "type": "string"
+                            },
+                            "option4": {
+                              "type": "string"
+                            },
+                            "answer": {
+                              "type": "string"
+                            },
+                            "idEvaluation": {
+                              "type": "string"
+                            },
+                            "reponses": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "idReponse": {
+                                    "type": "string"
+                                  },
+                                  "contenu": {
+                                    "type": "string"
+                                  },
+                                  "texte": {
+                                    "type": "string"
+                                  },
+                                  "correcte": {
+                                    "type": "boolean"
+                                  },
+                                  "question": {
+                                    "type": "object",
+                                    "x-java-type": "Question"
+                                  }
+                                },
+                                "x-java-type": "Reponse"
+                              }
+                            },
+                            "bonneReponse": {
+                              "type": "string"
+                            },
+                            "evaluation": {
+                              "type": "object",
+                              "properties": {
+                                "progressScore": {
+                                  "type": "integer",
+                                  "format": "int32"
+                                },
+                                "finalScore": {
+                                  "type": "integer",
+                                  "format": "int32"
+                                },
+                                "feedback": {
+                                  "type": "string"
+                                }
+                              },
+                              "x-java-type": "Evaluation"
+                            }
+                          },
+                          "x-java-type": "Question"
+                        }
+                      },
                       "x-java-type": "Reponse"
                     }
                   },
                   "completionDate": {
                     "type": "string",
                     "format": "date-time"
-                  },
-                  "evaluation": {
-                    "type": "object",
-                    "x-java-type": "return"
-                  },
-                  "idEvaluation": {
-                    "type": "object",
-                    "x-java-type": "return"
                   }
                 }
               },
               "example": {
-                "aId": {},
-                "obtainedMarks": {},
+                "aId": "1",
+                "obtainedMarks": 0.0,
                 "totalMarks": 0,
-                "attemptedQuestions": {},
-                "correctAttempted": {},
-                "date": {},
+                "attemptedQuestions": 0,
+                "correctAttempted": 0,
+                "date": "2020-01-01T00:00:00Z",
+                "evaluation": {
+                  "progressScore": 0,
+                  "finalScore": 0,
+                  "feedback": "string"
+                },
+                "idEvaluation": "string",
                 "responses": [
-                  {}
+                  {
+                    "idReponse": "string",
+                    "contenu": "string",
+                    "texte": "string",
+                    "correcte": true,
+                    "question": {
+                      "quesId": "1",
+                      "contenu": "string",
+                      "texte": "string",
+                      "image": "string",
+                      "option1": "string",
+                      "option2": "string",
+                      "option3": "string",
+                      "option4": "string",
+                      "answer": "string",
+                      "idEvaluation": "string",
+                      "reponses": [
+                        {
+                          "idReponse": "string",
+                          "contenu": "string",
+                          "texte": "string",
+                          "correcte": true,
+                          "question": {}
+                        }
+                      ],
+                      "bonneReponse": "string",
+                      "evaluation": {
+                        "progressScore": 0,
+                        "finalScore": 0,
+                        "feedback": "string"
+                      }
+                    }
+                  }
                 ],
-                "completionDate": "2020-01-01T00:00:00Z",
-                "evaluation": {},
-                "idEvaluation": {}
+                "completionDate": "2020-01-01T00:00:00Z"
               }
             }
           }
@@ -4219,67 +5580,210 @@
               "dto_type": "AttemptedQuizRecords",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
                   "aId": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "obtainedMarks": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "number",
+                    "format": "double"
                   },
                   "totalMarks": {
                     "type": "integer",
                     "format": "int32"
                   },
                   "attemptedQuestions": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "integer",
+                    "format": "int32"
                   },
                   "correctAttempted": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "integer",
+                    "format": "int32"
                   },
                   "date": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "evaluation": {
                     "type": "object",
-                    "x-java-type": "return"
+                    "properties": {
+                      "progressScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "finalScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "feedback": {
+                        "type": "string"
+                      }
+                    },
+                    "x-java-type": "Evaluation"
+                  },
+                  "idEvaluation": {
+                    "type": "string"
                   },
                   "responses": {
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "properties": {
+                        "idReponse": {
+                          "type": "string"
+                        },
+                        "contenu": {
+                          "type": "string"
+                        },
+                        "texte": {
+                          "type": "string"
+                        },
+                        "correcte": {
+                          "type": "boolean"
+                        },
+                        "question": {
+                          "type": "object",
+                          "properties": {
+                            "quesId": {
+                              "type": "string"
+                            },
+                            "contenu": {
+                              "type": "string"
+                            },
+                            "texte": {
+                              "type": "string"
+                            },
+                            "image": {
+                              "type": "string"
+                            },
+                            "option1": {
+                              "type": "string"
+                            },
+                            "option2": {
+                              "type": "string"
+                            },
+                            "option3": {
+                              "type": "string"
+                            },
+                            "option4": {
+                              "type": "string"
+                            },
+                            "answer": {
+                              "type": "string"
+                            },
+                            "idEvaluation": {
+                              "type": "string"
+                            },
+                            "reponses": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "idReponse": {
+                                    "type": "string"
+                                  },
+                                  "contenu": {
+                                    "type": "string"
+                                  },
+                                  "texte": {
+                                    "type": "string"
+                                  },
+                                  "correcte": {
+                                    "type": "boolean"
+                                  },
+                                  "question": {
+                                    "type": "object",
+                                    "x-java-type": "Question"
+                                  }
+                                },
+                                "x-java-type": "Reponse"
+                              }
+                            },
+                            "bonneReponse": {
+                              "type": "string"
+                            },
+                            "evaluation": {
+                              "type": "object",
+                              "properties": {
+                                "progressScore": {
+                                  "type": "integer",
+                                  "format": "int32"
+                                },
+                                "finalScore": {
+                                  "type": "integer",
+                                  "format": "int32"
+                                },
+                                "feedback": {
+                                  "type": "string"
+                                }
+                              },
+                              "x-java-type": "Evaluation"
+                            }
+                          },
+                          "x-java-type": "Question"
+                        }
+                      },
                       "x-java-type": "Reponse"
                     }
                   },
                   "completionDate": {
                     "type": "string",
                     "format": "date-time"
-                  },
-                  "evaluation": {
-                    "type": "object",
-                    "x-java-type": "return"
-                  },
-                  "idEvaluation": {
-                    "type": "object",
-                    "x-java-type": "return"
                   }
                 }
               },
               "example": {
-                "aId": {},
-                "obtainedMarks": {},
+                "aId": "1",
+                "obtainedMarks": 0.0,
                 "totalMarks": 0,
-                "attemptedQuestions": {},
-                "correctAttempted": {},
-                "date": {},
+                "attemptedQuestions": 0,
+                "correctAttempted": 0,
+                "date": "2020-01-01T00:00:00Z",
+                "evaluation": {
+                  "progressScore": 0,
+                  "finalScore": 0,
+                  "feedback": "string"
+                },
+                "idEvaluation": "string",
                 "responses": [
-                  {}
+                  {
+                    "idReponse": "string",
+                    "contenu": "string",
+                    "texte": "string",
+                    "correcte": true,
+                    "question": {
+                      "quesId": "1",
+                      "contenu": "string",
+                      "texte": "string",
+                      "image": "string",
+                      "option1": "string",
+                      "option2": "string",
+                      "option3": "string",
+                      "option4": "string",
+                      "answer": "string",
+                      "idEvaluation": "string",
+                      "reponses": [
+                        {
+                          "idReponse": "string",
+                          "contenu": "string",
+                          "texte": "string",
+                          "correcte": true,
+                          "question": {}
+                        }
+                      ],
+                      "bonneReponse": "string",
+                      "evaluation": {
+                        "progressScore": 0,
+                        "finalScore": 0,
+                        "feedback": "string"
+                      }
+                    }
+                  }
                 ],
-                "completionDate": "2020-01-01T00:00:00Z",
-                "evaluation": {},
-                "idEvaluation": {}
+                "completionDate": "2020-01-01T00:00:00Z"
               }
             }
           }
@@ -4328,63 +5832,205 @@
                 "type": "object",
                 "properties": {
                   "aId": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "obtainedMarks": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "number",
+                    "format": "double"
                   },
                   "totalMarks": {
                     "type": "integer",
                     "format": "int32"
                   },
                   "attemptedQuestions": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "integer",
+                    "format": "int32"
                   },
                   "correctAttempted": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "integer",
+                    "format": "int32"
                   },
                   "date": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "evaluation": {
                     "type": "object",
-                    "x-java-type": "return"
+                    "properties": {
+                      "progressScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "finalScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "feedback": {
+                        "type": "string"
+                      }
+                    },
+                    "x-java-type": "Evaluation"
+                  },
+                  "idEvaluation": {
+                    "type": "string"
                   },
                   "responses": {
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "properties": {
+                        "idReponse": {
+                          "type": "string"
+                        },
+                        "contenu": {
+                          "type": "string"
+                        },
+                        "texte": {
+                          "type": "string"
+                        },
+                        "correcte": {
+                          "type": "boolean"
+                        },
+                        "question": {
+                          "type": "object",
+                          "properties": {
+                            "quesId": {
+                              "type": "string"
+                            },
+                            "contenu": {
+                              "type": "string"
+                            },
+                            "texte": {
+                              "type": "string"
+                            },
+                            "image": {
+                              "type": "string"
+                            },
+                            "option1": {
+                              "type": "string"
+                            },
+                            "option2": {
+                              "type": "string"
+                            },
+                            "option3": {
+                              "type": "string"
+                            },
+                            "option4": {
+                              "type": "string"
+                            },
+                            "answer": {
+                              "type": "string"
+                            },
+                            "idEvaluation": {
+                              "type": "string"
+                            },
+                            "reponses": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "idReponse": {
+                                    "type": "string"
+                                  },
+                                  "contenu": {
+                                    "type": "string"
+                                  },
+                                  "texte": {
+                                    "type": "string"
+                                  },
+                                  "correcte": {
+                                    "type": "boolean"
+                                  },
+                                  "question": {
+                                    "type": "object",
+                                    "x-java-type": "Question"
+                                  }
+                                },
+                                "x-java-type": "Reponse"
+                              }
+                            },
+                            "bonneReponse": {
+                              "type": "string"
+                            },
+                            "evaluation": {
+                              "type": "object",
+                              "properties": {
+                                "progressScore": {
+                                  "type": "integer",
+                                  "format": "int32"
+                                },
+                                "finalScore": {
+                                  "type": "integer",
+                                  "format": "int32"
+                                },
+                                "feedback": {
+                                  "type": "string"
+                                }
+                              },
+                              "x-java-type": "Evaluation"
+                            }
+                          },
+                          "x-java-type": "Question"
+                        }
+                      },
                       "x-java-type": "Reponse"
                     }
                   },
                   "completionDate": {
                     "type": "string",
                     "format": "date-time"
-                  },
-                  "evaluation": {
-                    "type": "object",
-                    "x-java-type": "return"
-                  },
-                  "idEvaluation": {
-                    "type": "object",
-                    "x-java-type": "return"
                   }
                 }
               },
               "example": {
-                "aId": {},
-                "obtainedMarks": {},
+                "aId": "1",
+                "obtainedMarks": 0.0,
                 "totalMarks": 0,
-                "attemptedQuestions": {},
-                "correctAttempted": {},
-                "date": {},
+                "attemptedQuestions": 0,
+                "correctAttempted": 0,
+                "date": "2020-01-01T00:00:00Z",
+                "evaluation": {
+                  "progressScore": 0,
+                  "finalScore": 0,
+                  "feedback": "string"
+                },
+                "idEvaluation": "string",
                 "responses": [
-                  {}
+                  {
+                    "idReponse": "string",
+                    "contenu": "string",
+                    "texte": "string",
+                    "correcte": true,
+                    "question": {
+                      "quesId": "1",
+                      "contenu": "string",
+                      "texte": "string",
+                      "image": "string",
+                      "option1": "string",
+                      "option2": "string",
+                      "option3": "string",
+                      "option4": "string",
+                      "answer": "string",
+                      "idEvaluation": "string",
+                      "reponses": [
+                        {
+                          "idReponse": "string",
+                          "contenu": "string",
+                          "texte": "string",
+                          "correcte": true,
+                          "question": {}
+                        }
+                      ],
+                      "bonneReponse": "string",
+                      "evaluation": {
+                        "progressScore": 0,
+                        "finalScore": 0,
+                        "feedback": "string"
+                      }
+                    }
+                  }
                 ],
-                "completionDate": "2020-01-01T00:00:00Z",
-                "evaluation": {},
-                "idEvaluation": {}
+                "completionDate": "2020-01-01T00:00:00Z"
               }
             }
           }
@@ -4400,67 +6046,210 @@
               "dto_type": "AttemptedQuizRecords",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
                   "aId": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "string"
                   },
                   "obtainedMarks": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "number",
+                    "format": "double"
                   },
                   "totalMarks": {
                     "type": "integer",
                     "format": "int32"
                   },
                   "attemptedQuestions": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "integer",
+                    "format": "int32"
                   },
                   "correctAttempted": {
-                    "type": "object",
-                    "x-java-type": "return"
+                    "type": "integer",
+                    "format": "int32"
                   },
                   "date": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "evaluation": {
                     "type": "object",
-                    "x-java-type": "return"
+                    "properties": {
+                      "progressScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "finalScore": {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      "feedback": {
+                        "type": "string"
+                      }
+                    },
+                    "x-java-type": "Evaluation"
+                  },
+                  "idEvaluation": {
+                    "type": "string"
                   },
                   "responses": {
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "properties": {
+                        "idReponse": {
+                          "type": "string"
+                        },
+                        "contenu": {
+                          "type": "string"
+                        },
+                        "texte": {
+                          "type": "string"
+                        },
+                        "correcte": {
+                          "type": "boolean"
+                        },
+                        "question": {
+                          "type": "object",
+                          "properties": {
+                            "quesId": {
+                              "type": "string"
+                            },
+                            "contenu": {
+                              "type": "string"
+                            },
+                            "texte": {
+                              "type": "string"
+                            },
+                            "image": {
+                              "type": "string"
+                            },
+                            "option1": {
+                              "type": "string"
+                            },
+                            "option2": {
+                              "type": "string"
+                            },
+                            "option3": {
+                              "type": "string"
+                            },
+                            "option4": {
+                              "type": "string"
+                            },
+                            "answer": {
+                              "type": "string"
+                            },
+                            "idEvaluation": {
+                              "type": "string"
+                            },
+                            "reponses": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "idReponse": {
+                                    "type": "string"
+                                  },
+                                  "contenu": {
+                                    "type": "string"
+                                  },
+                                  "texte": {
+                                    "type": "string"
+                                  },
+                                  "correcte": {
+                                    "type": "boolean"
+                                  },
+                                  "question": {
+                                    "type": "object",
+                                    "x-java-type": "Question"
+                                  }
+                                },
+                                "x-java-type": "Reponse"
+                              }
+                            },
+                            "bonneReponse": {
+                              "type": "string"
+                            },
+                            "evaluation": {
+                              "type": "object",
+                              "properties": {
+                                "progressScore": {
+                                  "type": "integer",
+                                  "format": "int32"
+                                },
+                                "finalScore": {
+                                  "type": "integer",
+                                  "format": "int32"
+                                },
+                                "feedback": {
+                                  "type": "string"
+                                }
+                              },
+                              "x-java-type": "Evaluation"
+                            }
+                          },
+                          "x-java-type": "Question"
+                        }
+                      },
                       "x-java-type": "Reponse"
                     }
                   },
                   "completionDate": {
                     "type": "string",
                     "format": "date-time"
-                  },
-                  "evaluation": {
-                    "type": "object",
-                    "x-java-type": "return"
-                  },
-                  "idEvaluation": {
-                    "type": "object",
-                    "x-java-type": "return"
                   }
                 }
               },
               "example": {
-                "aId": {},
-                "obtainedMarks": {},
+                "aId": "1",
+                "obtainedMarks": 0.0,
                 "totalMarks": 0,
-                "attemptedQuestions": {},
-                "correctAttempted": {},
-                "date": {},
+                "attemptedQuestions": 0,
+                "correctAttempted": 0,
+                "date": "2020-01-01T00:00:00Z",
+                "evaluation": {
+                  "progressScore": 0,
+                  "finalScore": 0,
+                  "feedback": "string"
+                },
+                "idEvaluation": "string",
                 "responses": [
-                  {}
+                  {
+                    "idReponse": "string",
+                    "contenu": "string",
+                    "texte": "string",
+                    "correcte": true,
+                    "question": {
+                      "quesId": "1",
+                      "contenu": "string",
+                      "texte": "string",
+                      "image": "string",
+                      "option1": "string",
+                      "option2": "string",
+                      "option3": "string",
+                      "option4": "string",
+                      "answer": "string",
+                      "idEvaluation": "string",
+                      "reponses": [
+                        {
+                          "idReponse": "string",
+                          "contenu": "string",
+                          "texte": "string",
+                          "correcte": true,
+                          "question": {}
+                        }
+                      ],
+                      "bonneReponse": "string",
+                      "evaluation": {
+                        "progressScore": 0,
+                        "finalScore": 0,
+                        "feedback": "string"
+                      }
+                    }
+                  }
                 ],
-                "completionDate": "2020-01-01T00:00:00Z",
-                "evaluation": {},
-                "idEvaluation": {}
+                "completionDate": "2020-01-01T00:00:00Z"
               }
             }
           }
@@ -4501,7 +6290,13 @@
           }
         },
         "x-metadata": {
-          "annotation": "@GetMapping(\"/\""
+          "annotation": "@GetMapping(\"/\"",
+          "request": {
+            "path": [],
+            "query": [],
+            "header": [],
+            "body": null
+          }
         },
         "x-confidence": 0.87,
         "x-source": "ast"
@@ -4713,8 +6508,8 @@
       "post": {
         "summary": "addFormation",
         "tags": [
-          "add",
-          "formation"
+          "formation",
+          "add"
         ],
         "responses": {
           "200": {
@@ -4780,6 +6575,19 @@
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "properties": {
+                        "progressScore": {
+                          "type": "integer",
+                          "format": "int32"
+                        },
+                        "finalScore": {
+                          "type": "integer",
+                          "format": "int32"
+                        },
+                        "feedback": {
+                          "type": "string"
+                        }
+                      },
                       "x-java-type": "Evaluation"
                     }
                   }
@@ -4795,7 +6603,11 @@
                 "video": "string",
                 "categorie": "string",
                 "evaluations": [
-                  {}
+                  {
+                    "progressScore": 0,
+                    "finalScore": 0,
+                    "feedback": "string"
+                  }
                 ]
               }
             }
@@ -4812,6 +6624,7 @@
               "dto_type": "Formation",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
@@ -4845,6 +6658,19 @@
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "properties": {
+                        "progressScore": {
+                          "type": "integer",
+                          "format": "int32"
+                        },
+                        "finalScore": {
+                          "type": "integer",
+                          "format": "int32"
+                        },
+                        "feedback": {
+                          "type": "string"
+                        }
+                      },
                       "x-java-type": "Evaluation"
                     }
                   }
@@ -4860,7 +6686,11 @@
                 "video": "string",
                 "categorie": "string",
                 "evaluations": [
-                  {}
+                  {
+                    "progressScore": 0,
+                    "finalScore": 0,
+                    "feedback": "string"
+                  }
                 ]
               }
             }
@@ -4874,8 +6704,8 @@
       "put": {
         "summary": "updateFormation",
         "tags": [
-          "update",
-          "formation"
+          "formation",
+          "update"
         ],
         "responses": {
           "200": {
@@ -4952,6 +6782,19 @@
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "properties": {
+                        "progressScore": {
+                          "type": "integer",
+                          "format": "int32"
+                        },
+                        "finalScore": {
+                          "type": "integer",
+                          "format": "int32"
+                        },
+                        "feedback": {
+                          "type": "string"
+                        }
+                      },
                       "x-java-type": "Evaluation"
                     }
                   }
@@ -4967,7 +6810,11 @@
                 "video": "string",
                 "categorie": "string",
                 "evaluations": [
-                  {}
+                  {
+                    "progressScore": 0,
+                    "finalScore": 0,
+                    "feedback": "string"
+                  }
                 ]
               }
             }
@@ -4994,6 +6841,7 @@
               "dto_type": "Formation",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
@@ -5027,6 +6875,19 @@
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "properties": {
+                        "progressScore": {
+                          "type": "integer",
+                          "format": "int32"
+                        },
+                        "finalScore": {
+                          "type": "integer",
+                          "format": "int32"
+                        },
+                        "feedback": {
+                          "type": "string"
+                        }
+                      },
                       "x-java-type": "Evaluation"
                     }
                   }
@@ -5042,7 +6903,11 @@
                 "video": "string",
                 "categorie": "string",
                 "evaluations": [
-                  {}
+                  {
+                    "progressScore": 0,
+                    "finalScore": 0,
+                    "feedback": "string"
+                  }
                 ]
               }
             }
@@ -5056,8 +6921,8 @@
       "delete": {
         "summary": "deleteFormation",
         "tags": [
-          "delete",
-          "formation"
+          "formation",
+          "delete"
         ],
         "responses": {
           "200": {
@@ -5124,8 +6989,8 @@
       "get": {
         "summary": "getAllFormations",
         "tags": [
-          "get",
-          "formation"
+          "formation",
+          "get"
         ],
         "responses": {
           "200": {
@@ -5155,7 +7020,13 @@
           }
         },
         "x-metadata": {
-          "annotation": "@GetMapping(\"/all\""
+          "annotation": "@GetMapping(\"/all\"",
+          "request": {
+            "path": [],
+            "query": [],
+            "header": [],
+            "body": null
+          }
         },
         "x-confidence": 0.87,
         "x-source": "ast"
@@ -5165,8 +7036,8 @@
       "get": {
         "summary": "getFormationById",
         "tags": [
-          "get",
-          "formation"
+          "formation",
+          "get"
         ],
         "responses": {
           "200": {
@@ -5233,8 +7104,8 @@
       "get": {
         "summary": "getAllComments",
         "tags": [
-          "get",
-          "comment"
+          "comment",
+          "get"
         ],
         "responses": {
           "200": {
@@ -5301,8 +7172,8 @@
       "get": {
         "summary": "getCommentById",
         "tags": [
-          "get",
-          "comment"
+          "comment",
+          "get"
         ],
         "responses": {
           "200": {
@@ -5367,8 +7238,8 @@
       "put": {
         "summary": "updateComment",
         "tags": [
-          "update",
-          "comment"
+          "comment",
+          "update"
         ],
         "responses": {
           "200": {
@@ -5456,6 +7327,7 @@
               "dto_type": "Comment",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
@@ -5485,8 +7357,8 @@
       "delete": {
         "summary": "deleteComment",
         "tags": [
-          "comment",
-          "delete"
+          "delete",
+          "comment"
         ],
         "responses": {
           "200": {
@@ -5553,8 +7425,8 @@
       "get": {
         "summary": "getById",
         "tags": [
-          "get",
-          "event_topic"
+          "event_topic",
+          "get"
         ],
         "responses": {
           "200": {
@@ -5619,8 +7491,8 @@
       "put": {
         "summary": "update",
         "tags": [
-          "update",
-          "event_topic"
+          "event_topic",
+          "update"
         ],
         "responses": {
           "200": {
@@ -5676,6 +7548,31 @@
                   "description": {
                     "type": "string"
                   },
+                  "eventDate": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "isEvent": {
+                    "type": "boolean"
+                  },
+                  "location": {
+                    "type": "string"
+                  },
+                  "commentIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "reportIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "userId": {
+                    "type": "string"
+                  },
                   "media": {
                     "type": "string"
                   },
@@ -5689,6 +7586,16 @@
                 "id": "1",
                 "title": "string",
                 "description": "string",
+                "eventDate": "2020-01-01T00:00:00Z",
+                "isEvent": true,
+                "location": "string",
+                "commentIds": [
+                  "string"
+                ],
+                "reportIds": [
+                  "string"
+                ],
+                "userId": "1",
                 "media": "string",
                 "mediaType": {}
               }
@@ -5716,6 +7623,7 @@
               "dto_type": "EventTopic",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
@@ -5726,6 +7634,31 @@
                     "type": "string"
                   },
                   "description": {
+                    "type": "string"
+                  },
+                  "eventDate": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "isEvent": {
+                    "type": "boolean"
+                  },
+                  "location": {
+                    "type": "string"
+                  },
+                  "commentIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "reportIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "userId": {
                     "type": "string"
                   },
                   "media": {
@@ -5741,6 +7674,16 @@
                 "id": "1",
                 "title": "string",
                 "description": "string",
+                "eventDate": "2020-01-01T00:00:00Z",
+                "isEvent": true,
+                "location": "string",
+                "commentIds": [
+                  "string"
+                ],
+                "reportIds": [
+                  "string"
+                ],
+                "userId": "1",
                 "media": "string",
                 "mediaType": {}
               }
@@ -5753,8 +7696,8 @@
       "delete": {
         "summary": "delete",
         "tags": [
-          "delete",
-          "event_topic"
+          "event_topic",
+          "delete"
         ],
         "responses": {
           "200": {
@@ -5853,16 +7796,6 @@
         },
         "parameters": [
           {
-            "name": "file",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "object",
-              "x-java-type": "MultipartFile"
-            },
-            "example": {}
-          },
-          {
             "name": "fileType",
             "in": "query",
             "required": true,
@@ -5873,21 +7806,34 @@
             "example": {}
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "x-java-type": "MultipartFile",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              },
+              "example": {
+                "file": "<binary>"
+              }
+            }
+          }
+        },
         "x-metadata": {
           "annotation": "@PostMapping(\"/upload\"",
           "request": {
             "path": [],
             "query": [
-              {
-                "name": "file",
-                "java_type": "MultipartFile",
-                "required": true,
-                "schema": {
-                  "type": "object",
-                  "x-java-type": "MultipartFile"
-                },
-                "example": {}
-              },
               {
                 "name": "fileType",
                 "java_type": "FileType",
@@ -5900,7 +7846,29 @@
               }
             ],
             "header": [],
-            "body": null
+            "body": {
+              "param": "file",
+              "dto_type": "MultipartFile",
+              "content_type": "multipart/form-data",
+              "required": true,
+              "multipart_field": "file",
+              "schema": {
+                "type": "object",
+                "x-java-type": "MultipartFile",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              },
+              "example": {
+                "file": "<binary>"
+              }
+            }
           }
         },
         "x-confidence": 0.87,
@@ -5911,8 +7879,8 @@
       "get": {
         "summary": "downloadFile",
         "tags": [
-          "file_upload",
-          "download"
+          "download",
+          "file_upload"
         ],
         "responses": {
           "200": {
@@ -5999,8 +7967,8 @@
       "post": {
         "summary": "addReaction",
         "tags": [
-          "add",
-          "reaction"
+          "reaction",
+          "add"
         ],
         "responses": {
           "200": {
@@ -6039,6 +8007,16 @@
                   "id": {
                     "type": "string"
                   },
+                  "emoji": {
+                    "type": "object",
+                    "x-java-type": "EmojiType"
+                  },
+                  "userId": {
+                    "type": "string"
+                  },
+                  "entityName": {
+                    "type": "string"
+                  },
                   "entityId": {
                     "type": "string"
                   },
@@ -6050,6 +8028,9 @@
               },
               "example": {
                 "id": "1",
+                "emoji": {},
+                "userId": "1",
+                "entityName": "string",
                 "entityId": "1",
                 "updatedAt": "2020-01-01T00:00:00Z"
               }
@@ -6067,10 +8048,21 @@
               "dto_type": "Reaction",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
                   "id": {
+                    "type": "string"
+                  },
+                  "emoji": {
+                    "type": "object",
+                    "x-java-type": "EmojiType"
+                  },
+                  "userId": {
+                    "type": "string"
+                  },
+                  "entityName": {
                     "type": "string"
                   },
                   "entityId": {
@@ -6084,6 +8076,9 @@
               },
               "example": {
                 "id": "1",
+                "emoji": {},
+                "userId": "1",
+                "entityName": "string",
                 "entityId": "1",
                 "updatedAt": "2020-01-01T00:00:00Z"
               }
@@ -6098,8 +8093,8 @@
       "post": {
         "summary": "removeReaction",
         "tags": [
-          "remove",
-          "reaction"
+          "reaction",
+          "remove"
         ],
         "responses": {
           "200": {
@@ -6138,6 +8133,16 @@
                   "id": {
                     "type": "string"
                   },
+                  "emoji": {
+                    "type": "object",
+                    "x-java-type": "EmojiType"
+                  },
+                  "userId": {
+                    "type": "string"
+                  },
+                  "entityName": {
+                    "type": "string"
+                  },
                   "entityId": {
                     "type": "string"
                   },
@@ -6149,6 +8154,9 @@
               },
               "example": {
                 "id": "1",
+                "emoji": {},
+                "userId": "1",
+                "entityName": "string",
                 "entityId": "1",
                 "updatedAt": "2020-01-01T00:00:00Z"
               }
@@ -6166,10 +8174,21 @@
               "dto_type": "Reaction",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
                   "id": {
+                    "type": "string"
+                  },
+                  "emoji": {
+                    "type": "object",
+                    "x-java-type": "EmojiType"
+                  },
+                  "userId": {
+                    "type": "string"
+                  },
+                  "entityName": {
                     "type": "string"
                   },
                   "entityId": {
@@ -6183,6 +8202,9 @@
               },
               "example": {
                 "id": "1",
+                "emoji": {},
+                "userId": "1",
+                "entityName": "string",
                 "entityId": "1",
                 "updatedAt": "2020-01-01T00:00:00Z"
               }
@@ -6450,6 +8472,17 @@
             "example": {}
           }
         ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {}
+            }
+          }
+        },
         "x-metadata": {
           "annotation": "@PutMapping(\"/{id}/status\"",
           "request": {
@@ -6477,7 +8510,16 @@
               }
             ],
             "header": [],
-            "body": null
+            "body": {
+              "param": "status",
+              "dto_type": null,
+              "content_type": "application/json",
+              "required": false,
+              "schema": {
+                "type": "object"
+              },
+              "example": {}
+            }
           }
         },
         "x-confidence": 0.87,
@@ -6488,8 +8530,8 @@
       "get": {
         "summary": "getPanier",
         "tags": [
-          "panier",
-          "get"
+          "get",
+          "panier"
         ],
         "responses": {
           "200": {
@@ -6558,8 +8600,8 @@
       "post": {
         "summary": "addFormationById",
         "tags": [
-          "panier",
-          "add"
+          "add",
+          "panier"
         ],
         "responses": {
           "200": {
@@ -6646,8 +8688,8 @@
       "delete": {
         "summary": "removeFormation",
         "tags": [
-          "panier",
-          "remove"
+          "remove",
+          "panier"
         ],
         "responses": {
           "200": {
@@ -6734,8 +8776,8 @@
       "delete": {
         "summary": "clearPanier",
         "tags": [
-          "panier",
-          "clear"
+          "clear",
+          "panier"
         ],
         "responses": {
           "200": {
@@ -6804,8 +8846,8 @@
       "post": {
         "summary": "createCheckout",
         "tags": [
-          "create",
-          "payment"
+          "payment",
+          "create"
         ],
         "responses": {
           "200": {
@@ -6873,6 +8915,7 @@
               "dto_type": "Panier",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
@@ -6905,8 +8948,8 @@
       "post": {
         "summary": "uploadFile",
         "tags": [
-          "file",
-          "upload"
+          "upload",
+          "file"
         ],
         "responses": {
           "200": {
@@ -6944,18 +8987,31 @@
               "type": "string"
             },
             "example": "1"
-          },
-          {
-            "name": "file",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "object",
-              "x-java-type": "MultipartFile"
-            },
-            "example": {}
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "x-java-type": "MultipartFile",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              },
+              "example": {
+                "file": "<binary>"
+              }
+            }
+          }
+        },
         "x-metadata": {
           "annotation": "@PostMapping(\"/upload/{projectId}\"",
           "request": {
@@ -6970,20 +9026,31 @@
                 "example": "1"
               }
             ],
-            "query": [
-              {
-                "name": "file",
-                "java_type": "MultipartFile",
-                "required": true,
-                "schema": {
-                  "type": "object",
-                  "x-java-type": "MultipartFile"
-                },
-                "example": {}
-              }
-            ],
+            "query": [],
             "header": [],
-            "body": null
+            "body": {
+              "param": "file",
+              "dto_type": "MultipartFile",
+              "content_type": "multipart/form-data",
+              "required": true,
+              "multipart_field": "file",
+              "schema": {
+                "type": "object",
+                "x-java-type": "MultipartFile",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              },
+              "example": {
+                "file": "<binary>"
+              }
+            }
           }
         },
         "x-confidence": 0.87,
@@ -6994,8 +9061,8 @@
       "get": {
         "summary": "downloadFile",
         "tags": [
-          "file",
-          "download"
+          "download",
+          "file"
         ],
         "responses": {
           "200": {
@@ -7062,8 +9129,8 @@
       "get": {
         "summary": "getProjectFiles",
         "tags": [
-          "file",
-          "get"
+          "get",
+          "file"
         ],
         "responses": {
           "200": {
@@ -7203,6 +9270,9 @@
                   },
                   "benefices": {
                     "type": "string"
+                  },
+                  "rejectionMotif": {
+                    "type": "string"
                   }
                 }
               },
@@ -7218,7 +9288,8 @@
                 "telephone": "string",
                 "technologies": "string",
                 "objectifs": "string",
-                "benefices": "string"
+                "benefices": "string",
+                "rejectionMotif": "string"
               }
             }
           }
@@ -7234,6 +9305,7 @@
               "dto_type": "Projet",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
@@ -7273,6 +9345,9 @@
                   },
                   "benefices": {
                     "type": "string"
+                  },
+                  "rejectionMotif": {
+                    "type": "string"
                   }
                 }
               },
@@ -7288,7 +9363,8 @@
                 "telephone": "string",
                 "technologies": "string",
                 "objectifs": "string",
-                "benefices": "string"
+                "benefices": "string",
+                "rejectionMotif": "string"
               }
             }
           }
@@ -7385,6 +9461,9 @@
                   },
                   "benefices": {
                     "type": "string"
+                  },
+                  "rejectionMotif": {
+                    "type": "string"
                   }
                 }
               },
@@ -7400,7 +9479,8 @@
                 "telephone": "string",
                 "technologies": "string",
                 "objectifs": "string",
-                "benefices": "string"
+                "benefices": "string",
+                "rejectionMotif": "string"
               }
             }
           }
@@ -7426,6 +9506,7 @@
               "dto_type": "Projet",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
@@ -7465,6 +9546,9 @@
                   },
                   "benefices": {
                     "type": "string"
+                  },
+                  "rejectionMotif": {
+                    "type": "string"
                   }
                 }
               },
@@ -7480,7 +9564,8 @@
                 "telephone": "string",
                 "technologies": "string",
                 "objectifs": "string",
-                "benefices": "string"
+                "benefices": "string",
+                "rejectionMotif": "string"
               }
             }
           }
@@ -7493,8 +9578,8 @@
       "delete": {
         "summary": "deleteProjet",
         "tags": [
-          "projet",
-          "delete"
+          "delete",
+          "projet"
         ],
         "responses": {
           "200": {
@@ -7561,8 +9646,8 @@
       "get": {
         "summary": "getAllProjets",
         "tags": [
-          "projet",
-          "get"
+          "get",
+          "projet"
         ],
         "responses": {
           "200": {
@@ -7592,7 +9677,13 @@
           }
         },
         "x-metadata": {
-          "annotation": "@GetMapping(\"/all\""
+          "annotation": "@GetMapping(\"/all\"",
+          "request": {
+            "path": [],
+            "query": [],
+            "header": [],
+            "body": null
+          }
         },
         "x-confidence": 0.87,
         "x-source": "ast"
@@ -7602,8 +9693,8 @@
       "get": {
         "summary": "getProjetById",
         "tags": [
-          "projet",
-          "get"
+          "get",
+          "projet"
         ],
         "responses": {
           "200": {
@@ -7731,6 +9822,9 @@
                   "dueDate": {
                     "type": "string",
                     "format": "date-time"
+                  },
+                  "completed": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -7744,7 +9838,8 @@
                 "projectId": "1",
                 "title": "string",
                 "description": "string",
-                "dueDate": "2020-01-01T00:00:00Z"
+                "dueDate": "2020-01-01T00:00:00Z",
+                "completed": true
               }
             }
           }
@@ -7770,6 +9865,7 @@
               "dto_type": "Milestone",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
@@ -7788,6 +9884,9 @@
                   "dueDate": {
                     "type": "string",
                     "format": "date-time"
+                  },
+                  "completed": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -7801,7 +9900,8 @@
                 "projectId": "1",
                 "title": "string",
                 "description": "string",
-                "dueDate": "2020-01-01T00:00:00Z"
+                "dueDate": "2020-01-01T00:00:00Z",
+                "completed": true
               }
             }
           }
@@ -7812,8 +9912,8 @@
       "delete": {
         "summary": "deleteMilestone",
         "tags": [
-          "projet",
-          "delete"
+          "delete",
+          "projet"
         ],
         "responses": {
           "200": {
@@ -7939,6 +10039,17 @@
             "example": "string"
           }
         ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {}
+            }
+          }
+        },
         "x-metadata": {
           "annotation": "@PutMapping(\"/validate-or-reject/{id}\"",
           "request": {
@@ -7974,7 +10085,16 @@
               }
             ],
             "header": [],
-            "body": null
+            "body": {
+              "param": "rejectionMotif",
+              "dto_type": null,
+              "content_type": "application/json",
+              "required": false,
+              "schema": {
+                "type": "object"
+              },
+              "example": {}
+            }
           }
         },
         "x-confidence": 0.87,
@@ -7985,8 +10105,8 @@
       "put": {
         "summary": "assignEncadrant",
         "tags": [
-          "projet",
-          "assign"
+          "assign",
+          "projet"
         ],
         "responses": {
           "200": {
@@ -8035,6 +10155,17 @@
             "example": "string"
           }
         ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {}
+            }
+          }
+        },
         "x-metadata": {
           "annotation": "@PutMapping(\"/assignEncadrant/{projetId}\"",
           "request": {
@@ -8061,7 +10192,16 @@
               }
             ],
             "header": [],
-            "body": null
+            "body": {
+              "param": "encadrant",
+              "dto_type": null,
+              "content_type": "application/json",
+              "required": false,
+              "schema": {
+                "type": "object"
+              },
+              "example": {}
+            }
           }
         },
         "x-confidence": 0.87,
@@ -8072,8 +10212,8 @@
       "get": {
         "summary": "getProjectTasks",
         "tags": [
-          "projet",
-          "get"
+          "get",
+          "projet"
         ],
         "responses": {
           "200": {
@@ -8198,6 +10338,10 @@
                   "description": {
                     "type": "string"
                   },
+                  "status": {
+                    "type": "object",
+                    "x-java-type": "TaskStatus"
+                  },
                   "deadline": {
                     "type": "string",
                     "format": "date"
@@ -8231,6 +10375,7 @@
                 "projectId": "1",
                 "title": "string",
                 "description": "string",
+                "status": {},
                 "deadline": "2020-01-01",
                 "assignedTo": "string",
                 "startDate": "2020-01-01T00:00:00Z",
@@ -8263,6 +10408,7 @@
               "dto_type": "Task",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
@@ -8277,6 +10423,10 @@
                   },
                   "description": {
                     "type": "string"
+                  },
+                  "status": {
+                    "type": "object",
+                    "x-java-type": "TaskStatus"
                   },
                   "deadline": {
                     "type": "string",
@@ -8311,6 +10461,7 @@
                 "projectId": "1",
                 "title": "string",
                 "description": "string",
+                "status": {},
                 "deadline": "2020-01-01",
                 "assignedTo": "string",
                 "startDate": "2020-01-01T00:00:00Z",
@@ -8377,9 +10528,13 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "x-java-type": "Map"
+                "additionalProperties": {
+                  "type": "string"
+                }
               },
-              "example": {}
+              "example": {
+                "key": "string"
+              }
             }
           }
         },
@@ -8404,11 +10559,16 @@
               "dto_type": "Map<String, String>",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
-                "x-java-type": "Map"
+                "additionalProperties": {
+                  "type": "string"
+                }
               },
-              "example": {}
+              "example": {
+                "key": "string"
+              }
             }
           }
         },
@@ -8480,6 +10640,10 @@
                   "description": {
                     "type": "string"
                   },
+                  "status": {
+                    "type": "object",
+                    "x-java-type": "TaskStatus"
+                  },
                   "deadline": {
                     "type": "string",
                     "format": "date"
@@ -8513,6 +10677,7 @@
                 "projectId": "1",
                 "title": "string",
                 "description": "string",
+                "status": {},
                 "deadline": "2020-01-01",
                 "assignedTo": "string",
                 "startDate": "2020-01-01T00:00:00Z",
@@ -8545,6 +10710,7 @@
               "dto_type": "Task",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
@@ -8559,6 +10725,10 @@
                   },
                   "description": {
                     "type": "string"
+                  },
+                  "status": {
+                    "type": "object",
+                    "x-java-type": "TaskStatus"
                   },
                   "deadline": {
                     "type": "string",
@@ -8593,6 +10763,7 @@
                 "projectId": "1",
                 "title": "string",
                 "description": "string",
+                "status": {},
                 "deadline": "2020-01-01",
                 "assignedTo": "string",
                 "startDate": "2020-01-01T00:00:00Z",
@@ -8610,8 +10781,8 @@
       "delete": {
         "summary": "deleteTask",
         "tags": [
-          "projet",
-          "delete"
+          "delete",
+          "projet"
         ],
         "responses": {
           "200": {
@@ -8678,8 +10849,8 @@
       "get": {
         "summary": "getProjectMilestones",
         "tags": [
-          "projet",
-          "get"
+          "get",
+          "projet"
         ],
         "responses": {
           "200": {
@@ -8807,6 +10978,9 @@
                   "dueDate": {
                     "type": "string",
                     "format": "date-time"
+                  },
+                  "completed": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -8820,7 +10994,8 @@
                 "projectId": "1",
                 "title": "string",
                 "description": "string",
-                "dueDate": "2020-01-01T00:00:00Z"
+                "dueDate": "2020-01-01T00:00:00Z",
+                "completed": true
               }
             }
           }
@@ -8846,6 +11021,7 @@
               "dto_type": "Milestone",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
@@ -8864,6 +11040,9 @@
                   "dueDate": {
                     "type": "string",
                     "format": "date-time"
+                  },
+                  "completed": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -8877,7 +11056,8 @@
                 "projectId": "1",
                 "title": "string",
                 "description": "string",
-                "dueDate": "2020-01-01T00:00:00Z"
+                "dueDate": "2020-01-01T00:00:00Z",
+                "completed": true
               }
             }
           }
@@ -8989,7 +11169,13 @@
           }
         },
         "x-metadata": {
-          "annotation": "@GetMapping(\"/encadrants\""
+          "annotation": "@GetMapping(\"/encadrants\"",
+          "request": {
+            "path": [],
+            "query": [],
+            "header": [],
+            "body": null
+          }
         },
         "x-confidence": 0.87,
         "x-source": "ast"
@@ -9144,18 +11330,31 @@
               "x-java-type": "TypeRessource"
             },
             "example": {}
-          },
-          {
-            "name": "file",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "object",
-              "x-java-type": "MultipartFile"
-            },
-            "example": {}
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "x-java-type": "MultipartFile",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              },
+              "example": {
+                "file": "<binary>"
+              }
+            }
+          }
+        },
         "x-metadata": {
           "annotation": "@PostMapping(\"/{typeRessource}\"",
           "request": {
@@ -9171,20 +11370,31 @@
                 "example": {}
               }
             ],
-            "query": [
-              {
-                "name": "file",
-                "java_type": "MultipartFile",
-                "required": true,
-                "schema": {
-                  "type": "object",
-                  "x-java-type": "MultipartFile"
-                },
-                "example": {}
-              }
-            ],
+            "query": [],
             "header": [],
-            "body": null
+            "body": {
+              "param": "file",
+              "dto_type": "MultipartFile",
+              "content_type": "multipart/form-data",
+              "required": true,
+              "multipart_field": "file",
+              "schema": {
+                "type": "object",
+                "x-java-type": "MultipartFile",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              },
+              "example": {
+                "file": "<binary>"
+              }
+            }
           }
         },
         "x-confidence": 0.87,
@@ -9195,8 +11405,8 @@
       "get": {
         "summary": "getResume",
         "tags": [
-          "get",
-          "ressources"
+          "ressources",
+          "get"
         ],
         "responses": {
           "200": {
@@ -9263,8 +11473,8 @@
       "get": {
         "summary": "getRessourceById",
         "tags": [
-          "get",
-          "ressources"
+          "ressources",
+          "get"
         ],
         "responses": {
           "200": {
@@ -9329,8 +11539,8 @@
       "put": {
         "summary": "updateRessource",
         "tags": [
-          "update",
-          "ressources"
+          "ressources",
+          "update"
         ],
         "responses": {
           "200": {
@@ -9436,6 +11646,7 @@
               "dto_type": "Ressources",
               "content_type": "application/json",
               "required": true,
+              "multipart_field": null,
               "schema": {
                 "type": "object",
                 "properties": {
@@ -9637,8 +11848,8 @@
       "get": {
         "summary": "sortRessources",
         "tags": [
-          "sort",
-          "ressources"
+          "ressources",
+          "sort"
         ],
         "responses": {
           "200": {
@@ -9719,46 +11930,6 @@
         "x-source": "ast"
       }
     },
-    "/AuthenticationMicroService/**": {
-      "get": {
-        "summary": "GET /AuthenticationMicroService/**",
-        "tags": [
-          "gateway_application"
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        },
-        "x-metadata": {
-          "pattern": "spring_cloud_gateway_route"
-        },
-        "x-confidence": 0.6,
-        "x-source": "regex"
-      }
-    },
     "/api/users/api/users/encadrants": {
       "get": {
         "summary": "GET /api/users/api/users/encadrants",
@@ -9793,7 +11964,13 @@
           }
         },
         "x-metadata": {
-          "pattern": "spring_GetMapping"
+          "pattern": "spring_GetMapping",
+          "request": {
+            "path": [],
+            "query": [],
+            "header": [],
+            "body": null
+          }
         },
         "x-confidence": 0.87,
         "x-source": "regex"
@@ -9839,11 +12016,28 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "string"
           }
         ],
         "x-metadata": {
-          "pattern": "spring_PostMapping"
+          "pattern": "spring_PostMapping",
+          "request": {
+            "path": [
+              {
+                "name": "typeRessource",
+                "java_type": "String",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                },
+                "example": "string"
+              }
+            ],
+            "query": [],
+            "header": [],
+            "body": null
+          }
         },
         "x-confidence": 0.87,
         "x-source": "regex"
@@ -9924,9 +12118,6 @@
     },
     {
       "name": "gamification"
-    },
-    {
-      "name": "gateway_application"
     },
     {
       "name": "generate"
