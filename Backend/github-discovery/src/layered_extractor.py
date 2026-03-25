@@ -243,6 +243,57 @@ class SpecFirstExtractor:
         endpoints: List[Endpoint] = []
         paths = spec.get("paths") or {}
 
+        def _coerce_schema(obj: Any) -> Optional[Dict[str, Any]]:
+            if isinstance(obj, dict):
+                return obj
+            return None
+
+        def _extract_param_list(params: Any, *, location: str) -> List[Dict[str, Any]]:
+            out: List[Dict[str, Any]] = []
+            if not isinstance(params, list):
+                return out
+            for p in params:
+                if not isinstance(p, dict):
+                    continue
+                if p.get("in") != location:
+                    continue
+                name = p.get("name")
+                if not isinstance(name, str) or not name:
+                    continue
+                schema = _coerce_schema(p.get("schema")) or {"type": "string"}
+                item: Dict[str, Any] = {
+                    "name": name,
+                    "required": bool(p.get("required", location == "path")),
+                    "schema": schema,
+                }
+                if "example" in p:
+                    item["example"] = p.get("example")
+                out.append(item)
+            return out
+
+        def _extract_request_body(body_obj: Any) -> Optional[Dict[str, Any]]:
+            if not isinstance(body_obj, dict):
+                return None
+            content = body_obj.get("content")
+            if not isinstance(content, dict) or not content:
+                return None
+            # Prefer JSON if present
+            content_type = "application/json" if "application/json" in content else next(iter(content.keys()))
+            media = content.get(content_type)
+            if not isinstance(media, dict):
+                return None
+            schema = _coerce_schema(media.get("schema")) or {"type": "object"}
+            out: Dict[str, Any] = {
+                "param": None,
+                "dto_type": None,
+                "content_type": content_type,
+                "required": bool(body_obj.get("required", True)),
+                "schema": schema,
+            }
+            if "example" in media:
+                out["example"] = media.get("example")
+            return out
+
         for path, methods in paths.items():
             if not isinstance(path, str) or not isinstance(methods, dict):
                 continue
@@ -250,10 +301,16 @@ class SpecFirstExtractor:
             if not normalized_path:
                 continue
 
+            path_level_params = []
+            if isinstance(methods.get("parameters"), list):
+                path_level_params = methods.get("parameters") or []
+
             for method_key, operation in methods.items():
                 if not isinstance(method_key, str):
                     continue
                 if method_key.lower().startswith("x-"):
+                    continue
+                if method_key == "parameters":
                     continue
                 http_method = _httpmethod_from_string(method_key)
                 if not http_method:
@@ -262,6 +319,23 @@ class SpecFirstExtractor:
                 function_name = None
                 if isinstance(operation, dict):
                     function_name = operation.get("operationId") or operation.get("summary")
+
+                request_meta: Dict[str, Any] = {"path": [], "query": [], "header": [], "body": None}
+                if isinstance(operation, dict):
+                    op_params = operation.get("parameters")
+                    combined_params = []
+                    if isinstance(path_level_params, list):
+                        combined_params.extend(path_level_params)
+                    if isinstance(op_params, list):
+                        combined_params.extend(op_params)
+
+                    request_meta["path"].extend(_extract_param_list(combined_params, location="path"))
+                    request_meta["query"].extend(_extract_param_list(combined_params, location="query"))
+                    request_meta["header"].extend(_extract_param_list(combined_params, location="header"))
+
+                    body = _extract_request_body(operation.get("requestBody"))
+                    if body is not None:
+                        request_meta["body"] = body
 
                 endpoints.append(
                     Endpoint(
@@ -272,7 +346,10 @@ class SpecFirstExtractor:
                         confidence=1.0,
                         source="spec",
                         function_name=function_name,
-                        metadata={"spec_file": str(file_path)},
+                        metadata={
+                            "spec_file": str(file_path),
+                            "request": request_meta,
+                        },
                     )
                 )
 

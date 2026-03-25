@@ -647,6 +647,10 @@ class JavaVisitor(NodeVisitor):
 
             param_name = name_from_ann or var_name
 
+            # Special-case file uploads: @RequestParam MultipartFile should be requestBody (multipart/form-data)
+            if location == "query" and "MultipartFile" in java_type:
+                location = "body"
+
             # Save
             if location in {"path", "query", "header"}:
                 request["request"][location].append({
@@ -666,6 +670,8 @@ class JavaVisitor(NodeVisitor):
                         "dto_type": java_type,
                         "content_type": content_type,
                         "required": required,
+                        # Used later to name the multipart field correctly.
+                        "multipart_field": param_name if content_type == "multipart/form-data" else None,
                     }
                     flat_names.append(var_name)
 

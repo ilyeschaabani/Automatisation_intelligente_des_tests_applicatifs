@@ -25,6 +25,33 @@
        #   LLM_API_KEY=local
        ```
 
+    **Optional: final-stage LLM verification (recommended for test generation):**
+
+    You can enable a final pipeline stage that asks the LLM to **validate request templates**
+    (path/query/header/body schemas + examples) and apply **safe corrections** (fill missing keys,
+    fill missing examples, enforce path params required).
+
+    - Enable verification:
+       ```bash
+       # .env
+       LLM_VERIFY=true
+       ```
+    - Enable strict mode (pipeline fails if outputs are still not test-ready):
+       ```bash
+       # .env
+       LLM_VERIFY_STRICT=true
+       ```
+    - Optional limits (to control token usage):
+       ```bash
+       # .env
+       LLM_VERIFY_MAX_ENDPOINTS=40
+       LLM_VERIFY_CHUNK_SIZE=15
+       ```
+
+    Notes:
+    - This step is best-effort and is designed to avoid hallucinating DTO fields.
+    - Strict mode improves reliability by refusing to produce outputs that fail structural checks.
+
     **Option B — OpenRouter (cloud):**
     - Set `OPENROUTER_API_KEY` (and optionally `OPENROUTER_MODEL`).
 
@@ -130,6 +157,7 @@ The pipeline consists of the following components:
 ## Limitations
 
 - LLM extraction is optional and requires either a cloud key (OpenRouter/OpenAI) or a local OpenAI-compatible endpoint
+- LLM verification is optional; it can improve structural completeness but cannot guarantee semantic correctness of the upstream code
 - Some dynamic route patterns may be missed
 - Very large repositories may require more memory
 - GraphQL support is limited to detection

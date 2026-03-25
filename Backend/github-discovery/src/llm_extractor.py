@@ -71,6 +71,41 @@ Code:
 
 Extract all endpoints following the specified JSON format."""
 
+    VERIFY_SYSTEM_PROMPT = """You are an expert API test generation validator.
+
+You are given extracted endpoints and their request templates.
+
+Goal: ensure every endpoint has the information needed to generate an HTTP test:
+- request.path/query/header are lists of objects with: name, required (bool), schema (object), example
+- request.body is either null or an object with: content_type, required, schema (object), example
+
+CRITICAL RULES:
+- Respond with ONLY valid JSON (no markdown, no extra text).
+- Do NOT invent DTO fields that are not present in the provided schema.
+- You may only fix: missing keys, missing required flags, missing schemas (set safe defaults), missing examples (set safe examples), wrong obvious required-ness (path params required=true).
+- If something cannot be fixed from the given data, report it as an issue instead of hallucinating.
+
+Output JSON structure:
+{
+    "updates": [
+        {
+            "method": "get|post|put|delete|patch",
+            "full_path": "/path/{id}",
+            "request": { ... corrected request template ... }
+        }
+    ],
+    "issues": ["..."]
+}
+"""
+
+    VERIFY_USER_PROMPT_TEMPLATE = """Validate and correct these extracted endpoints request templates.
+
+Only return updates for endpoints that need changes.
+
+Endpoints JSON:
+{endpoints_json}
+"""
+
     def __init__(self, config: Config):
         self.config = config
         self.logger = get_logger(__name__)
@@ -247,3 +282,54 @@ Extract all endpoints following the specified JSON format."""
     def is_available(self) -> bool:
         """Check if LLM extractor is available"""
         return self.client is not None
+
+    def verify_request_templates(self, endpoints_payload: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Validate/fix endpoint request templates for test readiness.
+
+        Args:
+            endpoints_payload: A compact list of endpoints as dicts with at least:
+                {"method": str, "full_path": str, "request": dict}
+
+        Returns:
+            Dict with keys: updates (list), issues (list)
+        """
+        if not self.client:
+            raise LLMError("LLM client not initialized - missing API key")
+
+        import json
+
+        model = self.config.openrouter_model if self.use_openrouter else self.config.llm_model
+        user_prompt = self.VERIFY_USER_PROMPT_TEMPLATE.format(
+            endpoints_json=json.dumps(endpoints_payload, ensure_ascii=False)
+        )
+
+        try:
+            response = self.client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": self.VERIFY_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.0,
+                max_tokens=2000,
+            )
+
+            raw_response = response.choices[0].message.content or ""
+
+            # Parse JSON (tolerate accidental leading/trailing text)
+            json_start = raw_response.find("{")
+            json_end = raw_response.rfind("}") + 1
+            if json_start == -1 or json_end <= json_start:
+                raise LLMError("No JSON found in LLM verification response", details={"response": raw_response})
+
+            data = json.loads(raw_response[json_start:json_end])
+            if not isinstance(data, dict):
+                raise LLMError("LLM verification response was not an object", details={"response": raw_response})
+
+            data.setdefault("updates", [])
+            data.setdefault("issues", [])
+            return data
+
+        except Exception as e:
+            self.logger.error("LLM verification failed", error=str(e))
+            raise LLMError(f"LLM verification failed: {str(e)}") from e

@@ -119,6 +119,42 @@ class Pipeline:
 
         self.stats = PipelineStats(start_time=datetime.utcnow())
 
+    def _filter_gateway_wildcard_endpoints(self, endpoints: List[Endpoint]) -> List[Endpoint]:
+        """Remove Spring Cloud Gateway routing patterns from the endpoint list.
+
+        Gateway route/predicate paths (often ending in '/**') are not directly testable
+        REST endpoints, and they confuse downstream test generation.
+        """
+        if not endpoints:
+            return endpoints
+
+        gateway_patterns = {
+            "spring_cloud_gateway_route",
+            "spring_cloud_gateway_path_predicate",
+        }
+
+        filtered: List[Endpoint] = []
+        removed = 0
+
+        for e in endpoints:
+            path = (getattr(e, "path", "") or "")
+            md = getattr(e, "metadata", None)
+            pattern = md.get("pattern") if isinstance(md, dict) else None
+
+            is_gateway_pattern = pattern in gateway_patterns
+            is_wildcard_path = "/**" in path
+
+            if is_gateway_pattern or is_wildcard_path:
+                removed += 1
+                continue
+
+            filtered.append(e)
+
+        if removed:
+            self.logger.info("Filtered gateway wildcard routes", removed=removed)
+
+        return filtered
+
     def run(self, repo_url: str, branch: Optional[str] = None, keep_repo: bool = False) -> Dict[str, Any]:
         """
         Run the complete pipeline.
@@ -161,6 +197,10 @@ class Pipeline:
                 # Process endpoints (normalize/dedupe) even in spec-first mode
                 processing_result = self.endpoint_processor.process(spec_result.endpoints, {})
                 final_endpoints = processing_result.endpoints
+
+                # Ensure endpoints include request templates for AI-driven test generation
+                self._ensure_request_templates(spec_result.endpoints)
+                self._ensure_request_templates(final_endpoints)
 
                 self.stats.total_files = 0
                 self.stats.files_processed = 0
@@ -239,6 +279,10 @@ class Pipeline:
             all_endpoints.extend(universal_endpoints)
             self.stats.endpoints_from_universal = len(universal_endpoints)
 
+            # Drop gateway routing wildcards (e.g., '/svc/**') from outputs.
+            # These are not real endpoints and create noisy, non-testable artifacts.
+            all_endpoints = self._filter_gateway_wildcard_endpoints(all_endpoints)
+
             # Step 6: Process endpoints (normalize, deduplicate)
             self.logger.info("Processing endpoints")
             processing_result = self.endpoint_processor.process(all_endpoints, prefix_mapping)
@@ -246,6 +290,16 @@ class Pipeline:
 
             # Ensure final endpoints also have Spring request schemas (processor creates new Endpoint objects)
             self._enrich_spring_requests(final_endpoints, repo_path, candidate_files)
+
+            # Ensure endpoints include request templates for AI-driven test generation
+            self._ensure_request_templates(all_endpoints)
+            self._ensure_request_templates(final_endpoints)
+
+            # Optional final-stage LLM verification of request templates.
+            # This is best-effort and only applies safe, schema-validated fixes.
+            self._llm_verify_request_templates(final_endpoints)
+            # Ensure any remaining gaps are filled deterministically.
+            self._ensure_request_templates(final_endpoints)
 
             # Update stats
             self.stats.files_processed = self.stats.total_files - self.stats.files_failed
@@ -261,6 +315,9 @@ class Pipeline:
                 description=f"Auto-generated from repository {repo_url}",
                 version="1.0.0"
             )
+
+            # Validate generated OpenAPI (best-effort). In strict verify mode, fail if invalid.
+            self._validate_openapi_or_fail(openapi_spec.to_dict())
 
             # Step 8: Save outputs
             self._save_outputs(openapi_spec, all_endpoints, repo_id)
@@ -536,10 +593,12 @@ class Pipeline:
         - request body schema for @RequestBody DTOs
         """
         try:
+            import re
+
             def example_from_schema(schema: Any, name_hint: Optional[str] = None, depth: int = 0) -> Any:
                 if not isinstance(schema, dict):
                     return None
-                if depth > 4:
+                if depth > 6:
                     return {}
 
                 if "example" in schema:
@@ -600,7 +659,51 @@ class Pipeline:
 
                 return None
 
-            java_files = [p for p in candidate_files if p.suffix.lower() == ".java"]
+            def is_empty_object_schema(schema: Any) -> bool:
+                if not isinstance(schema, dict):
+                    return True
+                if schema.get("type") != "object":
+                    return False
+                props = schema.get("properties")
+                if isinstance(props, dict) and props:
+                    return False
+                return True
+
+            def should_refresh_example(existing: Any, schema: Any) -> bool:
+                if existing is None:
+                    return True
+                if existing == {} and isinstance(schema, dict) and isinstance(schema.get("properties"), dict) and schema.get("properties"):
+                    return True
+                if existing == [] and isinstance(schema, dict) and schema.get("type") == "array":
+                    return True
+                return False
+
+            # Build DTO index from all Java files in repo (less aggressive ignores than endpoint scan).
+            # This avoids missing DTOs in multi-module repos or under non-standard folders.
+            ignored = set(getattr(FileScanner, "IGNORED_DIRS", set()))
+            # Keep test folders for DTO lookup (sometimes requests live in shared test modules)
+            ignored.discard("test")
+            ignored.discard("tests")
+            ignored.discard("spec")
+            ignored.discard("specs")
+
+            java_files: List[Path] = []
+            try:
+                for p in repo_path.rglob("*.java"):
+                    if any(part in ignored for part in p.parts):
+                        continue
+                    if not p.is_file():
+                        continue
+                    try:
+                        if p.stat().st_size > 1_000_000:
+                            continue
+                    except OSError:
+                        continue
+                    java_files.append(p)
+            except Exception:
+                # Fallback to scanned candidates
+                java_files = [p for p in candidate_files if p.suffix.lower() == ".java"]
+
             dto_extractor = JavaDTOExtractor.from_java_files(repo_path, java_files)
 
             for ep in endpoints:
@@ -608,6 +711,22 @@ class Pipeline:
                 req = meta.get("request")
                 if not isinstance(req, dict):
                     continue
+
+                # If Spring param parsing missed @PathVariable, infer from the route template.
+                existing_path = req.get("path") if isinstance(req.get("path"), list) else []
+                existing_names = {p.get("name") for p in existing_path if isinstance(p, dict)}
+                full_path = getattr(ep, "full_path", "") or ep.path
+                for name in re.findall(r"\{([^}]+)\}", full_path or ""):
+                    if name in existing_names:
+                        continue
+                    existing_path.append({
+                        "name": name,
+                        "java_type": "String",
+                        "required": True,
+                        "schema": {"type": "string"},
+                        "example": "1" if name.lower().endswith("id") else "string",
+                    })
+                req["path"] = existing_path
 
                 # Normalize param lists with schema mapping
                 for section in ("path", "query", "header"):
@@ -626,21 +745,34 @@ class Pipeline:
                             item.setdefault("required", True)
 
                         # Provide a concrete example value for test generation
-                        if "example" not in item:
+                        if "example" not in item or should_refresh_example(item.get("example"), item.get("schema")):
                             item["example"] = example_from_schema(item.get("schema"), name_hint=item.get("name"))
 
                 body = req.get("body")
                 if isinstance(body, dict):
                     dto_type = (body.get("dto_type") or "").strip()
-                    # Handle generics/qualified names by taking the simple type
-                    dto_simple = dto_type.split(".")[-1]
-                    dto_simple = dto_simple.split("<", 1)[0].strip()
-                    if dto_simple:
-                        schema = dto_extractor.extract_schema(dto_simple)
-                        if schema is not None:
-                            body["schema"] = schema
+                    dto_type_simple = dto_type.split(".")[-1].strip()
+                    base = dto_type_simple.split("<", 1)[0].strip() if dto_type_simple else ""
+
+                    # 1) If body type is a collection/scalar/generic, map it directly (keep generics so items types work).
+                    # 2) Else, try to resolve a DTO class and extract its fields.
+                    if dto_type:
+                        is_generic = "<" in dto_type_simple and ">" in dto_type_simple
+                        is_array = dto_type_simple.endswith("[]")
+                        is_collectionish = base in {"List", "Set", "Collection", "Iterable", "Map", "HashMap", "LinkedHashMap"}
+                        is_scalarish = base in {"String", "Integer", "Long", "Double", "Float", "Boolean", "UUID", "BigDecimal"}
+
+                        if is_generic or is_array or is_collectionish or is_scalarish:
+                            body["schema"] = java_type_to_schema(dto_type_simple)
                         else:
-                            body.setdefault("schema", {"type": "object", "x-java-type": dto_simple})
+                            schema = dto_extractor.extract_schema(base, expand_refs_depth=3) if base else None
+                            if schema is not None:
+                                body["schema"] = schema
+                            else:
+                                # Keep placeholder if it contains type info, but ensure non-empty schema exists.
+                                existing = body.get("schema")
+                                if not isinstance(existing, dict) or not existing or is_empty_object_schema(existing):
+                                    body["schema"] = java_type_to_schema(base or dto_type_simple)
 
                     # Multipart fallback
                     if body.get("content_type") == "multipart/form-data":
@@ -649,19 +781,321 @@ class Pipeline:
                         if isinstance(schema, dict):
                             schema.setdefault("type", "object")
                             props = schema.setdefault("properties", {})
-                            props.setdefault("file", {"type": "string", "format": "binary"})
+                            field_name = body.get("multipart_field") or "file"
+                            props.setdefault(str(field_name), {"type": "string", "format": "binary"})
                             req_list = schema.setdefault("required", [])
-                            if "file" not in req_list:
-                                req_list.append("file")
+                            if field_name not in req_list:
+                                req_list.append(field_name)
 
                     # Provide a concrete example body payload
-                    if "example" not in body:
+                    if "example" not in body or should_refresh_example(body.get("example"), body.get("schema")):
                         body["example"] = example_from_schema(body.get("schema"), name_hint=body.get("dto_type") or "body")
 
                 ep.metadata = meta
         except Exception as e:
             # Enrichment is best-effort; do not fail the pipeline.
             self.logger.debug("Spring request enrichment failed", error=str(e))
+
+    def _ensure_request_templates(self, endpoints: List[Endpoint]) -> None:
+        """Ensure every endpoint carries a consistent request template.
+
+        This makes both `*_endpoints.json` and the generated OpenAPI usable for an AI agent
+        that needs to synthesize concrete HTTP tests.
+        """
+        import re
+
+        def example_from_schema(schema: Any, name_hint: Optional[str] = None, depth: int = 0) -> Any:
+            if not isinstance(schema, dict):
+                return None
+            if depth > 6:
+                return {}
+
+            if "example" in schema:
+                return schema.get("example")
+            enum = schema.get("enum")
+            if isinstance(enum, list) and enum:
+                return enum[0]
+
+            schema_type = schema.get("type")
+            fmt = schema.get("format")
+            hint = (name_hint or "").lower()
+
+            if schema_type == "string" or schema_type is None:
+                if fmt == "uuid":
+                    return "00000000-0000-0000-0000-000000000000"
+                if fmt == "date":
+                    return "2020-01-01"
+                if fmt == "date-time":
+                    return "2020-01-01T00:00:00Z"
+                if fmt == "binary":
+                    return "<binary>"
+                if "email" in hint:
+                    return "user@example.com"
+                if "token" in hint or "auth" in hint:
+                    return "token"
+                if hint.endswith("id") or hint == "id" or "_id" in hint:
+                    return "1"
+                return "string"
+
+            if schema_type == "integer":
+                if hint.endswith("id") or hint == "id" or "_id" in hint:
+                    return 1
+                if "page" in hint or "size" in hint or "limit" in hint:
+                    return 1
+                return 0
+
+            if schema_type == "number":
+                return 0.0
+
+            if schema_type == "boolean":
+                return True
+
+            if schema_type == "array":
+                items = schema.get("items")
+                return [example_from_schema(items, name_hint=name_hint, depth=depth + 1)]
+
+            if schema_type == "object":
+                props = schema.get("properties")
+                if isinstance(props, dict) and props:
+                    out: Dict[str, Any] = {}
+                    for k, v in props.items():
+                        out[k] = example_from_schema(v, name_hint=k, depth=depth + 1)
+                    return out
+                add_props = schema.get("additionalProperties")
+                if isinstance(add_props, dict):
+                    return {"key": example_from_schema(add_props, name_hint="key", depth=depth + 1)}
+                return {}
+
+            return None
+
+        def extract_path_params(path: str) -> List[str]:
+            if not path:
+                return []
+            names: List[str] = []
+            names.extend(re.findall(r"\{([^}]+)\}", path))
+            names.extend(re.findall(r"(?<!\w):([A-Za-z_][A-Za-z0-9_]*)", path))
+            seen = set()
+            out: List[str] = []
+            for n in names:
+                if n in seen:
+                    continue
+                seen.add(n)
+                out.append(n)
+            return out
+
+        for ep in endpoints:
+            meta = ep.metadata if isinstance(ep.metadata, dict) else {}
+            req = meta.get("request")
+            if not isinstance(req, dict):
+                req = {}
+                meta["request"] = req
+
+            req.setdefault("path", [])
+            req.setdefault("query", [])
+            req.setdefault("header", [])
+            req.setdefault("body", None)
+
+            existing_path = req.get("path") if isinstance(req.get("path"), list) else []
+            existing_names = {p.get("name") for p in existing_path if isinstance(p, dict)}
+            for name in extract_path_params(getattr(ep, "full_path", "") or ep.path):
+                if name in existing_names:
+                    continue
+                schema = {"type": "string"}
+                existing_path.append({
+                    "name": name,
+                    "java_type": "String",
+                    "required": True,
+                    "schema": schema,
+                    "example": example_from_schema(schema, name_hint=name),
+                })
+            req["path"] = existing_path
+
+            if ep.method.value in {"post", "put", "patch"} and req.get("body") is None:
+                # Avoid inventing a placeholder JSON body when the endpoint only has
+                # path params (common for routes like /reset/{token}). If we can't
+                # confidently infer a body from code, keep it as null.
+                path_param_names = {p.get("name") for p in req.get("path", []) if isinstance(p, dict)}
+                candidates = [p for p in (ep.parameters or []) if p and p not in path_param_names]
+                if candidates:
+                    body_param = candidates[-1]
+                    schema = {"type": "object"}
+                    req["body"] = {
+                        "param": body_param,
+                        "dto_type": None,
+                        "content_type": "application/json",
+                        # This is an inferred body (not extracted from framework annotations),
+                        # so do not mark it as required.
+                        "required": False,
+                        "schema": schema,
+                        "example": example_from_schema(schema, name_hint=body_param),
+                    }
+
+            ep.metadata = meta
+
+    def _llm_verify_request_templates(self, endpoints: List[Endpoint]) -> None:
+        """Ask the configured LLM to verify request templates and apply safe corrections.
+
+        This stage is optional (Config.llm_verify). It is designed for improving test readiness,
+        not for inventing new DTO fields.
+        """
+        try:
+            if not getattr(self.config, "llm_verify", False):
+                return
+            if not self.llm_extractor or not getattr(self.llm_extractor, "is_available", lambda: False)():
+                self.logger.warning("LLM verify requested but LLM extractor unavailable; skipping")
+                return
+
+            max_endpoints = int(getattr(self.config, "llm_verify_max_endpoints", 40))
+            chunk_size = int(getattr(self.config, "llm_verify_chunk_size", 15))
+            strict = bool(getattr(self.config, "llm_verify_strict", False))
+
+            # Create a compact payload for the LLM
+            payload: List[dict] = []
+            for ep in endpoints[:max_endpoints]:
+                req = (ep.metadata or {}).get("request") if isinstance(ep.metadata, dict) else None
+                if not isinstance(req, dict):
+                    continue
+                payload.append({
+                    "method": ep.method.value,
+                    "full_path": getattr(ep, "full_path", "") or ep.path,
+                    "request": req,
+                })
+
+            if not payload:
+                return
+
+            issues: List[str] = []
+            updates_applied = 0
+
+            for i in range(0, len(payload), max(1, chunk_size)):
+                chunk = payload[i:i + chunk_size]
+                out = self.llm_extractor.verify_request_templates(chunk)
+                chunk_issues = out.get("issues")
+                if isinstance(chunk_issues, list):
+                    issues.extend([str(x) for x in chunk_issues if x])
+
+                updates = out.get("updates")
+                if not isinstance(updates, list):
+                    continue
+
+                # Apply safe updates: replace only the `request` object for matching endpoints.
+                for upd in updates:
+                    if not isinstance(upd, dict):
+                        continue
+                    method = str(upd.get("method") or "").lower()
+                    full_path = str(upd.get("full_path") or "")
+                    req = upd.get("request")
+                    if method not in {"get", "post", "put", "delete", "patch"}:
+                        continue
+                    if not full_path:
+                        continue
+                    if not isinstance(req, dict):
+                        continue
+
+                    # Basic structure validation
+                    for key in ("path", "query", "header"):
+                        if key not in req:
+                            req[key] = []
+                        if not isinstance(req.get(key), list):
+                            req[key] = []
+                    if "body" not in req:
+                        req["body"] = None
+
+                    # Find endpoint and apply
+                    for ep in endpoints:
+                        if ep.method.value != method:
+                            continue
+                        ep_full = getattr(ep, "full_path", "") or ep.path
+                        if ep_full != full_path:
+                            continue
+                        meta = ep.metadata if isinstance(ep.metadata, dict) else {}
+                        meta["request"] = req
+                        ep.metadata = meta
+                        updates_applied += 1
+                        break
+
+            if issues:
+                # Do not fail just because the LLM reports issues; strict mode is enforced by
+                # deterministic validation below.
+                self.logger.warning("LLM verify reported issues", count=len(issues))
+
+            # Deterministic validation: ensure required keys exist and examples are present.
+            missing = self._find_request_template_gaps(endpoints)
+            if missing:
+                msg = f"Request templates still incomplete after LLM verify: {missing[:10]}"
+                if strict:
+                    raise PipelineError(msg)
+                self.logger.warning(msg)
+
+            self.logger.info(
+                "LLM verify completed",
+                endpoints_checked=min(len(endpoints), max_endpoints),
+                updates_applied=updates_applied,
+                issues_reported=len(issues),
+                strict=strict,
+            )
+        except Exception as e:
+            # In non-strict mode, do not fail the pipeline.
+            if getattr(self.config, "llm_verify_strict", False):
+                raise
+            self.logger.warning("LLM verify failed; continuing", error=str(e))
+
+    def _find_request_template_gaps(self, endpoints: List[Endpoint]) -> List[str]:
+        """Return a list of human-readable gap descriptions for request templates."""
+        gaps: List[str] = []
+
+        def has_schema_and_example(p: dict) -> bool:
+            if not isinstance(p.get("schema"), dict):
+                return False
+            return "example" in p
+
+        for ep in endpoints:
+            meta = ep.metadata if isinstance(ep.metadata, dict) else {}
+            req = meta.get("request")
+            if not isinstance(req, dict):
+                gaps.append(f"{ep.method.value} {getattr(ep, 'full_path', '') or ep.path}: missing request")
+                continue
+
+            for section in ("path", "query", "header"):
+                items = req.get(section)
+                if not isinstance(items, list):
+                    gaps.append(f"{ep.method.value} {getattr(ep, 'full_path', '') or ep.path}: {section} not list")
+                    continue
+                for it in items:
+                    if not isinstance(it, dict) or not it.get("name"):
+                        gaps.append(f"{ep.method.value} {getattr(ep, 'full_path', '') or ep.path}: {section} item invalid")
+                        break
+                    if not has_schema_and_example(it):
+                        gaps.append(f"{ep.method.value} {getattr(ep, 'full_path', '') or ep.path}: {section}.{it.get('name')} missing schema/example")
+                        break
+
+            # Body is optional at the template level: many POST/PUT/PATCH endpoints do
+            # legitimately have no request body. If a body exists, it must be test-ready.
+            if ep.method.value in {"post", "put", "patch"}:
+                body = req.get("body")
+                if body is None:
+                    continue
+                if not isinstance(body, dict):
+                    gaps.append(f"{ep.method.value} {getattr(ep, 'full_path', '') or ep.path}: body invalid")
+                    continue
+                if not isinstance(body.get("schema"), dict):
+                    gaps.append(f"{ep.method.value} {getattr(ep, 'full_path', '') or ep.path}: body missing schema")
+                if "example" not in body:
+                    gaps.append(f"{ep.method.value} {getattr(ep, 'full_path', '') or ep.path}: body missing example")
+
+        return gaps
+
+    def _validate_openapi_or_fail(self, openapi_dict: Dict[str, Any]) -> None:
+        """Validate OpenAPI output and optionally fail in strict verify mode."""
+        strict = bool(getattr(self.config, "llm_verify", False) and getattr(self.config, "llm_verify_strict", False))
+        try:
+            from openapi_spec_validator import validate
+
+            validate(openapi_dict)
+        except Exception as e:
+            if strict:
+                raise PipelineError(f"OpenAPI validation failed in strict mode: {str(e)}") from e
+            self.logger.warning("OpenAPI validation failed (non-strict)", error=str(e))
 
     def _save_outputs(self, openapi_spec: Any, endpoints: List[Endpoint], repo_name: str) -> None:
         """Save outputs to files"""

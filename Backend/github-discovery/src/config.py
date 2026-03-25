@@ -26,6 +26,15 @@ class Config:
     llm_force: bool = os.getenv("LLM_FORCE", "false").strip().lower() in {"1", "true", "yes", "y", "on"}
     llm_force_max_files: int = int(os.getenv("LLM_FORCE_MAX_FILES", "3"))
 
+    # Final-stage LLM verification of request templates (for test generation readiness)
+    # - When enabled, the pipeline asks the LLM to validate that request templates are complete
+    #   (path/query/header/body schemas + examples) and returns safe corrections.
+    # - Strict mode fails the run if required testing fields are still missing after auto-fixes.
+    llm_verify: bool = os.getenv("LLM_VERIFY", "false").strip().lower() in {"1", "true", "yes", "y", "on"}
+    llm_verify_strict: bool = os.getenv("LLM_VERIFY_STRICT", "false").strip().lower() in {"1", "true", "yes", "y", "on"}
+    llm_verify_max_endpoints: int = int(os.getenv("LLM_VERIFY_MAX_ENDPOINTS", "40"))
+    llm_verify_chunk_size: int = int(os.getenv("LLM_VERIFY_CHUNK_SIZE", "15"))
+
     # OpenRouter (preferred for LLM with multiple model options)
     openrouter_api_key: Optional[str] = os.getenv("OPENROUTER_API_KEY")
     openrouter_model: str = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")

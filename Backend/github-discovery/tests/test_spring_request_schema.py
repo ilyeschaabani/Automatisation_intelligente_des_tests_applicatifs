@@ -1,43 +1,9 @@
 from pathlib import Path
 
 from src.ast_parser import TreeSitterParser
-from src.java_dto_extractor import JavaDTOExtractor
+from src.config import Config
 from src.models.openapi import OpenAPISpec
-from src.java_dto_extractor import java_type_to_schema
-
-
-def _enrich_like_pipeline(endpoints, repo_root: Path, candidate_files: list[Path]) -> None:
-    java_files = [p for p in candidate_files if p.suffix.lower() == ".java"]
-    dto_extractor = JavaDTOExtractor.from_java_files(repo_root, java_files)
-
-    for ep in endpoints:
-        meta = ep.metadata or {}
-        req = meta.get("request")
-        if not isinstance(req, dict):
-            continue
-
-        for section in ("path", "query", "header"):
-            items = req.get(section)
-            if not isinstance(items, list):
-                continue
-            for item in items:
-                if not isinstance(item, dict):
-                    continue
-                jt = item.get("java_type") or "string"
-                item.setdefault("schema", java_type_to_schema(str(jt)))
-                if section == "path":
-                    item["required"] = True
-                else:
-                    item.setdefault("required", True)
-
-        body = req.get("body")
-        if isinstance(body, dict):
-            dto_type = (body.get("dto_type") or "").strip()
-            dto_simple = dto_type.split(".")[-1].split("<", 1)[0].strip()
-            schema = dto_extractor.extract_schema(dto_simple)
-            body["schema"] = schema or {"type": "object"}
-
-        ep.metadata = meta
+from src.pipeline import Pipeline
 
 
 def test_spring_request_meta_and_openapi(tmp_path: Path):
@@ -101,7 +67,9 @@ def test_spring_request_meta_and_openapi(tmp_path: Path):
     assert len(endpoints) == 2
 
     # Enrich like pipeline does
-    _enrich_like_pipeline(endpoints, repo_root, [controller, dto])
+    pipeline = Pipeline(Config(llm_provider="none"))
+    pipeline._enrich_spring_requests(endpoints, repo_root, [controller, dto])
+    pipeline._ensure_request_templates(endpoints)
 
     # Find POST /create
     post_ep = next(e for e in endpoints if e.method.value == "post")
@@ -121,6 +89,10 @@ def test_spring_request_meta_and_openapi(tmp_path: Path):
     assert "age" in schema["properties"]
     assert set(schema.get("required", [])) >= {"email", "age"}
 
+    # Example should be non-empty now that schema has properties
+    assert isinstance(body.get("example"), dict)
+    assert body["example"].get("email")
+
     # OpenAPI should include requestBody + parameters
     spec = OpenAPISpec.from_endpoints(endpoints)
     out = spec.to_dict()
@@ -136,3 +108,52 @@ def test_spring_request_meta_and_openapi(tmp_path: Path):
     get_op = out["paths"]["/api/users/{id}"]["get"]
     get_params = get_op.get("parameters", [])
     assert any(p["in"] == "path" and p["name"] == "id" and p["required"] is True for p in get_params)
+
+
+def test_spring_generic_body_schema(tmp_path: Path):
+    repo_root = tmp_path
+
+    controller = repo_root / "IdsController.java"
+    controller.write_text(
+        """
+        package com.example.api;
+
+        import org.springframework.web.bind.annotation.*;
+        import java.util.*;
+
+        @RestController
+        @RequestMapping(\"/api/ids\")
+        public class IdsController {
+
+            @PostMapping(\"/bulk\")
+            public String bulk(@RequestBody Set<Long> ids) {
+                return \"ok\";
+            }
+        }
+        """,
+        encoding="utf-8",
+    )
+
+    parser = TreeSitterParser()
+    endpoints = parser.parse_file(controller, "java").endpoints
+    assert len(endpoints) == 1
+
+    pipeline = Pipeline(Config(llm_provider="none"))
+    pipeline._enrich_spring_requests(endpoints, repo_root, [controller])
+    pipeline._ensure_request_templates(endpoints)
+
+    ep = endpoints[0]
+    req = ep.metadata.get("request")
+    assert isinstance(req, dict)
+    body = req.get("body")
+    assert isinstance(body, dict)
+
+    schema = body.get("schema")
+    assert isinstance(schema, dict)
+    assert schema["type"] == "array"
+    assert schema["items"]["type"] == "integer"
+    assert schema["items"].get("format") == "int64"
+
+    example = body.get("example")
+    assert isinstance(example, list)
+    assert len(example) == 1
