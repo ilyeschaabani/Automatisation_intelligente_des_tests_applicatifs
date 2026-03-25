@@ -88,7 +88,21 @@ class OpenAPISpec:
                 }
 
                 # Add parameters if detected
-                if endpoint.parameters:
+                request_meta = None
+                if endpoint.metadata and isinstance(endpoint.metadata, dict):
+                    request_meta = endpoint.metadata.get("request")
+
+                if isinstance(request_meta, dict):
+                    params = self._build_parameters_from_request_meta(request_meta)
+                    if params:
+                        operation["parameters"] = params
+
+                    request_body = self._build_request_body_from_request_meta(request_meta)
+                    if request_body:
+                        operation["requestBody"] = request_body
+
+                # Legacy fallback
+                elif endpoint.parameters:
                     operation["parameters"] = self._build_parameters(endpoint.parameters, path)
 
                 # Add metadata as extensions
@@ -219,6 +233,83 @@ class OpenAPISpec:
                 param_objects.append(param_obj)
 
         return param_objects
+
+    def _build_parameters_from_request_meta(self, request_meta: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Build OpenAPI parameters from enriched request metadata."""
+        out: List[Dict[str, Any]] = []
+
+        def add_many(items: Any, location: str, force_required: Optional[bool] = None) -> None:
+            if not isinstance(items, list):
+                return
+            for it in items:
+                if not isinstance(it, dict):
+                    continue
+                name = it.get("name")
+                if not name:
+                    continue
+                required = bool(it.get("required", True))
+                if force_required is not None:
+                    required = force_required
+
+                schema = it.get("schema")
+                if not isinstance(schema, dict):
+                    # fallback minimal
+                    schema = {"type": "string"}
+
+                param_obj: Dict[str, Any] = {
+                    "name": name,
+                    "in": location,
+                    "required": required,
+                    "schema": schema,
+
+                }
+
+                if "example" in it:
+                    param_obj["example"] = it.get("example")
+
+                out.append(param_obj)
+
+        add_many(request_meta.get("path"), "path", force_required=True)
+        add_many(request_meta.get("query"), "query")
+        add_many(request_meta.get("header"), "header")
+
+        # stable unique by (in,name)
+        seen = set()
+        uniq: List[Dict[str, Any]] = []
+        for p in out:
+            key = (p.get("in"), p.get("name"))
+            if key in seen:
+                continue
+            seen.add(key)
+            uniq.append(p)
+        return uniq
+
+    def _build_request_body_from_request_meta(self, request_meta: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        body = request_meta.get("body")
+        if not isinstance(body, dict):
+            return None
+
+        content_type = body.get("content_type") or "application/json"
+        schema = body.get("schema")
+        if not isinstance(schema, dict):
+            schema = {"type": "object"}
+
+        required = bool(body.get("required", True))
+
+        media_obj: Dict[str, Any] = {
+            "schema": schema
+        }
+        if "example" in body:
+            media_obj["example"] = body.get("example")
+
+        return {
+            "required": required,
+            "content": {
+                str(content_type): {
+                    **media_obj
+                }
+            }
+        }
 
     def _map_type(self, param_type: str) -> str:
         """Map custom type to OpenAPI schema type"""

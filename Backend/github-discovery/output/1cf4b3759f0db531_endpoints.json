@@ -1,11 +1,11 @@
 [
   {
     "method": "post",
-    "path": "/api/projects/generate-topics",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\PFEProjectController.java",
+    "path": "/generate-topics",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\PFEProjectController.java",
     "line_number": 33,
     "router_prefix": "/api/projects",
-    "full_path": "/api/projects/api/projects/generate-topics",
+    "full_path": "/api/projects/generate-topics",
     "function_name": "generatePfeTopics",
     "parameters": [
       "studentProfile"
@@ -14,16 +14,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/generate-topics\""
+      "annotation": "@PostMapping(\"/generate-topics\"",
+      "request": {
+        "path": [],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "studentProfile",
+          "dto_type": "String",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "x-java-type": "String"
+          },
+          "example": {}
+        }
+      }
     }
   },
   {
     "method": "get",
-    "path": "/api/projects/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\PFEProjectController.java",
+    "path": "/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\PFEProjectController.java",
     "line_number": 39,
     "router_prefix": "/api/projects",
-    "full_path": "/api/projects/api/projects/{id}",
+    "full_path": "/api/projects/{id}",
     "function_name": "getProjectById",
     "parameters": [
       "id"
@@ -32,16 +48,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/{id}\""
+      "annotation": "@GetMapping(\"/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "put",
-    "path": "/api/projects/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\PFEProjectController.java",
+    "path": "/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\PFEProjectController.java",
     "line_number": 57,
     "router_prefix": "/api/projects",
-    "full_path": "/api/projects/api/projects/{id}",
+    "full_path": "/api/projects/{id}",
     "function_name": "updateProject",
     "parameters": [
       "id",
@@ -51,16 +83,94 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PutMapping(\"/{id}\""
+      "annotation": "@PutMapping(\"/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "project",
+          "dto_type": "PFEProject",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "studentIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "mentorId": {
+                "type": "string"
+              },
+              "stage": {
+                "type": "object",
+                "x-java-type": "ProjectStage"
+              },
+              "documents": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "x-java-type": "DocumentFile"
+                }
+              },
+              "evaluation": {
+                "type": "object",
+                "x-java-type": "Evaluation"
+              },
+              "student": {
+                "type": "object",
+                "x-java-type": "User"
+              }
+            }
+          },
+          "example": {
+            "id": "1",
+            "title": "string",
+            "description": "string",
+            "studentIds": [
+              "string"
+            ],
+            "mentorId": "1",
+            "stage": {},
+            "documents": [
+              {}
+            ],
+            "evaluation": {},
+            "student": {}
+          }
+        }
+      }
     }
   },
   {
     "method": "delete",
-    "path": "/api/projects/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\PFEProjectController.java",
+    "path": "/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\PFEProjectController.java",
     "line_number": 68,
     "router_prefix": "/api/projects",
-    "full_path": "/api/projects/api/projects/{id}",
+    "full_path": "/api/projects/{id}",
     "function_name": "deleteProject",
     "parameters": [
       "id"
@@ -69,16 +179,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@DeleteMapping(\"/{id}\""
+      "annotation": "@DeleteMapping(\"/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "put",
-    "path": "/api/projects/{id}/stage",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\PFEProjectController.java",
+    "path": "/{id}/stage",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\PFEProjectController.java",
     "line_number": 78,
     "router_prefix": "/api/projects",
-    "full_path": "/api/projects/api/projects/{id}/stage",
+    "full_path": "/api/projects/{id}/stage",
     "function_name": "updateProjectStage",
     "parameters": [
       "id",
@@ -88,16 +214,42 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PutMapping(\"/{id}/stage\""
+      "annotation": "@PutMapping(\"/{id}/stage\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "stage",
+          "dto_type": "ProjectStage",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "x-java-type": "ProjectStage"
+          },
+          "example": {}
+        }
+      }
     }
   },
   {
     "method": "post",
-    "path": "/api/projects/{id}/document",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\PFEProjectController.java",
+    "path": "/{id}/document",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\PFEProjectController.java",
     "line_number": 87,
     "router_prefix": "/api/projects",
-    "full_path": "/api/projects/api/projects/{id}/document",
+    "full_path": "/api/projects/{id}/document",
     "function_name": "addDocument",
     "parameters": [
       "id",
@@ -107,16 +259,43 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/{id}/document\""
+      "annotation": "@PostMapping(\"/{id}/document\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [
+          {
+            "name": "file",
+            "java_type": "MultipartFile",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "x-java-type": "MultipartFile"
+            },
+            "example": {}
+          }
+        ],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "post",
-    "path": "/api/projects/{id}/evaluate",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\PFEProjectController.java",
+    "path": "/{id}/evaluate",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\PFEProjectController.java",
     "line_number": 109,
     "router_prefix": "/api/projects",
-    "full_path": "/api/projects/api/projects/{id}/evaluate",
+    "full_path": "/api/projects/{id}/evaluate",
     "function_name": "evaluateProject",
     "parameters": [
       "id",
@@ -126,16 +305,58 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/{id}/evaluate\""
+      "annotation": "@PostMapping(\"/{id}/evaluate\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "evaluation",
+          "dto_type": "Evaluation",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "progressScore": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "finalScore": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "feedback": {
+                "type": "string"
+              }
+            }
+          },
+          "example": {
+            "progressScore": 0,
+            "finalScore": 0,
+            "feedback": "string"
+          }
+        }
+      }
     }
   },
   {
     "method": "post",
-    "path": "/api/projects/{projectId}/comment",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\PFEProjectController.java",
+    "path": "/{projectId}/comment",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\PFEProjectController.java",
     "line_number": 115,
     "router_prefix": "/api/projects",
-    "full_path": "/api/projects/api/projects/{projectId}/comment",
+    "full_path": "/api/projects/{projectId}/comment",
     "function_name": "addCommentToProject",
     "parameters": [
       "projectId",
@@ -145,16 +366,57 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/{projectId}/comment\""
+      "annotation": "@PostMapping(\"/{projectId}/comment\"",
+      "request": {
+        "path": [
+          {
+            "name": "projectId",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "comment",
+          "dto_type": "Comment",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "content": {
+                "type": "string"
+              },
+              "createdBy": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          "example": {
+            "content": "string",
+            "createdBy": "string",
+            "createdAt": "2020-01-01T00:00:00Z"
+          }
+        }
+      }
     }
   },
   {
     "method": "get",
-    "path": "/api/users/role/{role}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\UserController.java",
+    "path": "/role/{role}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\UserController.java",
     "line_number": 32,
     "router_prefix": "/api/users",
-    "full_path": "/api/users/api/users/role/{role}",
+    "full_path": "/api/users/role/{role}",
     "function_name": "getUsersByRole",
     "parameters": [
       "role"
@@ -163,16 +425,33 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/role/{role}\""
+      "annotation": "@GetMapping(\"/role/{role}\"",
+      "request": {
+        "path": [
+          {
+            "name": "role",
+            "java_type": "Role",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "x-java-type": "Role"
+            },
+            "example": {}
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "post",
-    "path": "/api/auth/signup",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\AuthentificationRestAPI.java",
+    "path": "/signup",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\AuthentificationRestAPI.java",
     "line_number": 31,
     "router_prefix": "/api/auth",
-    "full_path": "/api/auth/api/auth/signup",
+    "full_path": "/api/auth/signup",
     "function_name": "signUp",
     "parameters": [
       "signUpRequest"
@@ -181,16 +460,73 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/signup\""
+      "annotation": "@PostMapping(\"/signup\"",
+      "request": {
+        "path": [],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "signUpRequest",
+          "dto_type": "SignUpRequest",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "nom": {
+                "type": "string"
+              },
+              "prenom": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string",
+                "format": "email"
+              },
+              "password": {
+                "type": "string"
+              },
+              "role": {
+                "type": "object",
+                "x-java-type": "Role"
+              },
+              "telephone": {
+                "type": "string"
+              },
+              "adresse": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "adresse",
+              "email",
+              "nom",
+              "password",
+              "prenom",
+              "role",
+              "telephone"
+            ]
+          },
+          "example": {
+            "nom": "string",
+            "prenom": "string",
+            "email": "user@example.com",
+            "password": "string",
+            "role": {},
+            "telephone": "string",
+            "adresse": "string"
+          }
+        }
+      }
     }
   },
   {
     "method": "post",
-    "path": "/api/auth/signin",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\AuthentificationRestAPI.java",
+    "path": "/signin",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\AuthentificationRestAPI.java",
     "line_number": 35,
     "router_prefix": "/api/auth",
-    "full_path": "/api/auth/api/auth/signin",
+    "full_path": "/api/auth/signin",
     "function_name": "signIn",
     "parameters": [
       "signInRequest"
@@ -199,16 +535,42 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/signin\""
+      "annotation": "@PostMapping(\"/signin\"",
+      "request": {
+        "path": [],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "signInRequest",
+          "dto_type": "SignInRequest",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "email": {
+                "type": "string"
+              },
+              "password": {
+                "type": "string"
+              }
+            }
+          },
+          "example": {
+            "email": "user@example.com",
+            "password": "string"
+          }
+        }
+      }
     }
   },
   {
     "method": "post",
-    "path": "/api/auth/refreshToken",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\AuthentificationRestAPI.java",
+    "path": "/refreshToken",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\AuthentificationRestAPI.java",
     "line_number": 39,
     "router_prefix": "/api/auth",
-    "full_path": "/api/auth/api/auth/refreshToken",
+    "full_path": "/api/auth/refreshToken",
     "function_name": "refreshToken",
     "parameters": [
       "refreshTokenrequest"
@@ -217,34 +579,72 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/refreshToken\""
+      "annotation": "@PostMapping(\"/refreshToken\"",
+      "request": {
+        "path": [],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "refreshTokenrequest",
+          "dto_type": "RefreshTokenrequest",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "token": {
+                "type": "string"
+              }
+            }
+          },
+          "example": {
+            "token": "token"
+          }
+        }
+      }
     }
   },
   {
     "method": "get",
-    "path": "/api/auth/me",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\AuthentificationRestAPI.java",
+    "path": "/me",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\AuthentificationRestAPI.java",
     "line_number": 43,
     "router_prefix": "/api/auth",
-    "full_path": "/api/auth/api/auth/me",
+    "full_path": "/api/auth/me",
     "function_name": "getCurrentUser",
     "parameters": [
-      "token"
+      "Authorization"
     ],
     "middleware": [],
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/me\""
+      "annotation": "@GetMapping(\"/me\"",
+      "request": {
+        "path": [],
+        "query": [],
+        "header": [
+          {
+            "name": "Authorization",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "token"
+          }
+        ],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/api/auth/encadrants",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\AuthentificationRestAPI.java",
+    "path": "/encadrants",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\AuthentificationRestAPI.java",
     "line_number": 47,
     "router_prefix": "/api/auth",
-    "full_path": "/api/auth/api/auth/encadrants",
+    "full_path": "/api/auth/encadrants",
     "function_name": "getEncadrants",
     "parameters": [],
     "middleware": [],
@@ -256,11 +656,11 @@
   },
   {
     "method": "get",
-    "path": "/api/auth/getuser",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\AuthentificationRestAPI.java",
+    "path": "/getuser",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\AuthentificationRestAPI.java",
     "line_number": 52,
     "router_prefix": "/api/auth",
-    "full_path": "/api/auth/api/auth/getuser",
+    "full_path": "/api/auth/getuser",
     "function_name": "getAllUsers",
     "parameters": [],
     "middleware": [],
@@ -272,11 +672,11 @@
   },
   {
     "method": "put",
-    "path": "/api/auth/update/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\AuthentificationRestAPI.java",
+    "path": "/update/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\AuthentificationRestAPI.java",
     "line_number": 56,
     "router_prefix": "/api/auth",
-    "full_path": "/api/auth/api/auth/update/{id}",
+    "full_path": "/api/auth/update/{id}",
     "function_name": "updateUser",
     "parameters": [
       "id",
@@ -286,16 +686,65 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PutMapping(\"/update/{id}\""
+      "annotation": "@PutMapping(\"/update/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "updatedUser",
+          "dto_type": "User",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "password": {
+                "type": "string"
+              },
+              "role": {
+                "type": "object",
+                "x-java-type": "Role"
+              }
+            }
+          },
+          "example": {
+            "id": "1",
+            "username": "string",
+            "email": "user@example.com",
+            "password": "string",
+            "role": {}
+          }
+        }
+      }
     }
   },
   {
     "method": "delete",
-    "path": "/api/auth/delete/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\AuthentificationRestAPI.java",
+    "path": "/delete/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\AuthentificationRestAPI.java",
     "line_number": 60,
     "router_prefix": "/api/auth",
-    "full_path": "/api/auth/api/auth/delete/{id}",
+    "full_path": "/api/auth/delete/{id}",
     "function_name": "deleteUser",
     "parameters": [
       "id"
@@ -304,16 +753,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@DeleteMapping(\"/delete/{id}\""
+      "annotation": "@DeleteMapping(\"/delete/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "post",
-    "path": "/forgotPassword/verifyMail/{email}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\ForgotPasswordController.java",
+    "path": "/verifyMail/{email}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\ForgotPasswordController.java",
     "line_number": 39,
     "router_prefix": "/forgotPassword",
-    "full_path": "/forgotPassword/forgotPassword/verifyMail/{email}",
+    "full_path": "/forgotPassword/verifyMail/{email}",
     "function_name": "verifyEmail",
     "parameters": [
       "email"
@@ -322,16 +787,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/verifyMail/{email}\""
+      "annotation": "@PostMapping(\"/verifyMail/{email}\"",
+      "request": {
+        "path": [
+          {
+            "name": "email",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "user@example.com"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "post",
-    "path": "/forgotPassword/verifyOTP/{otp}/{email}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\ForgotPasswordController.java",
+    "path": "/verifyOTP/{otp}/{email}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\ForgotPasswordController.java",
     "line_number": 61,
     "router_prefix": "/forgotPassword",
-    "full_path": "/forgotPassword/forgotPassword/verifyOTP/{otp}/{email}",
+    "full_path": "/forgotPassword/verifyOTP/{otp}/{email}",
     "function_name": "verifyOTP",
     "parameters": [
       "otp",
@@ -341,16 +822,42 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/verifyOTP/{otp}/{email}\""
+      "annotation": "@PostMapping(\"/verifyOTP/{otp}/{email}\"",
+      "request": {
+        "path": [
+          {
+            "name": "otp",
+            "java_type": "Integer",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "example": 0
+          },
+          {
+            "name": "email",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "user@example.com"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "post",
-    "path": "/forgotPassword/changePassword/{email}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\ForgotPasswordController.java",
+    "path": "/changePassword/{email}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\AuthenticationMicroService\\src\\main\\java\\tn\\esprit\\authenticationmicroservice\\Controller\\ForgotPasswordController.java",
     "line_number": 75,
     "router_prefix": "/forgotPassword",
-    "full_path": "/forgotPassword/forgotPassword/changePassword/{email}",
+    "full_path": "/forgotPassword/changePassword/{email}",
     "function_name": "changePasswordHandler",
     "parameters": [
       "changePassword",
@@ -360,16 +867,42 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/changePassword/{email}\""
+      "annotation": "@PostMapping(\"/changePassword/{email}\"",
+      "request": {
+        "path": [
+          {
+            "name": "email",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "user@example.com"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "changePassword",
+          "dto_type": "ChangePassword",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {}
+          },
+          "example": {}
+        }
+      }
     }
   },
   {
     "method": "put",
-    "path": "/api/certif/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\CertifController.java",
+    "path": "/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\CertifController.java",
     "line_number": 30,
     "router_prefix": "/api/certif",
-    "full_path": "/api/certif/api/certif/{id}",
+    "full_path": "/api/certif/{id}",
     "function_name": "updateCertif",
     "parameters": [
       "id",
@@ -379,16 +912,68 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PutMapping(\"/{id}\""
+      "annotation": "@PutMapping(\"/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "certif",
+          "dto_type": "Certif",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "idCertif": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "dateObtention": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "idFormation": {
+                "type": "string"
+              },
+              "idEtudiant": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "evaluation": {
+                "type": "object",
+                "x-java-type": "Evaluation"
+              }
+            }
+          },
+          "example": {
+            "idCertif": {},
+            "dateObtention": {},
+            "idFormation": "string",
+            "idEtudiant": {},
+            "evaluation": {}
+          }
+        }
+      }
     }
   },
   {
     "method": "delete",
-    "path": "/api/certif/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\CertifController.java",
+    "path": "/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\CertifController.java",
     "line_number": 35,
     "router_prefix": "/api/certif",
-    "full_path": "/api/certif/api/certif/{id}",
+    "full_path": "/api/certif/{id}",
     "function_name": "deleteCertif",
     "parameters": [
       "id"
@@ -397,16 +982,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@DeleteMapping(\"/{id}\""
+      "annotation": "@DeleteMapping(\"/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/api/certif/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\CertifController.java",
+    "path": "/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\CertifController.java",
     "line_number": 40,
     "router_prefix": "/api/certif",
-    "full_path": "/api/certif/api/certif/{id}",
+    "full_path": "/api/certif/{id}",
     "function_name": "getCertifById",
     "parameters": [
       "id"
@@ -415,16 +1016,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/{id}\""
+      "annotation": "@GetMapping(\"/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/api/certif/download/{idCertif}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\CertifController.java",
+    "path": "/download/{idCertif}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\CertifController.java",
     "line_number": 51,
     "router_prefix": "/api/certif",
-    "full_path": "/api/certif/api/certif/download/{idCertif}",
+    "full_path": "/api/certif/download/{idCertif}",
     "function_name": "downloadCertif",
     "parameters": [
       "idCertif"
@@ -433,16 +1050,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/download/{idCertif}\""
+      "annotation": "@GetMapping(\"/download/{idCertif}\"",
+      "request": {
+        "path": [
+          {
+            "name": "idCertif",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "post",
-    "path": "/evaluations/add",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\EvaluationController.java",
+    "path": "/add",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\EvaluationController.java",
     "line_number": 27,
     "router_prefix": "/evaluations",
-    "full_path": "/evaluations/evaluations/add",
+    "full_path": "/evaluations/add",
     "function_name": "createEvaluation",
     "parameters": [
       "evaluation"
@@ -451,16 +1084,48 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/add\""
+      "annotation": "@PostMapping(\"/add\"",
+      "request": {
+        "path": [],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "evaluation",
+          "dto_type": "Evaluation",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "progressScore": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "finalScore": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "feedback": {
+                "type": "string"
+              }
+            }
+          },
+          "example": {
+            "progressScore": 0,
+            "finalScore": 0,
+            "feedback": "string"
+          }
+        }
+      }
     }
   },
   {
     "method": "get",
-    "path": "/evaluations/listeval",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\EvaluationController.java",
+    "path": "/listeval",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\EvaluationController.java",
     "line_number": 34,
     "router_prefix": "/evaluations",
-    "full_path": "/evaluations/evaluations/listeval",
+    "full_path": "/evaluations/listeval",
     "function_name": "getAllEvaluations",
     "parameters": [],
     "middleware": [],
@@ -472,30 +1137,72 @@
   },
   {
     "method": "put",
-    "path": "/evaluations/{idEvaluation}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\EvaluationController.java",
+    "path": "/{idEvaluation}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\EvaluationController.java",
     "line_number": 48,
     "router_prefix": "/evaluations",
-    "full_path": "/evaluations/evaluations/{idEvaluation}",
+    "full_path": "/evaluations/{idEvaluation}",
     "function_name": "updateEvaluation",
     "parameters": [
-      "id",
+      "idEvaluation",
       "evaluation"
     ],
     "middleware": [],
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PutMapping(\"/{idEvaluation}\""
+      "annotation": "@PutMapping(\"/{idEvaluation}\"",
+      "request": {
+        "path": [
+          {
+            "name": "idEvaluation",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "evaluation",
+          "dto_type": "Evaluation",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "progressScore": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "finalScore": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "feedback": {
+                "type": "string"
+              }
+            }
+          },
+          "example": {
+            "progressScore": 0,
+            "finalScore": 0,
+            "feedback": "string"
+          }
+        }
+      }
     }
   },
   {
     "method": "delete",
-    "path": "/evaluations/{idEvaluation}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\EvaluationController.java",
+    "path": "/{idEvaluation}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\EvaluationController.java",
     "line_number": 56,
     "router_prefix": "/evaluations",
-    "full_path": "/evaluations/evaluations/{idEvaluation}",
+    "full_path": "/evaluations/{idEvaluation}",
     "function_name": "deleteEvaluation",
     "parameters": [
       "idEvaluation"
@@ -504,16 +1211,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@DeleteMapping(\"/{idEvaluation}\""
+      "annotation": "@DeleteMapping(\"/{idEvaluation}\"",
+      "request": {
+        "path": [
+          {
+            "name": "idEvaluation",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/evaluations/{idEvaluation}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\EvaluationController.java",
+    "path": "/{idEvaluation}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\EvaluationController.java",
     "line_number": 62,
     "router_prefix": "/evaluations",
-    "full_path": "/evaluations/evaluations/{idEvaluation}",
+    "full_path": "/evaluations/{idEvaluation}",
     "function_name": "getEvaluationById",
     "parameters": [
       "idEvaluation"
@@ -522,16 +1245,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/{idEvaluation}\""
+      "annotation": "@GetMapping(\"/{idEvaluation}\"",
+      "request": {
+        "path": [
+          {
+            "name": "idEvaluation",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "post",
-    "path": "/evaluations/{idEvaluation}/submit",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\EvaluationController.java",
+    "path": "/{idEvaluation}/submit",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\EvaluationController.java",
     "line_number": 68,
     "router_prefix": "/evaluations",
-    "full_path": "/evaluations/evaluations/{idEvaluation}/submit",
+    "full_path": "/evaluations/{idEvaluation}/submit",
     "function_name": "submitEvaluationAnswers",
     "parameters": [
       "idEvaluation",
@@ -541,16 +1280,42 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/{idEvaluation}/submit\""
+      "annotation": "@PostMapping(\"/{idEvaluation}/submit\"",
+      "request": {
+        "path": [
+          {
+            "name": "idEvaluation",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "payload",
+          "dto_type": "Map<String, Object>",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "x-java-type": "Map"
+          },
+          "example": {}
+        }
+      }
     }
   },
   {
     "method": "post",
-    "path": "/evaluations/{idEvaluation}/questions",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\EvaluationController.java",
+    "path": "/{idEvaluation}/questions",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\EvaluationController.java",
     "line_number": 79,
     "router_prefix": "/evaluations",
-    "full_path": "/evaluations/evaluations/{idEvaluation}/questions",
+    "full_path": "/evaluations/{idEvaluation}/questions",
     "function_name": "addQuestionsToEvaluation",
     "parameters": [
       "idEvaluation",
@@ -560,16 +1325,42 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/{idEvaluation}/questions\""
+      "annotation": "@PostMapping(\"/{idEvaluation}/questions\"",
+      "request": {
+        "path": [
+          {
+            "name": "idEvaluation",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "quesIds",
+          "dto_type": "Set<String>",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "x-java-type": "Set"
+          },
+          "example": {}
+        }
+      }
     }
   },
   {
     "method": "post",
-    "path": "/gamification/process-quiz/{idUser}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\GamificationController.java",
+    "path": "/process-quiz/{idUser}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\GamificationController.java",
     "line_number": 24,
     "router_prefix": "/gamification",
-    "full_path": "/gamification/gamification/process-quiz/{idUser}",
+    "full_path": "/gamification/process-quiz/{idUser}",
     "function_name": "processQuizResults",
     "parameters": [
       "idUser",
@@ -579,16 +1370,99 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/process-quiz/{idUser}\""
+      "annotation": "@PostMapping(\"/process-quiz/{idUser}\"",
+      "request": {
+        "path": [
+          {
+            "name": "idUser",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "quizRecord",
+          "dto_type": "AttemptedQuizRecords",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "aId": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "obtainedMarks": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "totalMarks": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "attemptedQuestions": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "correctAttempted": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "date": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "responses": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "x-java-type": "Reponse"
+                }
+              },
+              "completionDate": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "evaluation": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "idEvaluation": {
+                "type": "object",
+                "x-java-type": "return"
+              }
+            }
+          },
+          "example": {
+            "aId": {},
+            "obtainedMarks": {},
+            "totalMarks": 0,
+            "attemptedQuestions": {},
+            "correctAttempted": {},
+            "date": {},
+            "responses": [
+              {}
+            ],
+            "completionDate": "2020-01-01T00:00:00Z",
+            "evaluation": {},
+            "idEvaluation": {}
+          }
+        }
+      }
     }
   },
   {
     "method": "get",
-    "path": "/gamification/user/{idUser}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\GamificationController.java",
+    "path": "/user/{idUser}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\GamificationController.java",
     "line_number": 43,
     "router_prefix": "/gamification",
-    "full_path": "/gamification/gamification/user/{idUser}",
+    "full_path": "/gamification/user/{idUser}",
     "function_name": "getUserGamification",
     "parameters": [
       "idUser"
@@ -597,16 +1471,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/user/{idUser}\""
+      "annotation": "@GetMapping(\"/user/{idUser}\"",
+      "request": {
+        "path": [
+          {
+            "name": "idUser",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/gamification/badges/{userId}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\GamificationController.java",
+    "path": "/badges/{userId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\GamificationController.java",
     "line_number": 56,
     "router_prefix": "/gamification",
-    "full_path": "/gamification/gamification/badges/{userId}",
+    "full_path": "/gamification/badges/{userId}",
     "function_name": "getUserBadges",
     "parameters": [
       "idUser"
@@ -615,16 +1505,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/badges/{userId}\""
+      "annotation": "@GetMapping(\"/badges/{userId}\"",
+      "request": {
+        "path": [
+          {
+            "name": "idUser",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/gamification/level-up/{idUser}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\GamificationController.java",
+    "path": "/level-up/{idUser}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\GamificationController.java",
     "line_number": 69,
     "router_prefix": "/gamification",
-    "full_path": "/gamification/gamification/level-up/{idUser}",
+    "full_path": "/gamification/level-up/{idUser}",
     "function_name": "checkLevelUp",
     "parameters": [
       "User"
@@ -633,16 +1539,33 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/level-up/{idUser}\""
+      "annotation": "@GetMapping(\"/level-up/{idUser}\"",
+      "request": {
+        "path": [
+          {
+            "name": "User",
+            "java_type": "User",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "x-java-type": "User"
+            },
+            "example": {}
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "post",
-    "path": "/questions/addquestion",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuestionController.java",
+    "path": "/addquestion",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuestionController.java",
     "line_number": 28,
     "router_prefix": "/questions",
-    "full_path": "/questions/questions/addquestion",
+    "full_path": "/questions/addquestion",
     "function_name": "createQuestion",
     "parameters": [
       "question"
@@ -651,16 +1574,99 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"addquestion\""
+      "annotation": "@PostMapping(\"addquestion\"",
+      "request": {
+        "path": [],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "question",
+          "dto_type": "Question",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "quesId": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "contenu": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "texte": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "image": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "option1": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "option2": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "option3": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "option4": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "answer": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "idEvaluation": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "reponses": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "bonneReponse": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "evaluation": {
+                "type": "object",
+                "x-java-type": "return"
+              }
+            }
+          },
+          "example": {
+            "quesId": {},
+            "contenu": {},
+            "texte": {},
+            "image": {},
+            "option1": {},
+            "option2": {},
+            "option3": {},
+            "option4": {},
+            "answer": {},
+            "idEvaluation": {},
+            "reponses": {},
+            "bonneReponse": {},
+            "evaluation": {}
+          }
+        }
+      }
     }
   },
   {
     "method": "get",
-    "path": "/questions/listquestion",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuestionController.java",
+    "path": "/listquestion",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuestionController.java",
     "line_number": 32,
     "router_prefix": "/questions",
-    "full_path": "/questions/questions/listquestion",
+    "full_path": "/questions/listquestion",
     "function_name": "getAllQuestions",
     "parameters": [],
     "middleware": [],
@@ -672,11 +1678,11 @@
   },
   {
     "method": "put",
-    "path": "/questions/{quesId}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuestionController.java",
+    "path": "/{quesId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuestionController.java",
     "line_number": 37,
     "router_prefix": "/questions",
-    "full_path": "/questions/questions/{quesId}",
+    "full_path": "/questions/{quesId}",
     "function_name": "updateQuestion",
     "parameters": [
       "quesId",
@@ -686,16 +1692,109 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PutMapping(\"/{quesId}\""
+      "annotation": "@PutMapping(\"/{quesId}\"",
+      "request": {
+        "path": [
+          {
+            "name": "quesId",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "question",
+          "dto_type": "Question",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "quesId": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "contenu": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "texte": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "image": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "option1": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "option2": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "option3": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "option4": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "answer": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "idEvaluation": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "reponses": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "bonneReponse": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "evaluation": {
+                "type": "object",
+                "x-java-type": "return"
+              }
+            }
+          },
+          "example": {
+            "quesId": {},
+            "contenu": {},
+            "texte": {},
+            "image": {},
+            "option1": {},
+            "option2": {},
+            "option3": {},
+            "option4": {},
+            "answer": {},
+            "idEvaluation": {},
+            "reponses": {},
+            "bonneReponse": {},
+            "evaluation": {}
+          }
+        }
+      }
     }
   },
   {
     "method": "get",
-    "path": "/questions/by-evaluation/{idEvaluation}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuestionController.java",
+    "path": "/by-evaluation/{idEvaluation}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuestionController.java",
     "line_number": 51,
     "router_prefix": "/questions",
-    "full_path": "/questions/questions/by-evaluation/{idEvaluation}",
+    "full_path": "/questions/by-evaluation/{idEvaluation}",
     "function_name": "getQuestionsByEvaluation",
     "parameters": [
       "idEvaluation"
@@ -704,16 +1803,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/by-evaluation/{idEvaluation}\""
+      "annotation": "@GetMapping(\"/by-evaluation/{idEvaluation}\"",
+      "request": {
+        "path": [
+          {
+            "name": "idEvaluation",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/questions/{quesId}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuestionController.java",
+    "path": "/{quesId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuestionController.java",
     "line_number": 61,
     "router_prefix": "/questions",
-    "full_path": "/questions/questions/{quesId}",
+    "full_path": "/questions/{quesId}",
     "function_name": "getQuestionById",
     "parameters": [
       "quesId"
@@ -722,16 +1837,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/{quesId}\""
+      "annotation": "@GetMapping(\"/{quesId}\"",
+      "request": {
+        "path": [
+          {
+            "name": "quesId",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "delete",
-    "path": "/questions/{quesId}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuestionController.java",
+    "path": "/{quesId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuestionController.java",
     "line_number": 71,
     "router_prefix": "/questions",
-    "full_path": "/questions/questions/{quesId}",
+    "full_path": "/questions/{quesId}",
     "function_name": "deleteQuestion",
     "parameters": [
       "quesId"
@@ -740,16 +1871,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@DeleteMapping(\"/{quesId}\""
+      "annotation": "@DeleteMapping(\"/{quesId}\"",
+      "request": {
+        "path": [
+          {
+            "name": "quesId",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/quiz-results/user/{idUser}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuizResultController.java",
+    "path": "/user/{idUser}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuizResultController.java",
     "line_number": 30,
     "router_prefix": "/quiz-results",
-    "full_path": "/quiz-results/quiz-results/user/{idUser}",
+    "full_path": "/quiz-results/user/{idUser}",
     "function_name": "getUserResults",
     "parameters": [
       "idUser"
@@ -758,16 +1905,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/user/{idUser}\""
+      "annotation": "@GetMapping(\"/user/{idUser}\"",
+      "request": {
+        "path": [
+          {
+            "name": "idUser",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/quiz-results/by-evaluation/{evaluationId}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuizResultController.java",
+    "path": "/by-evaluation/{evaluationId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuizResultController.java",
     "line_number": 34,
     "router_prefix": "/quiz-results",
-    "full_path": "/quiz-results/quiz-results/by-evaluation/{evaluationId}",
+    "full_path": "/quiz-results/by-evaluation/{evaluationId}",
     "function_name": "getResultsByEvaluation",
     "parameters": [
       "idEvaluation"
@@ -776,16 +1939,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/by-evaluation/{evaluationId}\""
+      "annotation": "@GetMapping(\"/by-evaluation/{evaluationId}\"",
+      "request": {
+        "path": [
+          {
+            "name": "idEvaluation",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "post",
-    "path": "/quiz-results/submit",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuizResultController.java",
+    "path": "/submit",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\QuizResultController.java",
     "line_number": 43,
     "router_prefix": "/quiz-results",
-    "full_path": "/quiz-results/quiz-results/submit",
+    "full_path": "/quiz-results/submit",
     "function_name": "submitQuiz",
     "parameters": [
       "submission"
@@ -794,16 +1973,74 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/submit\""
+      "annotation": "@PostMapping(\"/submit\"",
+      "request": {
+        "path": [],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "submission",
+          "dto_type": "QuizResult",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "idEvaluation": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "score": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "completionDate": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "answers": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "percentage": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "dateTaken": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "userId": {
+                "type": "object",
+                "x-java-type": "return"
+              }
+            }
+          },
+          "example": {
+            "id": {},
+            "idEvaluation": {},
+            "score": {},
+            "completionDate": {},
+            "answers": {},
+            "percentage": {},
+            "dateTaken": {},
+            "userId": {}
+          }
+        }
+      }
     }
   },
   {
     "method": "post",
-    "path": "/user-activities/",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\RecordsController.java",
+    "path": "/",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\RecordsController.java",
     "line_number": 21,
     "router_prefix": "/user-activities",
-    "full_path": "/user-activities/user-activities/",
+    "full_path": "/user-activities",
     "function_name": "add",
     "parameters": [
       "record"
@@ -812,16 +2049,89 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/\""
+      "annotation": "@PostMapping(\"/\"",
+      "request": {
+        "path": [],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "record",
+          "dto_type": "AttemptedQuizRecords",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "aId": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "obtainedMarks": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "totalMarks": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "attemptedQuestions": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "correctAttempted": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "date": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "responses": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "x-java-type": "Reponse"
+                }
+              },
+              "completionDate": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "evaluation": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "idEvaluation": {
+                "type": "object",
+                "x-java-type": "return"
+              }
+            }
+          },
+          "example": {
+            "aId": {},
+            "obtainedMarks": {},
+            "totalMarks": 0,
+            "attemptedQuestions": {},
+            "correctAttempted": {},
+            "date": {},
+            "responses": [
+              {}
+            ],
+            "completionDate": "2020-01-01T00:00:00Z",
+            "evaluation": {},
+            "idEvaluation": {}
+          }
+        }
+      }
     }
   },
   {
     "method": "put",
-    "path": "/user-activities/",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\RecordsController.java",
+    "path": "/",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\RecordsController.java",
     "line_number": 27,
     "router_prefix": "/user-activities",
-    "full_path": "/user-activities/user-activities/",
+    "full_path": "/user-activities",
     "function_name": "update",
     "parameters": [
       "record"
@@ -830,16 +2140,89 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PutMapping(\"/\""
+      "annotation": "@PutMapping(\"/\"",
+      "request": {
+        "path": [],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "record",
+          "dto_type": "AttemptedQuizRecords",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "aId": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "obtainedMarks": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "totalMarks": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "attemptedQuestions": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "correctAttempted": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "date": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "responses": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "x-java-type": "Reponse"
+                }
+              },
+              "completionDate": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "evaluation": {
+                "type": "object",
+                "x-java-type": "return"
+              },
+              "idEvaluation": {
+                "type": "object",
+                "x-java-type": "return"
+              }
+            }
+          },
+          "example": {
+            "aId": {},
+            "obtainedMarks": {},
+            "totalMarks": 0,
+            "attemptedQuestions": {},
+            "correctAttempted": {},
+            "date": {},
+            "responses": [
+              {}
+            ],
+            "completionDate": "2020-01-01T00:00:00Z",
+            "evaluation": {},
+            "idEvaluation": {}
+          }
+        }
+      }
     }
   },
   {
     "method": "get",
-    "path": "/user-activities/",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\RecordsController.java",
+    "path": "/",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\RecordsController.java",
     "line_number": 33,
     "router_prefix": "/user-activities",
-    "full_path": "/user-activities/user-activities/",
+    "full_path": "/user-activities",
     "function_name": "records",
     "parameters": [],
     "middleware": [],
@@ -851,11 +2234,11 @@
   },
   {
     "method": "get",
-    "path": "/user-activities/{aId}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\RecordsController.java",
+    "path": "/{aId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\RecordsController.java",
     "line_number": 39,
     "router_prefix": "/user-activities",
-    "full_path": "/user-activities/user-activities/{aId}",
+    "full_path": "/user-activities/{aId}",
     "function_name": "getRecord",
     "parameters": [
       "aId"
@@ -864,16 +2247,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/{aId}\""
+      "annotation": "@GetMapping(\"/{aId}\"",
+      "request": {
+        "path": [
+          {
+            "name": "aId",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "delete",
-    "path": "/user-activities/{aId}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\RecordsController.java",
+    "path": "/{aId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\RecordsController.java",
     "line_number": 45,
     "router_prefix": "/user-activities",
-    "full_path": "/user-activities/user-activities/{aId}",
+    "full_path": "/user-activities/{aId}",
     "function_name": "delete",
     "parameters": [
       "aId"
@@ -882,34 +2281,66 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@DeleteMapping(\"/{aId}\""
+      "annotation": "@DeleteMapping(\"/{aId}\"",
+      "request": {
+        "path": [
+          {
+            "name": "aId",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/user-activities/quiz/{qId}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\RecordsController.java",
+    "path": "/quiz/{qId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\EvaluationMicroservicee\\src\\main\\java\\com\\example\\evaluationmicroservicee\\Controller\\RecordsController.java",
     "line_number": 51,
     "router_prefix": "/user-activities",
-    "full_path": "/user-activities/user-activities/quiz/{qId}",
+    "full_path": "/user-activities/quiz/{qId}",
     "function_name": "getRecordsOfQuiz",
     "parameters": [
-      "idEvaluation"
+      "qId"
     ],
     "middleware": [],
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/quiz/{qId}\""
+      "annotation": "@GetMapping(\"/quiz/{qId}\"",
+      "request": {
+        "path": [
+          {
+            "name": "qId",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "post",
-    "path": "/api/formations/add",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\FormationMicroService\\src\\main\\java\\tn\\esprit\\formationmicroservice\\Controllers\\FormationController.java",
+    "path": "/add",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\FormationMicroService\\src\\main\\java\\tn\\esprit\\formationmicroservice\\Controllers\\FormationController.java",
     "line_number": 19,
     "router_prefix": "/api/formations",
-    "full_path": "/api/formations/api/formations/add",
+    "full_path": "/api/formations/add",
     "function_name": "addFormation",
     "parameters": [
       "formation"
@@ -918,16 +2349,78 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/add\""
+      "annotation": "@PostMapping(\"/add\"",
+      "request": {
+        "path": [],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "formation",
+          "dto_type": "Formation",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "idFormation": {
+                "type": "string"
+              },
+              "image": {
+                "type": "string"
+              },
+              "titreFormation": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "dateDebut": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "dateFin": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "video": {
+                "type": "string"
+              },
+              "categorie": {
+                "type": "string"
+              },
+              "evaluations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "x-java-type": "Evaluation"
+                }
+              }
+            }
+          },
+          "example": {
+            "idFormation": "string",
+            "image": "string",
+            "titreFormation": "string",
+            "description": "string",
+            "dateDebut": "2020-01-01T00:00:00Z",
+            "dateFin": "2020-01-01T00:00:00Z",
+            "video": "string",
+            "categorie": "string",
+            "evaluations": [
+              {}
+            ]
+          }
+        }
+      }
     }
   },
   {
     "method": "put",
-    "path": "/api/formations/update/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\FormationMicroService\\src\\main\\java\\tn\\esprit\\formationmicroservice\\Controllers\\FormationController.java",
+    "path": "/update/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\FormationMicroService\\src\\main\\java\\tn\\esprit\\formationmicroservice\\Controllers\\FormationController.java",
     "line_number": 24,
     "router_prefix": "/api/formations",
-    "full_path": "/api/formations/api/formations/update/{id}",
+    "full_path": "/api/formations/update/{id}",
     "function_name": "updateFormation",
     "parameters": [
       "id",
@@ -937,16 +2430,88 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PutMapping(\"/update/{id}\""
+      "annotation": "@PutMapping(\"/update/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "formation",
+          "dto_type": "Formation",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "idFormation": {
+                "type": "string"
+              },
+              "image": {
+                "type": "string"
+              },
+              "titreFormation": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "dateDebut": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "dateFin": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "video": {
+                "type": "string"
+              },
+              "categorie": {
+                "type": "string"
+              },
+              "evaluations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "x-java-type": "Evaluation"
+                }
+              }
+            }
+          },
+          "example": {
+            "idFormation": "string",
+            "image": "string",
+            "titreFormation": "string",
+            "description": "string",
+            "dateDebut": "2020-01-01T00:00:00Z",
+            "dateFin": "2020-01-01T00:00:00Z",
+            "video": "string",
+            "categorie": "string",
+            "evaluations": [
+              {}
+            ]
+          }
+        }
+      }
     }
   },
   {
     "method": "delete",
-    "path": "/api/formations/delete/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\FormationMicroService\\src\\main\\java\\tn\\esprit\\formationmicroservice\\Controllers\\FormationController.java",
+    "path": "/delete/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\FormationMicroService\\src\\main\\java\\tn\\esprit\\formationmicroservice\\Controllers\\FormationController.java",
     "line_number": 29,
     "router_prefix": "/api/formations",
-    "full_path": "/api/formations/api/formations/delete/{id}",
+    "full_path": "/api/formations/delete/{id}",
     "function_name": "deleteFormation",
     "parameters": [
       "id"
@@ -955,16 +2520,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@DeleteMapping(\"/delete/{id}\""
+      "annotation": "@DeleteMapping(\"/delete/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/api/formations/all",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\FormationMicroService\\src\\main\\java\\tn\\esprit\\formationmicroservice\\Controllers\\FormationController.java",
+    "path": "/all",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\FormationMicroService\\src\\main\\java\\tn\\esprit\\formationmicroservice\\Controllers\\FormationController.java",
     "line_number": 34,
     "router_prefix": "/api/formations",
-    "full_path": "/api/formations/api/formations/all",
+    "full_path": "/api/formations/all",
     "function_name": "getAllFormations",
     "parameters": [],
     "middleware": [],
@@ -976,11 +2557,11 @@
   },
   {
     "method": "get",
-    "path": "/api/formations/get/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\FormationMicroService\\src\\main\\java\\tn\\esprit\\formationmicroservice\\Controllers\\FormationController.java",
+    "path": "/get/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\FormationMicroService\\src\\main\\java\\tn\\esprit\\formationmicroservice\\Controllers\\FormationController.java",
     "line_number": 39,
     "router_prefix": "/api/formations",
-    "full_path": "/api/formations/api/formations/get/{id}",
+    "full_path": "/api/formations/get/{id}",
     "function_name": "getFormationById",
     "parameters": [
       "id"
@@ -989,16 +2570,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/get/{id}\""
+      "annotation": "@GetMapping(\"/get/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/api/comments/byTopicId/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\CommentController.java",
+    "path": "/byTopicId/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\CommentController.java",
     "line_number": 33,
     "router_prefix": "/api/comments",
-    "full_path": "/api/comments/api/comments/byTopicId/{id}",
+    "full_path": "/api/comments/byTopicId/{id}",
     "function_name": "getAllComments",
     "parameters": [
       "id"
@@ -1007,16 +2604,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/byTopicId/{id}\""
+      "annotation": "@GetMapping(\"/byTopicId/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/api/comments/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\CommentController.java",
+    "path": "/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\CommentController.java",
     "line_number": 40,
     "router_prefix": "/api/comments",
-    "full_path": "/api/comments/api/comments/{id}",
+    "full_path": "/api/comments/{id}",
     "function_name": "getCommentById",
     "parameters": [
       "id"
@@ -1025,16 +2638,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/{id}\""
+      "annotation": "@GetMapping(\"/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "put",
-    "path": "/api/comments/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\CommentController.java",
+    "path": "/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\CommentController.java",
     "line_number": 48,
     "router_prefix": "/api/comments",
-    "full_path": "/api/comments/api/comments/{id}",
+    "full_path": "/api/comments/{id}",
     "function_name": "updateComment",
     "parameters": [
       "id",
@@ -1044,16 +2673,57 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PutMapping(\"/{id}\""
+      "annotation": "@PutMapping(\"/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "updatedComment",
+          "dto_type": "Comment",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "content": {
+                "type": "string"
+              },
+              "createdBy": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          "example": {
+            "content": "string",
+            "createdBy": "string",
+            "createdAt": "2020-01-01T00:00:00Z"
+          }
+        }
+      }
     }
   },
   {
     "method": "delete",
-    "path": "/api/comments/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\CommentController.java",
+    "path": "/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\CommentController.java",
     "line_number": 59,
     "router_prefix": "/api/comments",
-    "full_path": "/api/comments/api/comments/{id}",
+    "full_path": "/api/comments/{id}",
     "function_name": "deleteComment",
     "parameters": [
       "id"
@@ -1062,16 +2732,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@DeleteMapping(\"/{id}\""
+      "annotation": "@DeleteMapping(\"/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/api/events-topics/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\EventTopicController.java",
+    "path": "/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\EventTopicController.java",
     "line_number": 23,
     "router_prefix": "/api/events-topics",
-    "full_path": "/api/events-topics/api/events-topics/{id}",
+    "full_path": "/api/events-topics/{id}",
     "function_name": "getById",
     "parameters": [
       "id"
@@ -1080,16 +2766,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/{id}\""
+      "annotation": "@GetMapping(\"/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "put",
-    "path": "/api/events-topics/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\EventTopicController.java",
+    "path": "/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\EventTopicController.java",
     "line_number": 35,
     "router_prefix": "/api/events-topics",
-    "full_path": "/api/events-topics/api/events-topics/{id}",
+    "full_path": "/api/events-topics/{id}",
     "function_name": "update",
     "parameters": [
       "id",
@@ -1099,16 +2801,65 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PutMapping(\"/{id}\""
+      "annotation": "@PutMapping(\"/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "eventTopic",
+          "dto_type": "EventTopic",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "media": {
+                "type": "string"
+              },
+              "mediaType": {
+                "type": "object",
+                "x-java-type": "FileType"
+              }
+            }
+          },
+          "example": {
+            "id": "1",
+            "title": "string",
+            "description": "string",
+            "media": "string",
+            "mediaType": {}
+          }
+        }
+      }
     }
   },
   {
     "method": "delete",
-    "path": "/api/events-topics/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\EventTopicController.java",
+    "path": "/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\EventTopicController.java",
     "line_number": 40,
     "router_prefix": "/api/events-topics",
-    "full_path": "/api/events-topics/api/events-topics/{id}",
+    "full_path": "/api/events-topics/{id}",
     "function_name": "delete",
     "parameters": [
       "id"
@@ -1117,16 +2868,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@DeleteMapping(\"/{id}\""
+      "annotation": "@DeleteMapping(\"/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "post",
-    "path": "/api/files/upload",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\FileUploadController.java",
+    "path": "/upload",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\FileUploadController.java",
     "line_number": 29,
     "router_prefix": "/api/files",
-    "full_path": "/api/files/api/files/upload",
+    "full_path": "/api/files/upload",
     "function_name": "uploadImage",
     "parameters": [
       "file",
@@ -1136,16 +2903,43 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/upload\""
+      "annotation": "@PostMapping(\"/upload\"",
+      "request": {
+        "path": [],
+        "query": [
+          {
+            "name": "file",
+            "java_type": "MultipartFile",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "x-java-type": "MultipartFile"
+            },
+            "example": {}
+          },
+          {
+            "name": "fileType",
+            "java_type": "FileType",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "x-java-type": "FileType"
+            },
+            "example": {}
+          }
+        ],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/api/files/download/{fileType}/{fileName}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\FileUploadController.java",
+    "path": "/download/{fileType}/{fileName}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\FileUploadController.java",
     "line_number": 39,
     "router_prefix": "/api/files",
-    "full_path": "/api/files/api/files/download/{fileType}/{fileName}",
+    "full_path": "/api/files/download/{fileType}/{fileName}",
     "function_name": "downloadFile",
     "parameters": [
       "fileType",
@@ -1155,16 +2949,42 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/download/{fileType}/{fileName}\""
+      "annotation": "@GetMapping(\"/download/{fileType}/{fileName}\"",
+      "request": {
+        "path": [
+          {
+            "name": "fileType",
+            "java_type": "FileType",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "x-java-type": "FileType"
+            },
+            "example": {}
+          },
+          {
+            "name": "fileName",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "post",
-    "path": "/api/reactions/add",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\ReactionController.java",
+    "path": "/add",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\ReactionController.java",
     "line_number": 19,
     "router_prefix": "/api/reactions",
-    "full_path": "/api/reactions/api/reactions/add",
+    "full_path": "/api/reactions/add",
     "function_name": "addReaction",
     "parameters": [
       "reaction"
@@ -1173,16 +2993,47 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/add\""
+      "annotation": "@PostMapping(\"/add\"",
+      "request": {
+        "path": [],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "reaction",
+          "dto_type": "Reaction",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "entityId": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          "example": {
+            "id": "1",
+            "entityId": "1",
+            "updatedAt": "2020-01-01T00:00:00Z"
+          }
+        }
+      }
     }
   },
   {
     "method": "post",
-    "path": "/api/reactions/remove",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\ReactionController.java",
+    "path": "/remove",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\ReactionController.java",
     "line_number": 30,
     "router_prefix": "/api/reactions",
-    "full_path": "/api/reactions/api/reactions/remove",
+    "full_path": "/api/reactions/remove",
     "function_name": "removeReaction",
     "parameters": [
       "reaction"
@@ -1191,16 +3042,47 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/remove\""
+      "annotation": "@PostMapping(\"/remove\"",
+      "request": {
+        "path": [],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "reaction",
+          "dto_type": "Reaction",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "entityId": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          "example": {
+            "id": "1",
+            "entityId": "1",
+            "updatedAt": "2020-01-01T00:00:00Z"
+          }
+        }
+      }
     }
   },
   {
     "method": "get",
-    "path": "/api/reports/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\ReportController.java",
+    "path": "/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\ReportController.java",
     "line_number": 25,
     "router_prefix": "/api/reports",
-    "full_path": "/api/reports/api/reports/{id}",
+    "full_path": "/api/reports/{id}",
     "function_name": "getReportById",
     "parameters": [
       "id"
@@ -1209,16 +3091,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/{id}\""
+      "annotation": "@GetMapping(\"/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/api/reports/status/{status}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\ReportController.java",
+    "path": "/status/{status}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\ReportController.java",
     "line_number": 37,
     "router_prefix": "/api/reports",
-    "full_path": "/api/reports/api/reports/status/{status}",
+    "full_path": "/api/reports/status/{status}",
     "function_name": "getReportsByStatus",
     "parameters": [
       "status"
@@ -1227,16 +3125,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/status/{status}\""
+      "annotation": "@GetMapping(\"/status/{status}\"",
+      "request": {
+        "path": [
+          {
+            "name": "status",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "put",
-    "path": "/api/reports/{id}/status",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\ReportController.java",
+    "path": "/{id}/status",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\ReportController.java",
     "line_number": 43,
     "router_prefix": "/api/reports",
-    "full_path": "/api/reports/api/reports/{id}/status",
+    "full_path": "/api/reports/{id}/status",
     "function_name": "updateReportStatus",
     "parameters": [
       "id",
@@ -1246,16 +3160,43 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PutMapping(\"/{id}/status\""
+      "annotation": "@PutMapping(\"/{id}/status\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [
+          {
+            "name": "status",
+            "java_type": "ReportStatus",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "x-java-type": "ReportStatus"
+            },
+            "example": {}
+          }
+        ],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "delete",
-    "path": "/api/reports/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\ReportController.java",
+    "path": "/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ForumMicroService\\src\\main\\java\\tn\\esprit\\forummicroservice\\Controller\\ReportController.java",
     "line_number": 49,
     "router_prefix": "/api/reports",
-    "full_path": "/api/reports/api/reports/{id}",
+    "full_path": "/api/reports/{id}",
     "function_name": "deleteReport",
     "parameters": [
       "id"
@@ -1264,13 +3205,29 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@DeleteMapping(\"/{id}\""
+      "annotation": "@DeleteMapping(\"/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
     "path": "/api/formations/get/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\PanierMicroService\\src\\main\\java\\tn\\esprit\\paniermicroservice\\Client\\FormationClient.java",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\PanierMicroService\\src\\main\\java\\tn\\esprit\\paniermicroservice\\Client\\FormationClient.java",
     "line_number": 10,
     "router_prefix": "",
     "full_path": "/api/formations/get/{id}",
@@ -1282,16 +3239,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/api/formations/get/{id}\""
+      "annotation": "@GetMapping(\"/api/formations/get/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/api/panier/{userId}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\PanierMicroService\\src\\main\\java\\tn\\esprit\\paniermicroservice\\Controllers\\PanierController.java",
+    "path": "/{userId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\PanierMicroService\\src\\main\\java\\tn\\esprit\\paniermicroservice\\Controllers\\PanierController.java",
     "line_number": 17,
     "router_prefix": "/api/panier",
-    "full_path": "/api/panier/api/panier/{userId}",
+    "full_path": "/api/panier/{userId}",
     "function_name": "getPanier",
     "parameters": [
       "userId"
@@ -1300,16 +3273,33 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/{userId}\""
+      "annotation": "@GetMapping(\"/{userId}\"",
+      "request": {
+        "path": [
+          {
+            "name": "userId",
+            "java_type": "Long",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "example": 1
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "post",
-    "path": "/api/panier/{userId}/add/{formationId}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\PanierMicroService\\src\\main\\java\\tn\\esprit\\paniermicroservice\\Controllers\\PanierController.java",
+    "path": "/{userId}/add/{formationId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\PanierMicroService\\src\\main\\java\\tn\\esprit\\paniermicroservice\\Controllers\\PanierController.java",
     "line_number": 22,
     "router_prefix": "/api/panier",
-    "full_path": "/api/panier/api/panier/{userId}/add/{formationId}",
+    "full_path": "/api/panier/{userId}/add/{formationId}",
     "function_name": "addFormationById",
     "parameters": [
       "userId",
@@ -1319,16 +3309,42 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/{userId}/add/{formationId}\""
+      "annotation": "@PostMapping(\"/{userId}/add/{formationId}\"",
+      "request": {
+        "path": [
+          {
+            "name": "userId",
+            "java_type": "Long",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "example": 1
+          },
+          {
+            "name": "formationId",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "delete",
-    "path": "/api/panier/{userId}/remove/{formationId}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\PanierMicroService\\src\\main\\java\\tn\\esprit\\paniermicroservice\\Controllers\\PanierController.java",
+    "path": "/{userId}/remove/{formationId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\PanierMicroService\\src\\main\\java\\tn\\esprit\\paniermicroservice\\Controllers\\PanierController.java",
     "line_number": 28,
     "router_prefix": "/api/panier",
-    "full_path": "/api/panier/api/panier/{userId}/remove/{formationId}",
+    "full_path": "/api/panier/{userId}/remove/{formationId}",
     "function_name": "removeFormation",
     "parameters": [
       "userId",
@@ -1338,16 +3354,42 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@DeleteMapping(\"/{userId}/remove/{formationId}\""
+      "annotation": "@DeleteMapping(\"/{userId}/remove/{formationId}\"",
+      "request": {
+        "path": [
+          {
+            "name": "userId",
+            "java_type": "Long",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "example": 1
+          },
+          {
+            "name": "formationId",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "delete",
-    "path": "/api/panier/{userId}/clear",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\PanierMicroService\\src\\main\\java\\tn\\esprit\\paniermicroservice\\Controllers\\PanierController.java",
+    "path": "/{userId}/clear",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\PanierMicroService\\src\\main\\java\\tn\\esprit\\paniermicroservice\\Controllers\\PanierController.java",
     "line_number": 33,
     "router_prefix": "/api/panier",
-    "full_path": "/api/panier/api/panier/{userId}/clear",
+    "full_path": "/api/panier/{userId}/clear",
     "function_name": "clearPanier",
     "parameters": [
       "userId"
@@ -1356,13 +3398,30 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@DeleteMapping(\"/{userId}/clear\""
+      "annotation": "@DeleteMapping(\"/{userId}/clear\"",
+      "request": {
+        "path": [
+          {
+            "name": "userId",
+            "java_type": "Long",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "example": 1
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "post",
     "path": "/checkout",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\PanierMicroService\\src\\main\\java\\tn\\esprit\\paniermicroservice\\Controllers\\PaymentController.java",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\PanierMicroService\\src\\main\\java\\tn\\esprit\\paniermicroservice\\Controllers\\PaymentController.java",
     "line_number": 18,
     "router_prefix": "",
     "full_path": "/checkout",
@@ -1374,16 +3433,48 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/checkout\""
+      "annotation": "@PostMapping(\"/checkout\"",
+      "request": {
+        "path": [],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "panier",
+          "dto_type": "Panier",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "userId": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "total": {
+                "type": "number",
+                "format": "double"
+              }
+            }
+          },
+          "example": {
+            "id": "1",
+            "userId": 1,
+            "total": 0.0
+          }
+        }
+      }
     }
   },
   {
     "method": "post",
-    "path": "/api/files/upload/{projectId}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\FileController.java",
+    "path": "/upload/{projectId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\FileController.java",
     "line_number": 32,
     "router_prefix": "/api/files",
-    "full_path": "/api/files/api/files/upload/{projectId}",
+    "full_path": "/api/files/upload/{projectId}",
     "function_name": "uploadFile",
     "parameters": [
       "projectId",
@@ -1393,16 +3484,43 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/upload/{projectId}\""
+      "annotation": "@PostMapping(\"/upload/{projectId}\"",
+      "request": {
+        "path": [
+          {
+            "name": "projectId",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [
+          {
+            "name": "file",
+            "java_type": "MultipartFile",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "x-java-type": "MultipartFile"
+            },
+            "example": {}
+          }
+        ],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/api/files/download/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\FileController.java",
+    "path": "/download/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\FileController.java",
     "line_number": 54,
     "router_prefix": "/api/files",
-    "full_path": "/api/files/api/files/download/{id}",
+    "full_path": "/api/files/download/{id}",
     "function_name": "downloadFile",
     "parameters": [
       "id"
@@ -1411,16 +3529,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/download/{id}\""
+      "annotation": "@GetMapping(\"/download/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/api/files/project/{projectId}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\FileController.java",
+    "path": "/project/{projectId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\FileController.java",
     "line_number": 63,
     "router_prefix": "/api/files",
-    "full_path": "/api/files/api/files/project/{projectId}",
+    "full_path": "/api/files/project/{projectId}",
     "function_name": "getProjectFiles",
     "parameters": [
       "projectId"
@@ -1429,16 +3563,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/project/{projectId}\""
+      "annotation": "@GetMapping(\"/project/{projectId}\"",
+      "request": {
+        "path": [
+          {
+            "name": "projectId",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "post",
-    "path": "/api/projets/add",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "path": "/add",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
     "line_number": 33,
     "router_prefix": "/api/projets",
-    "full_path": "/api/projets/api/projets/add",
+    "full_path": "/api/projets/add",
     "function_name": "addProjet",
     "parameters": [
       "projet"
@@ -1447,16 +3597,83 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/add\""
+      "annotation": "@PostMapping(\"/add\"",
+      "request": {
+        "path": [],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "projet",
+          "dto_type": "Projet",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "idProjet": {
+                "type": "string"
+              },
+              "titre": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "porteurProjet": {
+                "type": "string"
+              },
+              "encadrant": {
+                "type": "string"
+              },
+              "espaceCollaboratif": {
+                "type": "boolean"
+              },
+              "statutProjet": {
+                "type": "object",
+                "x-java-type": "StatutProjet"
+              },
+              "email": {
+                "type": "string"
+              },
+              "telephone": {
+                "type": "string"
+              },
+              "technologies": {
+                "type": "string"
+              },
+              "objectifs": {
+                "type": "string"
+              },
+              "benefices": {
+                "type": "string"
+              }
+            }
+          },
+          "example": {
+            "idProjet": "string",
+            "titre": "string",
+            "description": "string",
+            "porteurProjet": "string",
+            "encadrant": "string",
+            "espaceCollaboratif": true,
+            "statutProjet": {},
+            "email": "user@example.com",
+            "telephone": "string",
+            "technologies": "string",
+            "objectifs": "string",
+            "benefices": "string"
+          }
+        }
+      }
     }
   },
   {
     "method": "put",
-    "path": "/api/projets/update/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "path": "/update/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
     "line_number": 39,
     "router_prefix": "/api/projets",
-    "full_path": "/api/projets/api/projets/update/{id}",
+    "full_path": "/api/projets/update/{id}",
     "function_name": "updateProjet",
     "parameters": [
       "id",
@@ -1466,16 +3683,93 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PutMapping(\"/update/{id}\""
+      "annotation": "@PutMapping(\"/update/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "projet",
+          "dto_type": "Projet",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "idProjet": {
+                "type": "string"
+              },
+              "titre": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "porteurProjet": {
+                "type": "string"
+              },
+              "encadrant": {
+                "type": "string"
+              },
+              "espaceCollaboratif": {
+                "type": "boolean"
+              },
+              "statutProjet": {
+                "type": "object",
+                "x-java-type": "StatutProjet"
+              },
+              "email": {
+                "type": "string"
+              },
+              "telephone": {
+                "type": "string"
+              },
+              "technologies": {
+                "type": "string"
+              },
+              "objectifs": {
+                "type": "string"
+              },
+              "benefices": {
+                "type": "string"
+              }
+            }
+          },
+          "example": {
+            "idProjet": "string",
+            "titre": "string",
+            "description": "string",
+            "porteurProjet": "string",
+            "encadrant": "string",
+            "espaceCollaboratif": true,
+            "statutProjet": {},
+            "email": "user@example.com",
+            "telephone": "string",
+            "technologies": "string",
+            "objectifs": "string",
+            "benefices": "string"
+          }
+        }
+      }
     }
   },
   {
     "method": "delete",
-    "path": "/api/projets/delete/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "path": "/delete/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
     "line_number": 44,
     "router_prefix": "/api/projets",
-    "full_path": "/api/projets/api/projets/delete/{id}",
+    "full_path": "/api/projets/delete/{id}",
     "function_name": "deleteProjet",
     "parameters": [
       "id"
@@ -1484,16 +3778,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@DeleteMapping(\"/delete/{id}\""
+      "annotation": "@DeleteMapping(\"/delete/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/api/projets/all",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "path": "/all",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
     "line_number": 49,
     "router_prefix": "/api/projets",
-    "full_path": "/api/projets/api/projets/all",
+    "full_path": "/api/projets/all",
     "function_name": "getAllProjets",
     "parameters": [],
     "middleware": [],
@@ -1505,11 +3815,11 @@
   },
   {
     "method": "get",
-    "path": "/api/projets/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "path": "/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
     "line_number": 54,
     "router_prefix": "/api/projets",
-    "full_path": "/api/projets/api/projets/{id}",
+    "full_path": "/api/projets/{id}",
     "function_name": "getProjetById",
     "parameters": [
       "id"
@@ -1518,16 +3828,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/{id}\""
+      "annotation": "@GetMapping(\"/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "put",
-    "path": "/api/projets/validate-or-reject/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "path": "/validate-or-reject/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
     "line_number": 59,
     "router_prefix": "/api/projets",
-    "full_path": "/api/projets/api/projets/validate-or-reject/{id}",
+    "full_path": "/api/projets/validate-or-reject/{id}",
     "function_name": "validateOrRejectProjet",
     "parameters": [
       "id",
@@ -1538,16 +3864,51 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PutMapping(\"/validate-or-reject/{id}\""
+      "annotation": "@PutMapping(\"/validate-or-reject/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [
+          {
+            "name": "isValid",
+            "java_type": "boolean",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "rejectionMotif",
+            "java_type": "String",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
+          }
+        ],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "put",
-    "path": "/api/projets/assignEncadrant/{projetId}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "path": "/assignEncadrant/{projetId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
     "line_number": 67,
     "router_prefix": "/api/projets",
-    "full_path": "/api/projets/api/projets/assignEncadrant/{projetId}",
+    "full_path": "/api/projets/assignEncadrant/{projetId}",
     "function_name": "assignEncadrant",
     "parameters": [
       "projetId",
@@ -1557,16 +3918,42 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PutMapping(\"/assignEncadrant/{projetId}\""
+      "annotation": "@PutMapping(\"/assignEncadrant/{projetId}\"",
+      "request": {
+        "path": [
+          {
+            "name": "projetId",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [
+          {
+            "name": "encadrant",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
+          }
+        ],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/api/projets/{projectId}/tasks",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "path": "/{projectId}/tasks",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
     "line_number": 80,
     "router_prefix": "/api/projets",
-    "full_path": "/api/projets/api/projets/{projectId}/tasks",
+    "full_path": "/api/projets/{projectId}/tasks",
     "function_name": "getProjectTasks",
     "parameters": [
       "projectId"
@@ -1575,16 +3962,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/{projectId}/tasks\""
+      "annotation": "@GetMapping(\"/{projectId}/tasks\"",
+      "request": {
+        "path": [
+          {
+            "name": "projectId",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "post",
-    "path": "/api/projets/{projectId}/tasks",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "path": "/{projectId}/tasks",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
     "line_number": 85,
     "router_prefix": "/api/projets",
-    "full_path": "/api/projets/api/projets/{projectId}/tasks",
+    "full_path": "/api/projets/{projectId}/tasks",
     "function_name": "createTask",
     "parameters": [
       "projectId",
@@ -1594,16 +3997,93 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/{projectId}/tasks\""
+      "annotation": "@PostMapping(\"/{projectId}/tasks\"",
+      "request": {
+        "path": [
+          {
+            "name": "projectId",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "task",
+          "dto_type": "Task",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "projectId": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "deadline": {
+                "type": "string",
+                "format": "date"
+              },
+              "assignedTo": {
+                "type": "string"
+              },
+              "startDate": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "dueDate": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "createdBy": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          "example": {
+            "id": "1",
+            "projectId": "1",
+            "title": "string",
+            "description": "string",
+            "deadline": "2020-01-01",
+            "assignedTo": "string",
+            "startDate": "2020-01-01T00:00:00Z",
+            "dueDate": "2020-01-01T00:00:00Z",
+            "createdBy": "string",
+            "createdAt": "2020-01-01T00:00:00Z",
+            "updatedAt": "2020-01-01T00:00:00Z"
+          }
+        }
+      }
     }
   },
   {
     "method": "put",
-    "path": "/api/projets/tasks/{taskId}/status",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "path": "/tasks/{taskId}/status",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
     "line_number": 94,
     "router_prefix": "/api/projets",
-    "full_path": "/api/projets/api/projets/tasks/{taskId}/status",
+    "full_path": "/api/projets/tasks/{taskId}/status",
     "function_name": "updateTaskStatus",
     "parameters": [
       "taskId",
@@ -1613,16 +4093,42 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PutMapping(\"/tasks/{taskId}/status\""
+      "annotation": "@PutMapping(\"/tasks/{taskId}/status\"",
+      "request": {
+        "path": [
+          {
+            "name": "taskId",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "body",
+          "dto_type": "Map<String, String>",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "x-java-type": "Map"
+          },
+          "example": {}
+        }
+      }
     }
   },
   {
     "method": "put",
-    "path": "/api/projets/tasks/{taskId}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "path": "/tasks/{taskId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
     "line_number": 100,
     "router_prefix": "/api/projets",
-    "full_path": "/api/projets/api/projets/tasks/{taskId}",
+    "full_path": "/api/projets/tasks/{taskId}",
     "function_name": "updateTask",
     "parameters": [
       "taskId",
@@ -1632,16 +4138,93 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PutMapping(\"/tasks/{taskId}\""
+      "annotation": "@PutMapping(\"/tasks/{taskId}\"",
+      "request": {
+        "path": [
+          {
+            "name": "taskId",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "task",
+          "dto_type": "Task",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "projectId": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "deadline": {
+                "type": "string",
+                "format": "date"
+              },
+              "assignedTo": {
+                "type": "string"
+              },
+              "startDate": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "dueDate": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "createdBy": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          "example": {
+            "id": "1",
+            "projectId": "1",
+            "title": "string",
+            "description": "string",
+            "deadline": "2020-01-01",
+            "assignedTo": "string",
+            "startDate": "2020-01-01T00:00:00Z",
+            "dueDate": "2020-01-01T00:00:00Z",
+            "createdBy": "string",
+            "createdAt": "2020-01-01T00:00:00Z",
+            "updatedAt": "2020-01-01T00:00:00Z"
+          }
+        }
+      }
     }
   },
   {
     "method": "delete",
-    "path": "/api/projets/tasks/{taskId}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "path": "/tasks/{taskId}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
     "line_number": 105,
     "router_prefix": "/api/projets",
-    "full_path": "/api/projets/api/projets/tasks/{taskId}",
+    "full_path": "/api/projets/tasks/{taskId}",
     "function_name": "deleteTask",
     "parameters": [
       "taskId"
@@ -1650,16 +4233,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@DeleteMapping(\"/tasks/{taskId}\""
+      "annotation": "@DeleteMapping(\"/tasks/{taskId}\"",
+      "request": {
+        "path": [
+          {
+            "name": "taskId",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/api/projets/{projectId}/milestones",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "path": "/{projectId}/milestones",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
     "line_number": 110,
     "router_prefix": "/api/projets",
-    "full_path": "/api/projets/api/projets/{projectId}/milestones",
+    "full_path": "/api/projets/{projectId}/milestones",
     "function_name": "getProjectMilestones",
     "parameters": [
       "projectId"
@@ -1668,16 +4267,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/{projectId}/milestones\""
+      "annotation": "@GetMapping(\"/{projectId}/milestones\"",
+      "request": {
+        "path": [
+          {
+            "name": "projectId",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "post",
-    "path": "/api/projets/{projectId}/milestones",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "path": "/{projectId}/milestones",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
     "line_number": 115,
     "router_prefix": "/api/projets",
-    "full_path": "/api/projets/api/projets/{projectId}/milestones",
+    "full_path": "/api/projets/{projectId}/milestones",
     "function_name": "addMilestone",
     "parameters": [
       "projectId",
@@ -1687,16 +4302,70 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/{projectId}/milestones\""
+      "annotation": "@PostMapping(\"/{projectId}/milestones\"",
+      "request": {
+        "path": [
+          {
+            "name": "projectId",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "milestone",
+          "dto_type": "Milestone",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "projectId": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "dueDate": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "dueDate",
+              "projectId",
+              "title"
+            ]
+          },
+          "example": {
+            "id": "1",
+            "projectId": "1",
+            "title": "string",
+            "description": "string",
+            "dueDate": "2020-01-01T00:00:00Z"
+          }
+        }
+      }
     }
   },
   {
     "method": "put",
-    "path": "/api/projets/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "path": "/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
     "line_number": 120,
     "router_prefix": "/api/projets",
-    "full_path": "/api/projets/api/projets/{id}",
+    "full_path": "/api/projets/{id}",
     "function_name": "updateMilestone",
     "parameters": [
       "id",
@@ -1706,16 +4375,70 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PutMapping(\"/{id}\""
+      "annotation": "@PutMapping(\"/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "milestone",
+          "dto_type": "Milestone",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "projectId": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "dueDate": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "dueDate",
+              "projectId",
+              "title"
+            ]
+          },
+          "example": {
+            "id": "1",
+            "projectId": "1",
+            "title": "string",
+            "description": "string",
+            "dueDate": "2020-01-01T00:00:00Z"
+          }
+        }
+      }
     }
   },
   {
     "method": "delete",
-    "path": "/api/projets/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "path": "/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
     "line_number": 125,
     "router_prefix": "/api/projets",
-    "full_path": "/api/projets/api/projets/{id}",
+    "full_path": "/api/projets/{id}",
     "function_name": "deleteMilestone",
     "parameters": [
       "id"
@@ -1724,16 +4447,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@DeleteMapping(\"/{id}\""
+      "annotation": "@DeleteMapping(\"/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "patch",
-    "path": "/api/projets/milestones/{id}/complete",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
+    "path": "/milestones/{id}/complete",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\ProjetController.java",
     "line_number": 133,
     "router_prefix": "/api/projets",
-    "full_path": "/api/projets/api/projets/milestones/{id}/complete",
+    "full_path": "/api/projets/milestones/{id}/complete",
     "function_name": "markAsCompleted",
     "parameters": [
       "id"
@@ -1742,16 +4481,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PatchMapping(\"/milestones/{id}/complete\""
+      "annotation": "@PatchMapping(\"/milestones/{id}/complete\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/api/users/encadrants",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\UserController.java",
+    "path": "/encadrants",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\UserController.java",
     "line_number": 21,
     "router_prefix": "/api/users",
-    "full_path": "/api/users/api/users/encadrants",
+    "full_path": "/api/users/encadrants",
     "function_name": "getEncadrants",
     "parameters": [],
     "middleware": [],
@@ -1764,7 +4519,7 @@
   {
     "method": "get",
     "path": "/api/download/{type}/{fileName}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\RessourceMicroService\\src\\main\\java\\tn\\esprit\\ressourcemicroservice\\Controller\\DownloadFileController.java",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\RessourceMicroService\\src\\main\\java\\tn\\esprit\\ressourcemicroservice\\Controller\\DownloadFileController.java",
     "line_number": 21,
     "router_prefix": "",
     "full_path": "/api/download/{type}/{fileName}",
@@ -1772,22 +4527,57 @@
     "parameters": [
       "type",
       "fileName",
-      "preview"
+      "true"
     ],
     "middleware": [],
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/api/download/{type}/{fileName}\""
+      "annotation": "@GetMapping(\"/api/download/{type}/{fileName}\"",
+      "request": {
+        "path": [
+          {
+            "name": "type",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
+          },
+          {
+            "name": "fileName",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
+          }
+        ],
+        "query": [
+          {
+            "name": "true",
+            "java_type": "boolean",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "post",
-    "path": "/api/upload/{typeRessource}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\RessourceMicroService\\src\\main\\java\\tn\\esprit\\ressourcemicroservice\\Controller\\FileUploadController.java",
+    "path": "/{typeRessource}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\RessourceMicroService\\src\\main\\java\\tn\\esprit\\ressourcemicroservice\\Controller\\FileUploadController.java",
     "line_number": 25,
     "router_prefix": "/api/upload",
-    "full_path": "/api/upload/api/upload/{typeRessource}",
+    "full_path": "/api/upload/{typeRessource}",
     "function_name": "uploadResource",
     "parameters": [
       "typeRessource",
@@ -1797,16 +4587,44 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PostMapping(\"/{typeRessource}\""
+      "annotation": "@PostMapping(\"/{typeRessource}\"",
+      "request": {
+        "path": [
+          {
+            "name": "typeRessource",
+            "java_type": "TypeRessource",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "x-java-type": "TypeRessource"
+            },
+            "example": {}
+          }
+        ],
+        "query": [
+          {
+            "name": "file",
+            "java_type": "MultipartFile",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "x-java-type": "MultipartFile"
+            },
+            "example": {}
+          }
+        ],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/api/ressources/resume/{fileName}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\RessourceMicroService\\src\\main\\java\\tn\\esprit\\ressourcemicroservice\\Controller\\RessourcesController.java",
+    "path": "/resume/{fileName}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\RessourceMicroService\\src\\main\\java\\tn\\esprit\\ressourcemicroservice\\Controller\\RessourcesController.java",
     "line_number": 48,
     "router_prefix": "/api/ressources",
-    "full_path": "/api/ressources/api/ressources/resume/{fileName}",
+    "full_path": "/api/ressources/resume/{fileName}",
     "function_name": "getResume",
     "parameters": [
       "fileName"
@@ -1815,16 +4633,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/resume/{fileName}\""
+      "annotation": "@GetMapping(\"/resume/{fileName}\"",
+      "request": {
+        "path": [
+          {
+            "name": "fileName",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/api/ressources/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\RessourceMicroService\\src\\main\\java\\tn\\esprit\\ressourcemicroservice\\Controller\\RessourcesController.java",
+    "path": "/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\RessourceMicroService\\src\\main\\java\\tn\\esprit\\ressourcemicroservice\\Controller\\RessourcesController.java",
     "line_number": 71,
     "router_prefix": "/api/ressources",
-    "full_path": "/api/ressources/api/ressources/{id}",
+    "full_path": "/api/ressources/{id}",
     "function_name": "getRessourceById",
     "parameters": [
       "id"
@@ -1833,16 +4667,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/{id}\""
+      "annotation": "@GetMapping(\"/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "put",
-    "path": "/api/ressources/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\RessourceMicroService\\src\\main\\java\\tn\\esprit\\ressourcemicroservice\\Controller\\RessourcesController.java",
+    "path": "/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\RessourceMicroService\\src\\main\\java\\tn\\esprit\\ressourcemicroservice\\Controller\\RessourcesController.java",
     "line_number": 77,
     "router_prefix": "/api/ressources",
-    "full_path": "/api/ressources/api/ressources/{id}",
+    "full_path": "/api/ressources/{id}",
     "function_name": "updateRessource",
     "parameters": [
       "id",
@@ -1852,16 +4702,75 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@PutMapping(\"/{id}\""
+      "annotation": "@PutMapping(\"/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": {
+          "param": "updatedRessource",
+          "dto_type": "Ressources",
+          "content_type": "application/json",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "idRessource": {
+                "type": "string"
+              },
+              "titre": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "type": {
+                "type": "object",
+                "x-java-type": "TypeRessource"
+              },
+              "date": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "category": {
+                "type": "object",
+                "x-java-type": "CategoryRessource"
+              },
+              "fileName": {
+                "type": "string"
+              }
+            }
+          },
+          "example": {
+            "idRessource": "string",
+            "titre": "string",
+            "description": "string",
+            "type": {},
+            "date": "2020-01-01T00:00:00Z",
+            "category": {},
+            "fileName": "string"
+          }
+        }
+      }
     }
   },
   {
     "method": "delete",
-    "path": "/api/ressources/{id}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\RessourceMicroService\\src\\main\\java\\tn\\esprit\\ressourcemicroservice\\Controller\\RessourcesController.java",
+    "path": "/{id}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\RessourceMicroService\\src\\main\\java\\tn\\esprit\\ressourcemicroservice\\Controller\\RessourcesController.java",
     "line_number": 83,
     "router_prefix": "/api/ressources",
-    "full_path": "/api/ressources/api/ressources/{id}",
+    "full_path": "/api/ressources/{id}",
     "function_name": "deleteRessource",
     "parameters": [
       "id"
@@ -1870,16 +4779,32 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@DeleteMapping(\"/{id}\""
+      "annotation": "@DeleteMapping(\"/{id}\"",
+      "request": {
+        "path": [
+          {
+            "name": "id",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        ],
+        "query": [],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/api/ressources/search",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\RessourceMicroService\\src\\main\\java\\tn\\esprit\\ressourcemicroservice\\Controller\\RessourcesController.java",
+    "path": "/search",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\RessourceMicroService\\src\\main\\java\\tn\\esprit\\ressourcemicroservice\\Controller\\RessourcesController.java",
     "line_number": 89,
     "router_prefix": "/api/ressources",
-    "full_path": "/api/ressources/api/ressources/search",
+    "full_path": "/api/ressources/search",
     "function_name": "searchRessources",
     "parameters": [
       "keyword",
@@ -1889,48 +4814,82 @@
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/search\""
+      "annotation": "@GetMapping(\"/search\"",
+      "request": {
+        "path": [],
+        "query": [
+          {
+            "name": "keyword",
+            "java_type": "String",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
+          },
+          {
+            "name": "type",
+            "java_type": "String",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
+          }
+        ],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
-    "path": "/api/ressources/sort",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\RessourceMicroService\\src\\main\\java\\tn\\esprit\\ressourcemicroservice\\Controller\\RessourcesController.java",
+    "path": "/sort",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\RessourceMicroService\\src\\main\\java\\tn\\esprit\\ressourcemicroservice\\Controller\\RessourcesController.java",
     "line_number": 97,
     "router_prefix": "/api/ressources",
-    "full_path": "/api/ressources/api/ressources/sort",
+    "full_path": "/api/ressources/sort",
     "function_name": "sortRessources",
     "parameters": [
-      "sortBy",
-      "direction"
+      "titre",
+      "asc"
     ],
     "middleware": [],
     "confidence": 0.87,
     "source": "ast",
     "metadata": {
-      "annotation": "@GetMapping(\"/sort\""
-    }
-  },
-  {
-    "method": "get",
-    "path": "/role/{role}",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\AccompagnementPFEMicroService\\src\\main\\java\\tn\\esprit\\accompagnementpfemicroservice\\Controllers\\UserController.java",
-    "line_number": 32,
-    "router_prefix": null,
-    "full_path": "/role/{role}",
-    "function_name": null,
-    "parameters": [],
-    "middleware": [],
-    "confidence": 0.87,
-    "source": "regex",
-    "metadata": {
-      "pattern": "spring_GetMapping"
+      "annotation": "@GetMapping(\"/sort\"",
+      "request": {
+        "path": [],
+        "query": [
+          {
+            "name": "titre",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
+          },
+          {
+            "name": "asc",
+            "java_type": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
+          }
+        ],
+        "header": [],
+        "body": null
+      }
     }
   },
   {
     "method": "get",
     "path": "/AuthenticationMicroService/**",
-    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_5f8b982b\\BACKEND\\PiDev-BackEnd\\Gateway\\src\\main\\java\\tn\\esprit\\gateway\\GatewayApplication.java",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\Gateway\\src\\main\\java\\tn\\esprit\\gateway\\GatewayApplication.java",
     "line_number": 23,
     "router_prefix": null,
     "full_path": "/AuthenticationMicroService/**",
@@ -1941,6 +4900,38 @@
     "source": "regex",
     "metadata": {
       "pattern": "spring_cloud_gateway_route"
+    }
+  },
+  {
+    "method": "get",
+    "path": "/api/users/encadrants",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\ProjectMicroService\\src\\main\\java\\tn\\esprit\\projectmicroservice\\Controller\\UserController.java",
+    "line_number": 21,
+    "router_prefix": null,
+    "full_path": "/api/users/encadrants",
+    "function_name": null,
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "regex",
+    "metadata": {
+      "pattern": "spring_GetMapping"
+    }
+  },
+  {
+    "method": "post",
+    "path": "/api/upload/{typeRessource}",
+    "file_path": "C:\\r\\1cf4b3759f0db531_tmp_50787da7\\BACKEND\\PiDev-BackEnd\\RessourceMicroService\\src\\main\\java\\tn\\esprit\\ressourcemicroservice\\Controller\\FileUploadController.java",
+    "line_number": 25,
+    "router_prefix": null,
+    "full_path": "/api/upload/{typeRessource}",
+    "function_name": null,
+    "parameters": [],
+    "middleware": [],
+    "confidence": 0.87,
+    "source": "regex",
+    "metadata": {
+      "pattern": "spring_PostMapping"
     }
   }
 ]

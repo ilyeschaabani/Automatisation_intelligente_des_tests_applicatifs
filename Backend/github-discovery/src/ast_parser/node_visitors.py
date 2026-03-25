@@ -41,6 +41,7 @@ class NodeVisitor(ABC):
         middleware: Optional[List[str]] = None,
         confidence: float = 1.0,
         metadata: Optional[dict] = None,
+        router_prefix: Optional[str] = None,
     ) -> None:
         """Add an extracted endpoint"""
         try:
@@ -49,7 +50,7 @@ class NodeVisitor(ABC):
                 path=path,
                 file_path=str(self.file_path),
                 line_number=line_number,
-                router_prefix=self.current_router_prefix,
+                router_prefix=self.current_router_prefix if router_prefix is None else router_prefix,
                 function_name=function_name,
                 parameters=parameters or [],
                 middleware=middleware or [],
@@ -371,12 +372,22 @@ class PythonVisitor(NodeVisitor):
 class JavaVisitor(NodeVisitor):
     """Visitor for Java files (Spring Boot)"""
 
+    _PARAM_ANNOTATION_RE = None
+
     def visit(self, node: tree_sitter.Node) -> None:
         """Visit node and extract Spring routes"""
+        if node.type == "class_declaration":
+            # Maintain class-level prefix scoping.
+            old_prefix = self.current_router_prefix
+            self._visit_class_declaration(node)
+            for child in node.children:
+                self.visit(child)
+            self.current_router_prefix = old_prefix
+            return
+
         if node.type == "method_declaration":
             self._visit_method_declaration(node)
-        elif node.type == "class_declaration":
-            self._visit_class_declaration(node)
+
         for child in node.children:
             self.visit(child)
 
@@ -387,19 +398,24 @@ class JavaVisitor(NodeVisitor):
             class_name_node = node.child_by_field_name("name")
             class_name = class_name_node.text.decode("utf8") if class_name_node else None
             
-            # Check for @RestController or @Controller with @RequestMapping at class level
-            for sibling in node.parent.children if node.parent else []:
-                if sibling == node:
+            modifiers_node = None
+            for child in node.children:
+                if child.type == "modifiers":
+                    modifiers_node = child
                     break
-                if sibling.type == "modifiers":
-                    # Extract annotations from modifiers
-                    annotations = self._extract_annotations_from_modifiers(sibling)
-                    for ann_text in annotations:
-                        if "@RequestMapping" in ann_text:
-                            import re
-                            match = re.search(r'@RequestMapping\s*\(\s*["\']([^"\']+)["\']', ann_text)
-                            if match:
-                                self.current_router_prefix = match.group(1)
+
+            if modifiers_node is None:
+                return
+
+            import re
+
+            modifiers_text = modifiers_node.text.decode("utf8")
+            match = re.search(
+                r"@RequestMapping\s*\(\s*(?:value\s*=\s*|path\s*=\s*)?[\"\']([^\"\']+)[\"\']",
+                modifiers_text,
+            )
+            if match:
+                self.current_router_prefix = match.group(1)
 
         except Exception as e:
             self.logger.debug(f"Class declaration processing failed: {e}")
@@ -451,13 +467,13 @@ class JavaVisitor(NodeVisitor):
             
             # @GetMapping, @PostMapping, etc. with value parameter
             mapping_patterns = [
-                (r'@(GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping|RequestMapping)\s*\(\s*(?:value\s*=\s*)?["\']([^"\']+)["\']', 
+                (r'@(GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping|RequestMapping)\s*\(\s*(?:value\s*=\s*|path\s*=\s*)?["\']([^"\']+)["\']', 
                  lambda m: (m.group(1).replace("Mapping", "").lower() if m.group(1) != "RequestMapping" else "get", m.group(2))),
                 # @RequestMapping with explicit method
-                (r'@RequestMapping\s*\(\s*value\s*=\s*["\']([^"\']+)["\'].*?method\s*=\s*RequestMethod\.(\w+)', 
+                (r'@RequestMapping\s*\(\s*(?:value\s*=\s*|path\s*=\s*)?["\']([^"\']+)["\'].*?method\s*=\s*RequestMethod\.(\w+)', 
                  lambda m: (m.group(2).lower(), m.group(1))),
                 # Simplified @RequestMapping
-                (r'@RequestMapping\s*\(\s*["\']([^"\']+)["\']',
+                (r'@RequestMapping\s*\(\s*(?:value\s*=\s*|path\s*=\s*)?["\']([^"\']+)["\']',
                  lambda m: ("get", m.group(1))),
             ]
 
@@ -471,21 +487,31 @@ class JavaVisitor(NodeVisitor):
                     identifier_node = node.child_by_field_name("name")
                     function_name = identifier_node.text.decode("utf8") if identifier_node else None
 
-                    parameters = self._extract_parameters(node)
+                    request_meta, parameters = self._extract_spring_request_metadata(node)
 
                     line_number = node.start_point[0] + 1
 
-                    # Combine with class-level prefix if exists
-                    full_path = self._combine_paths(self.current_router_prefix, path)
+                    # Spring: store method-level path in `path` and keep class-level prefix in `router_prefix`.
+                    # This avoids duplicated prefixes like /api/auth/api/auth/... when later combining paths.
+                    router_prefix = self.current_router_prefix or ""
+                    method_level_path = path
+
+                    # If the method-level path already includes the class-level prefix, avoid double-combining.
+                    if router_prefix and method_level_path.startswith(router_prefix.rstrip("/") + "/"):
+                        router_prefix = ""
 
                     self.add_endpoint(
                         method=method,
-                        path=full_path,
+                        path=method_level_path,
                         line_number=line_number,
                         function_name=function_name,
                         parameters=parameters,
                         confidence=0.87,
-                        metadata={"annotation": match.group(0)[:50]}
+                        metadata={
+                            "annotation": match.group(0)[:50],
+                            **(request_meta or {}),
+                        },
+                        router_prefix=router_prefix,
                     )
                     found_endpoint = True
                     break
@@ -498,42 +524,156 @@ class JavaVisitor(NodeVisitor):
                 "type": "java_method_processing"
             })
 
-    def _extract_parameters(self, node: tree_sitter.Node) -> List[str]:
-        """Extract parameter names from a Java method declaration."""
-        parameters: List[str] = []
-        try:
-            # Tree-sitter Java uses formal_parameters under field 'parameters'.
-            params_node = node.child_by_field_name("parameters")
-            candidates = []
-            if params_node is not None:
-                candidates.append(params_node)
-            # Fallback: find any parameters/formal_parameters child.
-            for child in node.children:
-                if child.type in {"formal_parameters", "parameters"}:
-                    candidates.append(child)
+    def _extract_spring_request_metadata(self, node: tree_sitter.Node) -> tuple[dict, List[str]]:
+        """Extract Spring request metadata (path/query/header/body) from method parameters.
 
-            for pn in candidates:
-                for ch in pn.children:
-                    # formal_parameter nodes usually contain an identifier as name.
-                    name_node = ch.child_by_field_name("name") if hasattr(ch, "child_by_field_name") else None
-                    if name_node and name_node.type == "identifier":
-                        parameters.append(name_node.text.decode("utf8"))
-                        continue
-                    # Fallback: first identifier within the parameter node.
-                    for grand in ch.children:
-                        if grand.type == "identifier":
-                            parameters.append(grand.text.decode("utf8"))
-                            break
-        except Exception as e:
-            self.logger.debug("Error extracting Java parameters", error=str(e))
-        # Unique preserve order
-        seen = set()
-        ordered: List[str] = []
-        for p in parameters:
-            if p not in seen:
-                ordered.append(p)
-                seen.add(p)
-        return ordered
+        Returns:
+            (metadata_fragment, flat_parameter_names)
+        """
+        import re
+
+        params_node = node.child_by_field_name("parameters")
+        if params_node is None:
+            return {}, []
+
+        raw = params_node.text.decode("utf8")
+        inner = raw.strip()
+        if inner.startswith("(") and inner.endswith(")"):
+            inner = inner[1:-1]
+
+        def split_top_level(s: str) -> List[str]:
+            parts: List[str] = []
+            cur: List[str] = []
+            depth_paren = 0
+            depth_angle = 0
+            depth_brack = 0
+            in_str: Optional[str] = None
+            esc = False
+            for ch in s:
+                if in_str:
+                    cur.append(ch)
+                    if esc:
+                        esc = False
+                    elif ch == "\\":
+                        esc = True
+                    elif ch == in_str:
+                        in_str = None
+                    continue
+
+                if ch in {"\"", "'"}:
+                    in_str = ch
+                    cur.append(ch)
+                    continue
+
+                if ch == "(":
+                    depth_paren += 1
+                elif ch == ")":
+                    depth_paren = max(0, depth_paren - 1)
+                elif ch == "<":
+                    depth_angle += 1
+                elif ch == ">":
+                    depth_angle = max(0, depth_angle - 1)
+                elif ch == "[":
+                    depth_brack += 1
+                elif ch == "]":
+                    depth_brack = max(0, depth_brack - 1)
+
+                if ch == "," and depth_paren == 0 and depth_angle == 0 and depth_brack == 0:
+                    part = "".join(cur).strip()
+                    if part:
+                        parts.append(part)
+                    cur = []
+                    continue
+
+                cur.append(ch)
+
+            tail = "".join(cur).strip()
+            if tail:
+                parts.append(tail)
+            return parts
+
+        def extract_first_quoted(arg_text: str) -> Optional[str]:
+            m = re.search(r'["\']([^"\']+)["\']', arg_text)
+            return m.group(1) if m else None
+
+        def strip_annotations(param_text: str) -> str:
+            # Remove annotations like @RequestParam(...)
+            return re.sub(r"@\w+(?:\s*\([^)]*\))?", " ", param_text)
+
+        request: dict = {"request": {"path": [], "query": [], "header": [], "body": None}}
+        flat_names: List[str] = []
+
+        for p in split_top_level(inner):
+            if not p:
+                continue
+
+            annotations = re.findall(r"@\w+(?:\s*\([^)]*\))?", p)
+            ann_join = " ".join(annotations)
+
+            location: Optional[str] = None
+            if "@PathVariable" in ann_join:
+                location = "path"
+            elif "@RequestParam" in ann_join:
+                location = "query"
+            elif "@RequestHeader" in ann_join:
+                location = "header"
+            elif "@RequestBody" in ann_join or "@RequestPart" in ann_join:
+                location = "body"
+
+            required = True
+            if re.search(r"required\s*=\s*false", ann_join):
+                required = False
+
+            # Resolve name: prefer annotation's value/name/path/value=...
+            name_from_ann: Optional[str] = None
+            m_named = re.search(r"(?:name|value|path)\s*=\s*([\"\'][^\"\']+[\"\'])", ann_join)
+            if m_named:
+                name_from_ann = extract_first_quoted(m_named.group(1))
+            if name_from_ann is None and ("@PathVariable" in ann_join or "@RequestParam" in ann_join or "@RequestHeader" in ann_join):
+                # handle @PathVariable("id") style
+                name_from_ann = extract_first_quoted(ann_join)
+
+            # Extract type/name from remaining text
+            stripped = strip_annotations(p)
+            stripped = re.sub(r"\b(final)\b", " ", stripped)
+            stripped = re.sub(r"\s+", " ", stripped).strip()
+            if not stripped:
+                continue
+            tokens = stripped.split(" ")
+            if len(tokens) < 2:
+                continue
+            var_name = tokens[-1].rstrip("...")
+            java_type = " ".join(tokens[:-1]).strip()
+
+            param_name = name_from_ann or var_name
+
+            # Save
+            if location in {"path", "query", "header"}:
+                request["request"][location].append({
+                    "name": param_name,
+                    "java_type": java_type,
+                    "required": required,
+                })
+                flat_names.append(param_name)
+            elif location == "body":
+                # Only one body per endpoint; keep the first
+                if request["request"]["body"] is None:
+                    content_type = "application/json"
+                    if "MultipartFile" in java_type or "@RequestPart" in ann_join:
+                        content_type = "multipart/form-data"
+                    request["request"]["body"] = {
+                        "param": var_name,
+                        "dto_type": java_type,
+                        "content_type": content_type,
+                        "required": required,
+                    }
+                    flat_names.append(var_name)
+
+        # Remove empty structure if nothing detected
+        if not request["request"]["path"] and not request["request"]["query"] and not request["request"]["header"] and request["request"]["body"] is None:
+            return {}, flat_names
+
+        return request, flat_names
 
     def _combine_paths(self, prefix: str, path: str) -> str:
         """Combine prefix and path"""

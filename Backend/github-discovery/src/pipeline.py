@@ -23,6 +23,7 @@ from .route_resolver import RouteResolver
 from .models.openapi import OpenAPISpec
 from .models.endpoint import Endpoint
 from .layered_extractor import SpecFirstExtractor, ConfigRoutesExtractor, UniversalFallbackExtractor
+from .java_dto_extractor import JavaDTOExtractor, java_type_to_schema
 
 
 @dataclass
@@ -226,6 +227,9 @@ class Pipeline:
             # Layer 3: Code routes (AST → Regex → LLM)
             all_endpoints.extend(self._parse_files(candidate_files, tech_stack, prefix_mapping))
 
+            # Enrich Spring endpoints with structured request input schemas (DTO attributes, query/header/path)
+            self._enrich_spring_requests(all_endpoints, repo_path, candidate_files)
+
             # Layer 4: Universal fallback
             self.logger.info("Layer 4: Universal fallback")
             universal_endpoints, universal_files_scanned = self.universal_fallback_extractor.extract(repo_path)
@@ -239,6 +243,9 @@ class Pipeline:
             self.logger.info("Processing endpoints")
             processing_result = self.endpoint_processor.process(all_endpoints, prefix_mapping)
             final_endpoints = processing_result.endpoints
+
+            # Ensure final endpoints also have Spring request schemas (processor creates new Endpoint objects)
+            self._enrich_spring_requests(final_endpoints, repo_path, candidate_files)
 
             # Update stats
             self.stats.files_processed = self.stats.total_files - self.stats.files_failed
@@ -520,6 +527,141 @@ class Pipeline:
 
         self.stats.files_processed = len(file_infos) - self.stats.files_failed
         return all_endpoints
+
+    def _enrich_spring_requests(self, endpoints: List[Endpoint], repo_path: Path, candidate_files: List[Path]) -> None:
+        """Best-effort enrichment for Spring Boot endpoints.
+
+        Adds/updates endpoint.metadata['request'] to include:
+        - path/query/header parameters with schema + required
+        - request body schema for @RequestBody DTOs
+        """
+        try:
+            def example_from_schema(schema: Any, name_hint: Optional[str] = None, depth: int = 0) -> Any:
+                if not isinstance(schema, dict):
+                    return None
+                if depth > 4:
+                    return {}
+
+                if "example" in schema:
+                    return schema.get("example")
+                enum = schema.get("enum")
+                if isinstance(enum, list) and enum:
+                    return enum[0]
+
+                schema_type = schema.get("type")
+                fmt = schema.get("format")
+                hint = (name_hint or "").lower()
+
+                if schema_type == "string" or schema_type is None:
+                    if fmt == "uuid":
+                        return "00000000-0000-0000-0000-000000000000"
+                    if fmt == "date":
+                        return "2020-01-01"
+                    if fmt == "date-time":
+                        return "2020-01-01T00:00:00Z"
+                    if fmt == "binary":
+                        return "<binary>"
+                    if "email" in hint:
+                        return "user@example.com"
+                    if "token" in hint or "auth" in hint:
+                        return "token"
+                    if hint.endswith("id") or hint == "id" or "_id" in hint:
+                        return "1"
+                    return "string"
+
+                if schema_type == "integer":
+                    if hint.endswith("id") or hint == "id" or "_id" in hint:
+                        return 1
+                    if "page" in hint or "size" in hint or "limit" in hint:
+                        return 1
+                    return 0
+
+                if schema_type == "number":
+                    return 0.0
+
+                if schema_type == "boolean":
+                    return True
+
+                if schema_type == "array":
+                    items = schema.get("items")
+                    return [example_from_schema(items, name_hint=name_hint, depth=depth + 1)]
+
+                if schema_type == "object":
+                    props = schema.get("properties")
+                    if isinstance(props, dict) and props:
+                        out: Dict[str, Any] = {}
+                        for k, v in props.items():
+                            out[k] = example_from_schema(v, name_hint=k, depth=depth + 1)
+                        return out
+                    add_props = schema.get("additionalProperties")
+                    if isinstance(add_props, dict):
+                        return {"key": example_from_schema(add_props, name_hint="key", depth=depth + 1)}
+                    return {}
+
+                return None
+
+            java_files = [p for p in candidate_files if p.suffix.lower() == ".java"]
+            dto_extractor = JavaDTOExtractor.from_java_files(repo_path, java_files)
+
+            for ep in endpoints:
+                meta = ep.metadata or {}
+                req = meta.get("request")
+                if not isinstance(req, dict):
+                    continue
+
+                # Normalize param lists with schema mapping
+                for section in ("path", "query", "header"):
+                    items = req.get(section)
+                    if not isinstance(items, list):
+                        continue
+                    for item in items:
+                        if not isinstance(item, dict):
+                            continue
+                        jt = item.get("java_type") or "string"
+                        item.setdefault("schema", java_type_to_schema(str(jt)))
+                        # Path params must be required for OpenAPI
+                        if section == "path":
+                            item["required"] = True
+                        else:
+                            item.setdefault("required", True)
+
+                        # Provide a concrete example value for test generation
+                        if "example" not in item:
+                            item["example"] = example_from_schema(item.get("schema"), name_hint=item.get("name"))
+
+                body = req.get("body")
+                if isinstance(body, dict):
+                    dto_type = (body.get("dto_type") or "").strip()
+                    # Handle generics/qualified names by taking the simple type
+                    dto_simple = dto_type.split(".")[-1]
+                    dto_simple = dto_simple.split("<", 1)[0].strip()
+                    if dto_simple:
+                        schema = dto_extractor.extract_schema(dto_simple)
+                        if schema is not None:
+                            body["schema"] = schema
+                        else:
+                            body.setdefault("schema", {"type": "object", "x-java-type": dto_simple})
+
+                    # Multipart fallback
+                    if body.get("content_type") == "multipart/form-data":
+                        # Ensure at least a file part if nothing extracted
+                        schema = body.get("schema")
+                        if isinstance(schema, dict):
+                            schema.setdefault("type", "object")
+                            props = schema.setdefault("properties", {})
+                            props.setdefault("file", {"type": "string", "format": "binary"})
+                            req_list = schema.setdefault("required", [])
+                            if "file" not in req_list:
+                                req_list.append("file")
+
+                    # Provide a concrete example body payload
+                    if "example" not in body:
+                        body["example"] = example_from_schema(body.get("schema"), name_hint=body.get("dto_type") or "body")
+
+                ep.metadata = meta
+        except Exception as e:
+            # Enrichment is best-effort; do not fail the pipeline.
+            self.logger.debug("Spring request enrichment failed", error=str(e))
 
     def _save_outputs(self, openapi_spec: Any, endpoints: List[Endpoint], repo_name: str) -> None:
         """Save outputs to files"""
