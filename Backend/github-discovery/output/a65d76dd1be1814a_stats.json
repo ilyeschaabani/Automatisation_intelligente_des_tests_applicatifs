@@ -1,0 +1,23 @@
+{
+  "start_time": "2026-03-30T14:08:32.327320",
+  "end_time": "2026-03-30T14:09:07.220652",
+  "duration_seconds": 34.893332,
+  "total_files": 23,
+  "files_processed": 23,
+  "files_failed": 0,
+  "endpoints_found": 0,
+  "endpoints_from_spec": 0,
+  "endpoints_from_config": 0,
+  "endpoints_from_ast": 0,
+  "endpoints_from_regex": 1,
+  "endpoints_from_llm": 0,
+  "endpoints_from_universal": 0,
+  "duplicates_removed": 0,
+  "llm_calls": 1,
+  "llm_failed": 0,
+  "cache_hits": 0,
+  "spec_files_found": 0,
+  "config_files_parsed": 12,
+  "universal_files_scanned": 129,
+  "errors": []
+}

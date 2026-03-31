@@ -44,6 +44,8 @@ public class Project {
 
     /** e.g. "SPRING_BOOT", "NODE_JS", "DJANGO" ... */
      String technologyStack;
+    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
+    List<Discovery> discoveries = new ArrayList<>();
 
     @Column(nullable = false)
     private boolean deployed = false;

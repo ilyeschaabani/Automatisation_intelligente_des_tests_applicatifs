@@ -214,8 +214,9 @@ class Pipeline:
                 if spec_result.openapi and isinstance(spec_result.openapi, dict):
                     openapi_out: Dict[str, Any] = spec_result.openapi
                 else:
-                    openapi_spec = OpenAPISpec.from_endpoints(
+                    openapi_spec = OpenAPISpec.from_endpoints_with_repo(
                         endpoints=final_endpoints,
+                        repo_root=repo_path,
                         title=f"API Specification - {repo_id}",
                         description=f"Auto-generated from repository {repo_url}",
                         version="1.0.0",
@@ -309,8 +310,9 @@ class Pipeline:
 
             # Step 7: Generate OpenAPI spec
             self.logger.info("Generating OpenAPI specification")
-            openapi_spec = OpenAPISpec.from_endpoints(
+            openapi_spec = OpenAPISpec.from_endpoints_with_repo(
                 endpoints=final_endpoints,
+                repo_root=repo_path,
                 title=f"API Specification - {repo_id}",
                 description=f"Auto-generated from repository {repo_url}",
                 version="1.0.0"
