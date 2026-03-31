@@ -26,26 +26,49 @@ public class DiscoveryServiceimpl {
     private final EndpointRepository endpointRepo;
 
     public List<Endpoint> getOrStartDiscovery(Long projectId, String branch) {
+
         Project project = projectRepo.findById(projectId)
                 .orElseThrow(() -> new RuntimeException("Project not found"));
 
         String finalBranch = (branch != null && !branch.isBlank())
                 ? branch
-                : project.getBranch();
+                : "main"; // or project.getBranch()
 
-        Optional<Discovery> latestDone =
-                discoveryRepo.findTopByProjectIdAndBranchAndStatusOrderByCreatedAtDesc(
-                        projectId,
+        // ✅ STEP 1: Check GLOBAL discovery (repoUrl + branch)
+        List<Discovery> existingDiscoveries =
+                discoveryRepo.findLatestByRepoAndBranch(
+                        project.getRepositoryUrl(),
                         finalBranch,
                         "done"
                 );
 
-        if (latestDone.isPresent()) {
-            return latestDone.get().getEndpoints();
+        if (!existingDiscoveries.isEmpty()) {
+            System.out.println("♻️ Reusing existing discovery");
+
+            Discovery existing = existingDiscoveries.get(0);
+
+            // 🔥 OPTIONAL: link it to this project
+            existing.setProject(project);
+            discoveryRepo.save(existing);
+
+            return existing.getEndpoints();
         }
 
-        // Start discovery
+        // ✅ STEP 2: Check if already RUNNING
+        Optional<Discovery> running =
+                discoveryRepo.findTopByProjectIdAndBranchAndStatusOrderByCreatedAtDesc(
+                        projectId,
+                        finalBranch,
+                        "running"
+                );
 
+        if (running.isPresent()) {
+            System.out.println("⏳ Discovery already running...");
+            return List.of();
+        }
+
+        // ✅ STEP 3: Start new discovery
+        System.out.println("🚀 Starting new discovery...");
 
         Map<String, Object> job = fastApiClient.startDiscovery(
                 project.getRepositoryUrl(),
@@ -57,6 +80,7 @@ public class DiscoveryServiceimpl {
         discovery.setRepoUrl(project.getRepositoryUrl());
         discovery.setBranch(finalBranch);
         discovery.setStatus("running");
+
         discoveryRepo.save(discovery);
 
         CompletableFuture.runAsync(() ->
