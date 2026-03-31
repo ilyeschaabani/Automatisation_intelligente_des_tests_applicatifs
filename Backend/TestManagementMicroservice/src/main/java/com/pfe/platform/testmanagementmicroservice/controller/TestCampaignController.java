@@ -1,9 +1,6 @@
 package com.pfe.platform.testmanagementmicroservice.controller;
 
-import com.pfe.platform.testmanagementmicroservice.DTO.TestCampaignCreateRequest;
-import com.pfe.platform.testmanagementmicroservice.DTO.TestCampaignDto;
-import com.pfe.platform.testmanagementmicroservice.DTO.TestCampaignSetTestCasesRequest;
-import com.pfe.platform.testmanagementmicroservice.DTO.TestCampaignUpdateRequest;
+import com.pfe.platform.testmanagementmicroservice.DTO.*;
 import com.pfe.platform.testmanagementmicroservice.entity.TestCampaign;
 import com.pfe.platform.testmanagementmicroservice.service.TestCompagne.TestCampaignMapper;
 import com.pfe.platform.testmanagementmicroservice.service.TestCompagne.TestCampaignService;
@@ -59,4 +56,11 @@ public class TestCampaignController {
     public void delete(@PathVariable Long id) {
         testCampaignService.delete(id);
     }
+
+    @GetMapping("/{campaignId}/endpoints")
+    public ResponseEntity<List<EndpointDto>> getEndpointsForTestCampaign(@PathVariable Long campaignId) {
+        List<EndpointDto> endpoints = testCampaignService.getEndpointsForTestCampaign(campaignId);
+        return ResponseEntity.ok(endpoints);
+    }
+
 }

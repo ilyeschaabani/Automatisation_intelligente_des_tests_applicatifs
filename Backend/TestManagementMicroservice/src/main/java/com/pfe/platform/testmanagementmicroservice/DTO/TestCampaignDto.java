@@ -1,5 +1,6 @@
 package com.pfe.platform.testmanagementmicroservice.DTO;
 
+import com.pfe.platform.testmanagementmicroservice.entity.Endpoint;
 import com.pfe.platform.testmanagementmicroservice.entity.Enum.SessionStatus;
 
 import java.time.Instant;
@@ -22,5 +23,6 @@ public record TestCampaignDto(
         List<Long> testCaseIds,
         Instant createdAt,
         String createdBy
+
 ) {
 }

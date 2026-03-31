@@ -1,14 +1,15 @@
 package com.pfe.platform.testmanagementmicroservice.service.TestCompagne;
 
+import com.pfe.platform.testmanagementmicroservice.DTO.EndpointDto;
 import com.pfe.platform.testmanagementmicroservice.DTO.TestCampaignCreateRequest;
 import com.pfe.platform.testmanagementmicroservice.DTO.TestCampaignSetTestCasesRequest;
 import com.pfe.platform.testmanagementmicroservice.DTO.TestCampaignUpdateRequest;
+import com.pfe.platform.testmanagementmicroservice.entity.Discovery;
 import com.pfe.platform.testmanagementmicroservice.entity.Project;
 import com.pfe.platform.testmanagementmicroservice.entity.TestCampaign;
 import com.pfe.platform.testmanagementmicroservice.entity.TestCase;
-import com.pfe.platform.testmanagementmicroservice.repository.ProjectRepository;
-import com.pfe.platform.testmanagementmicroservice.repository.TestCampaignRepository;
-import com.pfe.platform.testmanagementmicroservice.repository.TestCaseRepository;
+import com.pfe.platform.testmanagementmicroservice.repository.*;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -23,6 +24,8 @@ public class TestCampaignServiceImpl implements TestCampaignService {
     private final TestCampaignRepository testCampaignRepository;
     private final ProjectRepository projectRepository;
     private final TestCaseRepository testCaseRepository;
+    private final DiscoveryRepository discoveryRepository;
+    private final EndpointRepository endpointRepository;
 
     @Override
     public List<TestCampaign> findAll() {
@@ -122,4 +125,16 @@ public class TestCampaignServiceImpl implements TestCampaignService {
         }
         testCampaignRepository.deleteById(id);
     }
+
+    public List<EndpointDto> getEndpointsForTestCampaign(Long campaignId) {
+        TestCampaign campaign = testCampaignRepository.findById(campaignId)
+                .orElseThrow(() -> new RuntimeException("Test Campaign not found"));
+
+        Project project = campaign.getProject();
+        return endpointRepository.findByProjectIdWithDiscovery(project.getId())
+                .stream()
+                .map(EndpointDto::fromEntity)
+                .toList();
+    }
+
 }

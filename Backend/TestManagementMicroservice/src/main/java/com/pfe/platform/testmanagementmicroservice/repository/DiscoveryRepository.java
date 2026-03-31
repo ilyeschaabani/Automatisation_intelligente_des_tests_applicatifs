@@ -4,6 +4,7 @@ import com.pfe.platform.testmanagementmicroservice.entity.Discovery;
 import com.pfe.platform.testmanagementmicroservice.entity.Project;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -34,6 +35,9 @@ public interface DiscoveryRepository extends JpaRepository<Discovery, Long> {
     ORDER BY d.createdAt DESC
 """)
     List<Discovery> findLatestByRepoAndBranch(String repoUrl, String branch, String status);
+
+    @Query("SELECT d FROM Discovery d LEFT JOIN FETCH d.endpoints WHERE d.project.id = :projectId")
+    Optional<Discovery> findByProjectIdWithEndpoints(@Param("projectId") Long projectId);
 }
 
 

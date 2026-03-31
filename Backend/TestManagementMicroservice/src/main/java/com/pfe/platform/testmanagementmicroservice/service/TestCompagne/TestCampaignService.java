@@ -1,5 +1,6 @@
 package com.pfe.platform.testmanagementmicroservice.service.TestCompagne;
 
+import com.pfe.platform.testmanagementmicroservice.DTO.EndpointDto;
 import com.pfe.platform.testmanagementmicroservice.DTO.TestCampaignCreateRequest;
 import com.pfe.platform.testmanagementmicroservice.DTO.TestCampaignSetTestCasesRequest;
 import com.pfe.platform.testmanagementmicroservice.DTO.TestCampaignUpdateRequest;
@@ -21,4 +22,5 @@ public interface TestCampaignService {
     TestCampaign setTestCases(Long id, TestCampaignSetTestCasesRequest request);
 
     void delete(Long id);
+    List<EndpointDto> getEndpointsForTestCampaign(Long campaignId);
 }
