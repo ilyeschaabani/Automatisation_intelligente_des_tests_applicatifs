@@ -59,6 +59,7 @@ type RepoRow = {
   isPrivate: boolean
   url: string
   updatedAt?: string
+  branches: string[]
 }
 
 type ConnectionState =
@@ -140,13 +141,25 @@ function normalizeRepos(payload: unknown): RepoRow[] {
             ? r.updatedAt
             : undefined
 
+      const branches: string[] = Array.isArray(r.branches)
+        ? (r.branches as unknown[])
+            .map((b) => {
+              if (typeof b === 'string') return b
+              if (b && typeof b === 'object' && typeof (b as any).name === 'string') {
+                return (b as any).name
+              }
+              return null
+            })
+            .filter(Boolean) as string[]
+        : []
+
       const key =
         typeof r.id === 'number' || typeof r.id === 'string'
           ? String(r.id)
           : `${owner}/${name || 'repo'}:${idx}`
 
       if (!name) return null
-      return { key, name, owner, isPrivate, url, updatedAt }
+      return { key, name, owner, isPrivate, url, updatedAt, branches }
     })
     .filter(Boolean) as RepoRow[]
 }
@@ -171,10 +184,20 @@ export function GitHubIntegrationCard({
 
     try {
       const res = await apiFetch('/api/github/repos')
-      if (res.status === 404) {
-        setRepos({ kind: 'unavailable' })
+
+      if (res.status === 401) {
+        setConnection({ kind: 'unauthorized' })
+        setRepos({ kind: 'idle' })
         return
       }
+
+      if (res.status === 404) {
+        // Backend semantics: 404 means GitHub is not connected.
+        setConnection({ kind: 'notConnected' })
+        setRepos({ kind: 'idle' })
+        return
+      }
+
       if (!res.ok) {
         const text = await res.text().catch(() => '')
         setRepos({
@@ -402,6 +425,7 @@ export function GitHubIntegrationCard({
                     <TableHeader>
                       <TableRow>
                         <TableHead>Name</TableHead>
+                        <TableHead>Branches</TableHead>
                         <TableHead>Owner</TableHead>
                         <TableHead>Privacy</TableHead>
                         <TableHead>URL</TableHead>
@@ -412,6 +436,9 @@ export function GitHubIntegrationCard({
                       {repos.repos.map((repo) => (
                         <TableRow key={repo.key}>
                           <TableCell className="font-medium">{repo.name}</TableCell>
+                          <TableCell className="max-w-[240px] truncate">
+                            {repo.branches.length ? repo.branches.join(', ') : '—'}
+                          </TableCell>
                           <TableCell>{repo.owner}</TableCell>
                           <TableCell>
                             <Badge variant={repo.isPrivate ? 'outline' : 'secondary'}>

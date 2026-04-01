@@ -10,6 +10,7 @@ public record ProjectCreateRequest(
         String repositoryUrl,
         String gitTokenId,
         String technologyStack,
+        String defaultBranch,
         Boolean deployed
 ) {
 }

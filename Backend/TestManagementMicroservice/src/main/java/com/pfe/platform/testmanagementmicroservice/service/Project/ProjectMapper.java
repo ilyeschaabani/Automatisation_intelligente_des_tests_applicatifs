@@ -17,9 +17,9 @@ public final class ProjectMapper {
                 p.getRepositoryUrl(),
                 p.getGitTokenId(),
                 p.getTechnologyStack(),
+                p.getDefaultBranch(),
                 p.isDeployed(),
                 p.getCreatedAt()
         );
     }
 }
-

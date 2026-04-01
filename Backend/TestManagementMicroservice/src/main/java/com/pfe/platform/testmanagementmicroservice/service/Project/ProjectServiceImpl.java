@@ -34,6 +34,7 @@ public class ProjectServiceImpl implements ProjectService {
         p.setRepositoryUrl(blankToNull(req.repositoryUrl()));
         p.setGitTokenId(blankToNull(req.gitTokenId()));
         p.setTechnologyStack(blankToNull(req.technologyStack()));
+        p.setDefaultBranch(blankToNull(req.defaultBranch()));
         p.setDeployed(Boolean.TRUE.equals(req.deployed()));
         return projectRepository.save(p);
     }
@@ -51,6 +52,7 @@ public class ProjectServiceImpl implements ProjectService {
         existing.setRepositoryUrl(incoming.getRepositoryUrl());
         existing.setGitTokenId(incoming.getGitTokenId());
         existing.setTechnologyStack(incoming.getTechnologyStack());
+        existing.setDefaultBranch(blankToNull(incoming.getDefaultBranch()));
         existing.setDeployed(incoming.isDeployed());
         return projectRepository.save(existing);
     }

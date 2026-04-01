@@ -52,6 +52,8 @@ type RepoRow = {
   isPrivate: boolean
   url: string
   updatedAt?: string
+  defaultBranch?: string
+  branches: string[]
 }
 
 type GitHubConnectionState =
@@ -69,6 +71,39 @@ type RepoListState =
   | { kind: 'available'; repos: RepoRow[] }
   | { kind: 'unavailable' }
   | { kind: 'error'; message: string }
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function extractBranchNames(raw: unknown): string[] {
+  // Supports these shapes:
+  // - [{ name: 'main' }, ...]  (GitHub branches API)
+  // - ['main', ...]
+  // - { data: [...] } (axios/octokit style)
+  // - { branches: [...] } / { items: [...] }
+  const candidate =
+    Array.isArray(raw) ? raw
+      : isRecord(raw) && Array.isArray(raw.data) ? raw.data
+        : isRecord(raw) && Array.isArray(raw.branches) ? raw.branches
+          : isRecord(raw) && Array.isArray(raw.items) ? raw.items
+            : []
+
+  const names = candidate
+    .map((b) => {
+      if (typeof b === 'string') return b
+      if (isRecord(b)) {
+        if (typeof b.name === 'string') return b.name
+        if (typeof b.ref === 'string') return b.ref
+        if (typeof b.branch === 'string') return b.branch
+      }
+      return null
+    })
+    .filter(Boolean) as string[]
+
+  // De-dupe while preserving order.
+  return Array.from(new Set(names))
+}
 
 function normalizeRepos(payload: unknown): RepoRow[] {
   const list: unknown[] = Array.isArray(payload)
@@ -114,13 +149,22 @@ function normalizeRepos(payload: unknown): RepoRow[] {
             ? r.updatedAt
             : undefined
 
+      const defaultBranch: string | undefined =
+        typeof r.default_branch === 'string'
+          ? r.default_branch
+          : typeof r.defaultBranch === 'string'
+            ? r.defaultBranch
+            : undefined
+
+      const branches = extractBranchNames(r.branches)
+
       const key =
         typeof r.id === 'number' || typeof r.id === 'string'
           ? String(r.id)
           : `${owner}/${name || 'repo'}:${idx}`
 
       if (!name) return null
-      return { key, name, owner, isPrivate, url, updatedAt }
+      return { key, name, owner, isPrivate, url, updatedAt, defaultBranch, branches }
     })
     .filter(Boolean) as RepoRow[]
 }
@@ -190,6 +234,7 @@ export default function ProjectsPage() {
   })
   const [gitHubRepos, setGitHubRepos] = useState<RepoListState>({ kind: 'idle' })
   const [selectedRepoKey, setSelectedRepoKey] = useState('')
+  const [selectedBranch, setSelectedBranch] = useState('')
 
   const loadProjects = async () => {
     setIsLoading(true)
@@ -228,6 +273,7 @@ export default function ProjectsPage() {
     setSourceType('GIT')
     setDeployed(false)
     setSelectedRepoKey('')
+    setSelectedBranch('')
   }
 
   const connectUrl = useMemo(() => {
@@ -289,8 +335,17 @@ export default function ProjectsPage() {
       setGitHubConnection({ kind: 'connected', me })
 
       const reposRes = await githubApiFetch('/api/github/repos')
+
+      if (reposRes.status === 401) {
+        setGitHubConnection({ kind: 'unauthorized' })
+        setGitHubRepos({ kind: 'idle' })
+        return
+      }
+
       if (reposRes.status === 404) {
-        setGitHubRepos({ kind: 'unavailable' })
+        // Backend semantics: 404 means GitHub is not connected.
+        setGitHubConnection({ kind: 'notConnected' })
+        setGitHubRepos({ kind: 'idle' })
         return
       }
 
@@ -325,6 +380,7 @@ export default function ProjectsPage() {
   useEffect(() => {
     setSelectedRepoKey('')
     setRepositoryUrl('')
+    setSelectedBranch('')
     if (sourceType !== 'GIT') {
       setGitHubConnection({ kind: 'idle' })
       setGitHubRepos({ kind: 'idle' })
@@ -354,6 +410,8 @@ export default function ProjectsPage() {
         projectType,
         sourceType,
         repositoryUrl: repositoryUrl.trim() ? repositoryUrl.trim() : null,
+        defaultBranch:
+          sourceType === 'GIT' ? (selectedBranch.trim() ? selectedBranch.trim() : null) : null,
         deployed,
       })
       setIsCreateOpen(false)
@@ -482,6 +540,13 @@ export default function ProjectsPage() {
                             const repo = gitHubRepos.repos.find((r) => r.key === v) ?? null
                             if (repo?.url) setRepositoryUrl(repo.url)
                             if (!name.trim() && repo?.name) setName(repo.name)
+
+                            const defaultCandidate = repo?.defaultBranch
+                            const nextBranch =
+                              defaultCandidate && repo?.branches?.includes(defaultCandidate)
+                                ? defaultCandidate
+                                : repo?.branches?.[0] ?? ''
+                            setSelectedBranch(nextBranch)
                           }}
                         >
                           <SelectTrigger>
@@ -496,6 +561,53 @@ export default function ProjectsPage() {
                           </SelectContent>
                         </Select>
                       )}
+
+                      {gitHubRepos.kind === 'available' && selectedRepoKey ? (
+                        <div className="space-y-2 pt-2">
+                          <Label>Branch</Label>
+                          {(() => {
+                            const repo = gitHubRepos.repos.find((r) => r.key === selectedRepoKey) ?? null
+                            const branches = (() => {
+                              if (!repo) return [] as string[]
+                              if (repo.branches?.length) return repo.branches
+                              if (repo.defaultBranch) return [repo.defaultBranch]
+                              return [] as string[]
+                            })()
+
+                            if (!repo) {
+                              return (
+                                <p className="text-sm text-muted-foreground">Select a repository first.</p>
+                              )
+                            }
+
+                            if (branches.length === 0) {
+                              return (
+                                <Select value="" disabled>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="No branches available" />
+                                  </SelectTrigger>
+                                  <SelectContent />
+                                </Select>
+                              )
+                            }
+
+                            return (
+                              <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select a branch" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {branches.map((b) => (
+                                    <SelectItem key={b} value={b}>
+                                      {b}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )
+                          })()}
+                        </div>
+                      ) : null}
                     </div>
                   ) : (
                     <div className="space-y-2">

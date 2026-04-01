@@ -32,7 +32,9 @@ public class DiscoveryServiceimpl {
 
         String finalBranch = (branch != null && !branch.isBlank())
                 ? branch
-                : "main"; // or project.getBranch()
+                : (project.getDefaultBranch() != null && !project.getDefaultBranch().isBlank()
+                    ? project.getDefaultBranch()
+                    : "main");
 
         // ✅ STEP 1: Check GLOBAL discovery (repoUrl + branch)
         List<Discovery> existingDiscoveries =

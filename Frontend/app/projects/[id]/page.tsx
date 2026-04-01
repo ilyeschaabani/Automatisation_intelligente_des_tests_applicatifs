@@ -410,8 +410,15 @@ export default function ProjectDetailsPage({
         }
 
         const reposRes = await githubApiFetch('/api/github/repos')
+
+        if (reposRes.status === 401) {
+          if (!cancelled) setRepoMeta({ kind: 'unauthorized' })
+          return
+        }
+
         if (reposRes.status === 404) {
-          if (!cancelled) setRepoMeta({ kind: 'unavailable' })
+          // Backend semantics: 404 means GitHub is not connected.
+          if (!cancelled) setRepoMeta({ kind: 'notConnected' })
           return
         }
 

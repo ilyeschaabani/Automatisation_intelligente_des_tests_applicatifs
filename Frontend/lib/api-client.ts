@@ -7,6 +7,7 @@ export type Project = {
   projectType: ProjectType
   sourceType: SourceType
   repositoryUrl: string | null
+  defaultBranch?: string | null
   deployed: boolean
   createdAt?: string | null
 }
@@ -16,6 +17,7 @@ export type CreateProjectPayload = {
   projectType: ProjectType
   sourceType: SourceType
   repositoryUrl?: string | null
+  defaultBranch?: string | null
   deployed: boolean
 }
 

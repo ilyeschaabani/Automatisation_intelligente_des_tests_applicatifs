@@ -13,8 +13,8 @@ public record ProjectDto(
         String repositoryUrl,
         String gitTokenId,
         String technologyStack,
+        String defaultBranch,
         boolean deployed,
         Instant createdAt
 ) {
 }
-

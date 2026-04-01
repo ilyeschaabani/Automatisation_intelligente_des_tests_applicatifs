@@ -101,4 +101,3 @@ public class GitHubAuthController {
         return org.apache.commons.codec.binary.Base64.encodeBase64URLSafeString(b);
     }
 }
-

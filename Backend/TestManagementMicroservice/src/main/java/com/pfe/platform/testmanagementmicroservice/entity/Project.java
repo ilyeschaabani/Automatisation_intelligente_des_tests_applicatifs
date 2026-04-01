@@ -56,6 +56,10 @@ public class Project {
     @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
     List<TestSession> sessions = new ArrayList<>();
 
+    /** Default branch to use when running discovery (e.g. "main", "master", "develop") */
+    @Column(name = "default_branch")
+    String defaultBranch;
+
     @PrePersist
     void onCreate() {
         if (createdAt == null) createdAt = Instant.now();

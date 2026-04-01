@@ -61,13 +61,15 @@ public class GitHubRepoController {
             List<Map<String, Object>> repos = gitHubClient.getUserRepos(accessToken);
 
             // Return a minimal, stable response shape for the frontend.
+            // NOTE: We now include `branches` (list of branch names) for the repo selection UI.
             List<Map<String, Object>> payload = repos.stream()
                     .map(r -> Map.<String, Object>of(
                             "name", r.get("name"),
                             "owner", ownerLogin(r.get("owner")),
                             "private", r.get("private"),
                             "html_url", r.get("html_url"),
-                            "updated_at", r.get("updated_at")
+                            "updated_at", r.get("updated_at"),
+                            "branches", extractBranchNames(r.get("branches"))
                     ))
                     .sorted(Comparator.comparing(m -> String.valueOf(m.get("updated_at")), Comparator.nullsLast(Comparator.reverseOrder())))
                     .toList();
@@ -86,5 +88,17 @@ public class GitHubRepoController {
             return owner.get("login");
         }
         return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<String> extractBranchNames(Object branchesObj) {
+        if (!(branchesObj instanceof List<?> branches)) {
+            return List.of();
+        }
+        return branches.stream()
+                .filter(b -> b instanceof Map<?, ?>)
+                .map(b -> String.valueOf(((Map<String, Object>) b).get("name")))
+                .filter(n -> n != null && !n.isBlank() && !"null".equals(n))
+                .toList();
     }
 }

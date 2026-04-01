@@ -5,6 +5,8 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -30,8 +32,9 @@ public class GitHubClient {
                 .block();
     }
 
+    @SuppressWarnings("unchecked")
     public List<Map<String, Object>> getUserRepos(String accessToken) {
-        return webClient.get()
+        List<Map<String, Object>> repos = webClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/user/repos")
                         .queryParam("per_page", 100)
@@ -41,6 +44,44 @@ public class GitHubClient {
                 .retrieve()
                 .bodyToMono(List.class)
                 .block();
+
+        if (repos == null) {
+            return List.of();
+        }
+
+        List<Map<String, Object>> enriched = new ArrayList<>(repos.size());
+
+        for (Map<String, Object> repo : repos) {
+            Map<String, Object> copy = new HashMap<>(repo);
+
+            Map<String, Object> ownerObj = (Map<String, Object>) repo.get("owner");
+            String ownerLogin = ownerObj != null ? (String) ownerObj.get("login") : null;
+            String repoName = (String) repo.get("name");
+
+            if (ownerLogin != null && repoName != null) {
+                List<Map<String, Object>> branches = getRepoBranches(accessToken, ownerLogin, repoName);
+                copy.put("branches", branches);
+            } else {
+                copy.put("branches", List.of());
+            }
+
+            enriched.add(copy);
+        }
+
+        return enriched;
+    }
+    public List<Map<String, Object>> getRepoBranches(String accessToken, String owner, String repo) {
+        List<Map<String, Object>> branches = webClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/repos/{owner}/{repo}/branches")
+                        .queryParam("per_page", 100)
+                        .build(owner, repo))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                .retrieve()
+                .bodyToMono(List.class)
+                .block();
+
+        return branches != null ? branches : List.of();
     }
 }
 
