@@ -2,12 +2,20 @@
 
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { Header } from '@/components/header'
 import { Sidebar } from '@/components/sidebar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -25,7 +33,16 @@ import {
 } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -50,7 +67,17 @@ import {
   type CampaignExecutionStatus,
 } from '@/lib/campaign-executions'
 
-import { getCampaign, listTestCases, type TestCampaignDto, type TestCaseDto } from '@/lib/api-client'
+import {
+  getCampaign,
+  getProjects,
+  getCampaignEndpoints,
+  getProjectEndpoints,
+  listTestCases,
+  type EndpointDto,
+  type Project,
+  type TestCampaignDto,
+  type TestCaseDto,
+} from '@/lib/api-client'
 
 type CampaignType = 'Functional' | 'API' | 'Regression'
 type CampaignStatus = 'Running' | 'Completed' | 'Failed' | 'Scheduled'
@@ -71,6 +98,7 @@ type Campaign = {
   repository: string
   branch: string
   tags: string[]
+  projectId?: number
 }
 
 type CampaignTest = {
@@ -116,6 +144,7 @@ function mapBackendCampaign(dto: TestCampaignDto): Campaign {
     repository: '—',
     branch: '—',
     tags: [],
+    projectId: dto.projectId,
   }
 }
 
@@ -332,6 +361,10 @@ function seedTestsFor(campaign: Campaign): CampaignTest[] {
 export default function CampaignDetailsPage() {
   const params = useParams<{ id?: string | string[] }>()
   const id = Array.isArray(params?.id) ? params?.id[0] : params?.id
+  const campaignNumericId = useMemo(() => {
+    if (!id || !/^\d+$/.test(id)) return null
+    return Number(id)
+  }, [id])
 
   const campaigns = useMemo(() => toCampaigns(), [])
   const seedCampaign = useMemo(() => {
@@ -442,6 +475,27 @@ export default function CampaignDetailsPage() {
   const [selectedTestIds, setSelectedTestIds] = useState<string[]>([])
   const [storedRuns, setStoredRuns] = useState<CampaignExecution[]>([])
 
+  const [endpointBranch, setEndpointBranch] = useState('')
+  const [endpointSearch, setEndpointSearch] = useState('')
+  const [endpointMethod, setEndpointMethod] = useState<string>('ALL')
+  const [endpointsState, setEndpointsState] = useState<
+    | { kind: 'idle' }
+    | { kind: 'loading' }
+    | { kind: 'running'; attempt: number; maxAttempts: number }
+    | { kind: 'done'; endpoints: EndpointDto[] }
+    | { kind: 'error'; message: string }
+  >({ kind: 'idle' })
+  const [schemaDialog, setSchemaDialog] = useState<{
+    open: boolean
+    title: string
+    schema: string | null
+  }>({ open: false, title: '', schema: null })
+
+  const pollTimeoutRef = useRef<number | null>(null)
+  const pollAttemptRef = useRef(0)
+  const pollInFlightRef = useRef(false)
+  const [linkedProject, setLinkedProject] = useState<Project | null>(null)
+
   useEffect(() => {
     if (!campaign) {
       setStoredRuns([])
@@ -451,6 +505,46 @@ export default function CampaignDetailsPage() {
     setStoredRuns(listCampaignExecutions(campaign.id))
     setSelectedTestIds([])
   }, [campaign])
+
+  useEffect(() => {
+    return () => {
+      if (pollTimeoutRef.current) window.clearTimeout(pollTimeoutRef.current)
+      pollTimeoutRef.current = null
+      pollAttemptRef.current = 0
+      pollInFlightRef.current = false
+    }
+  }, [])
+
+  useEffect(() => {
+    const projectId = campaign?.projectId
+    if (!projectId) {
+      setLinkedProject(null)
+      return
+    }
+
+    let cancelled = false
+
+    const run = async () => {
+      try {
+        const projects = await getProjects()
+        if (cancelled) return
+        const found = projects.find((p) => Number(p.id) === Number(projectId))
+        setLinkedProject(found ?? null)
+      } catch {
+        if (!cancelled) setLinkedProject(null)
+      }
+    }
+
+    void run()
+    return () => {
+      cancelled = true
+    }
+  }, [campaign?.projectId])
+
+  const linkedDefaultBranchLabel = useMemo(() => {
+    const v = String(linkedProject?.defaultBranch ?? '').trim()
+    return v
+  }, [linkedProject])
 
   const recentRuns = useMemo(() => {
     const dynamic = storedRuns.map((r) => {
@@ -463,6 +557,143 @@ export default function CampaignDetailsPage() {
     })
     return [...dynamic, ...recentRunsSeed]
   }, [recentRunsSeed, storedRuns])
+
+  const filteredEndpoints = useMemo(() => {
+    const list = endpointsState.kind === 'done' ? endpointsState.endpoints : []
+    const search = endpointSearch.trim().toLowerCase()
+    return list.filter((e) => {
+      if (endpointMethod !== 'ALL' && String(e.method).toUpperCase() !== endpointMethod) return false
+      if (search) {
+        const path = String(e.path ?? '').toLowerCase()
+        if (!path.includes(search)) return false
+      }
+      return true
+    })
+  }, [endpointsState, endpointMethod, endpointSearch])
+
+  const methodOptions = useMemo(() => {
+    const list = endpointsState.kind === 'done' ? endpointsState.endpoints : []
+    const methods = Array.from(new Set(list.map((e) => String(e.method ?? '').toUpperCase()).filter(Boolean))).sort()
+    return ['ALL', ...methods]
+  }, [endpointsState])
+
+  const resolveEffectiveBranch = (explicit: string | undefined, projectDefault: string | null | undefined) => {
+    const typed = String(explicit ?? '').trim()
+    if (typed) return typed
+
+    const fallback = String(projectDefault ?? '').trim()
+    if (fallback) return fallback
+
+    return 'main'
+  }
+
+  const loadExistingEndpoints = async () => {
+    if (!campaignNumericId) return
+    if (!campaign?.projectId) return
+
+    try {
+      setEndpointsState({ kind: 'loading' })
+      const endpoints = await getCampaignEndpoints(campaignNumericId)
+      const list = Array.isArray(endpoints) ? endpoints : []
+      if (list.length > 0) {
+        setEndpointsState({ kind: 'done', endpoints: list })
+      } else {
+        setEndpointsState({ kind: 'idle' })
+      }
+    } catch (err) {
+      setEndpointsState({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Failed to load endpoints',
+      })
+    }
+  }
+
+  const schedulePoll = (fn: () => void, delayMs: number) => {
+    if (pollTimeoutRef.current) window.clearTimeout(pollTimeoutRef.current)
+    pollTimeoutRef.current = window.setTimeout(fn, delayMs)
+  }
+
+  const clearPolling = () => {
+    if (pollTimeoutRef.current) window.clearTimeout(pollTimeoutRef.current)
+    pollTimeoutRef.current = null
+    pollAttemptRef.current = 0
+    pollInFlightRef.current = false
+  }
+
+  const nextDelayMs = (attempt: number) => {
+    if (attempt <= 1) return 2000
+    if (attempt === 2) return 3000
+    return 5000
+  }
+
+  const discoverEndpoints = async (options?: { branch?: string }) => {
+    const projectId = campaign?.projectId
+    if (!projectId) return
+    if (!campaignNumericId) return
+
+    clearPolling()
+
+    const explicitBranch = String(options?.branch ?? endpointBranch).trim() || undefined
+    // If user leaves branch empty, rely on backend fallback:
+    // UI branch -> project.defaultBranch -> "main".
+    const branch = explicitBranch && explicitBranch.trim() ? explicitBranch.trim() : undefined
+    const maxAttempts = 60
+
+    const step = async () => {
+      if (pollInFlightRef.current) {
+        schedulePoll(() => void step(), nextDelayMs(pollAttemptRef.current || 1))
+        return
+      }
+
+      pollInFlightRef.current = true
+      pollAttemptRef.current += 1
+      const attempt = pollAttemptRef.current
+
+      try {
+        const endpoints = await getProjectEndpoints(projectId, branch)
+        const list = Array.isArray(endpoints) ? endpoints : []
+
+        if (list.length > 0) {
+          clearPolling()
+          setEndpointsState({ kind: 'done', endpoints: list })
+          return
+        }
+
+        if (attempt >= maxAttempts) {
+          clearPolling()
+          setEndpointsState({
+            kind: 'error',
+            message: 'Timed out waiting for discovery to finish. Please try again.',
+          })
+          return
+        }
+
+        setEndpointsState({ kind: 'running', attempt, maxAttempts })
+        schedulePoll(() => void step(), nextDelayMs(attempt))
+      } catch (err) {
+        clearPolling()
+        setEndpointsState({
+          kind: 'error',
+          message: err instanceof Error ? err.message : 'Failed to load endpoints',
+        })
+      } finally {
+        pollInFlightRef.current = false
+      }
+    }
+
+    setEndpointsState({ kind: 'loading' })
+    pollAttemptRef.current = 0
+    void step()
+  }
+
+  useEffect(() => {
+    if (!campaignNumericId) return
+    if (!campaign?.projectId) return
+    if (endpointsState.kind !== 'idle') return
+
+    void loadExistingEndpoints()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaignNumericId, campaign?.projectId])
 
   const runCampaign = () => {
     if (!campaign) return
@@ -763,6 +994,142 @@ export default function CampaignDetailsPage() {
                       </div>
                     </CardContent>
                   </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <CardTitle>Endpoints</CardTitle>
+                          <CardDescription>
+                            Discover and browse endpoints extracted from the campaign’s project repository.
+                          </CardDescription>
+                        </div>
+
+                        <Button
+                          size="sm"
+                          onClick={() => void discoverEndpoints()}
+                          disabled={!campaign?.projectId || endpointsState.kind === 'loading' || endpointsState.kind === 'running'}
+                        >
+                          {endpointsState.kind === 'loading'
+                            ? 'Loading…'
+                            : endpointsState.kind === 'running'
+                              ? 'Discovery running…'
+                              : endpointsState.kind === 'done'
+                                ? 'Refresh endpoints'
+                                : 'Discover endpoints'}
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {!campaign?.projectId ? (
+                        <p className="text-sm text-muted-foreground">
+                          This campaign is not linked to a project.
+                        </p>
+                      ) : null}
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="space-y-2">
+                          <Label htmlFor="campaign-endpoint-branch">Branch (optional)</Label>
+                          <Input
+                            id="campaign-endpoint-branch"
+                            value={endpointBranch}
+                            onChange={(e) => setEndpointBranch(e.target.value)}
+                            placeholder={linkedDefaultBranchLabel ? `Fallback: ${linkedDefaultBranchLabel}` : 'Fallback: main'}
+                            disabled={endpointsState.kind === 'loading' || endpointsState.kind === 'running'}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="campaign-endpoint-search">Search by path</Label>
+                          <Input
+                            id="campaign-endpoint-search"
+                            value={endpointSearch}
+                            onChange={(e) => setEndpointSearch(e.target.value)}
+                            placeholder="/api/projects"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-2">
+                            <Label>Method</Label>
+                            <Select value={endpointMethod} onValueChange={setEndpointMethod}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="All" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {methodOptions.map((m) => (
+                                  <SelectItem key={m} value={m}>
+                                    {m}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+
+                      {endpointsState.kind === 'error' ? (
+                        <p className="text-sm text-destructive">{endpointsState.message}</p>
+                      ) : endpointsState.kind === 'loading' ? (
+                        <p className="text-sm text-muted-foreground">Loading endpoints…</p>
+                      ) : endpointsState.kind === 'running' ? (
+                        <p className="text-sm text-muted-foreground">
+                          Discovery running… polling every few seconds ({endpointsState.attempt}/{endpointsState.maxAttempts}).
+                        </p>
+                      ) : endpointsState.kind === 'idle' && campaign?.projectId ? (
+                        <p className="text-sm text-muted-foreground">
+                          No endpoints loaded yet. Click “Discover endpoints” to start discovery.
+                        </p>
+                      ) : endpointsState.kind === 'done' && endpointsState.endpoints.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No endpoints found.</p>
+                      ) : null}
+
+                      {endpointsState.kind === 'done' && endpointsState.endpoints.length > 0 ? (
+                        <div className="rounded-md border border-border">
+                          <div className="max-h-[420px] overflow-auto">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="w-28">Method</TableHead>
+                                  <TableHead>Path</TableHead>
+                                  <TableHead>Summary</TableHead>
+                                  <TableHead className="w-56 text-right">Schema</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {filteredEndpoints.map((e) => (
+                                  <TableRow key={e.id}>
+                                    <TableCell>
+                                      <Badge variant="secondary">{String(e.method).toUpperCase()}</Badge>
+                                    </TableCell>
+                                    <TableCell className="font-medium">{e.path}</TableCell>
+                                    <TableCell className="text-muted-foreground">{e.summary ?? '—'}</TableCell>
+                                    <TableCell className="text-right">
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="whitespace-nowrap"
+                                        onClick={() =>
+                                          setSchemaDialog({
+                                            open: true,
+                                            title: `${String(e.method).toUpperCase()} ${e.path}`,
+                                            schema: e.requestSchema,
+                                          })
+                                        }
+                                      >
+                                        View schema
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </div>
+                      ) : null}
+                    </CardContent>
+                  </Card>
                 </div>
 
                 <div className="space-y-6">
@@ -831,6 +1198,32 @@ export default function CampaignDetailsPage() {
             </>
           )}
         </div>
+
+        <Dialog
+          open={schemaDialog.open}
+          onOpenChange={(open) => setSchemaDialog((prev) => ({ ...prev, open }))}
+        >
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Request schema</DialogTitle>
+              <DialogDescription>{schemaDialog.title}</DialogDescription>
+            </DialogHeader>
+
+            {schemaDialog.schema ? (
+              <pre className="max-h-[60vh] overflow-auto rounded-md border border-border bg-muted/20 p-3 text-xs whitespace-pre-wrap">
+                {schemaDialog.schema}
+              </pre>
+            ) : (
+              <p className="text-sm text-muted-foreground">No request schema available.</p>
+            )}
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setSchemaDialog((p) => ({ ...p, open: false }))}>
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   )

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { CampaignCard } from '@/components/campaign-card'
@@ -21,6 +21,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -44,6 +51,8 @@ import { toast } from '@/hooks/use-toast'
 
 import {
   getProjects,
+  getProjectEndpoints,
+  type EndpointDto,
   type Project,
 } from '@/lib/api-client'
 
@@ -246,6 +255,8 @@ export default function ProjectDetailsPage({
 }: {}) {
   const params = useParams<{ id?: string | string[] }>()
   const id = Array.isArray(params?.id) ? params?.id[0] : params?.id
+  const searchParams = useSearchParams()
+  const autoDiscoverRan = useRef(false)
 
   const [project, setProject] = useState<Project | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -263,7 +274,35 @@ export default function ProjectDetailsPage({
   const [scanErrorDetails, setScanErrorDetails] = useState<unknown>(null)
   const [rawOpen, setRawOpen] = useState(false)
 
+  const [endpointBranch, setEndpointBranch] = useState('')
+  const [endpointSearch, setEndpointSearch] = useState('')
+  const [endpointMethod, setEndpointMethod] = useState<string>('ALL')
+  const [endpointsState, setEndpointsState] = useState<
+    | { kind: 'idle' }
+    | { kind: 'loading' }
+    | { kind: 'running'; attempt: number; maxAttempts: number }
+    | { kind: 'done'; endpoints: EndpointDto[] }
+    | { kind: 'error'; message: string }
+  >({ kind: 'idle' })
+  const pollTimeoutRef = useRef<number | null>(null)
+  const pollAttemptRef = useRef(0)
+  const pollInFlightRef = useRef(false)
+  const [schemaDialog, setSchemaDialog] = useState<{
+    open: boolean
+    title: string
+    schema: string | null
+  }>({ open: false, title: '', schema: null })
+
   const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (pollTimeoutRef.current) window.clearTimeout(pollTimeoutRef.current)
+      pollTimeoutRef.current = null
+      pollAttemptRef.current = 0
+      pollInFlightRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     if (!id) {
@@ -308,6 +347,140 @@ export default function ProjectDetailsPage({
     if (!project) return ''
     return String(project.repositoryUrl ?? '')
   }, [project])
+
+  const defaultBranchLabel = useMemo(() => {
+    if (!project) return ''
+    const v = String(project.defaultBranch ?? '').trim()
+    return v
+  }, [project])
+
+  const filteredEndpoints = useMemo(() => {
+    const list = endpointsState.kind === 'done' ? endpointsState.endpoints : []
+    const search = endpointSearch.trim().toLowerCase()
+    return list.filter((e) => {
+      if (endpointMethod !== 'ALL' && String(e.method).toUpperCase() !== endpointMethod) {
+        return false
+      }
+      if (search) {
+        const path = String(e.path ?? '').toLowerCase()
+        if (!path.includes(search)) return false
+      }
+      return true
+    })
+  }, [endpointsState, endpointMethod, endpointSearch])
+
+  const methodOptions = useMemo(() => {
+    const list = endpointsState.kind === 'done' ? endpointsState.endpoints : []
+    const methods = Array.from(
+      new Set(list.map((e) => String(e.method ?? '').toUpperCase()).filter(Boolean)),
+    ).sort()
+    return ['ALL', ...methods]
+  }, [endpointsState])
+
+  const runDiscovery = async (projectId: number, branch?: string) => {
+    const data = await getProjectEndpoints(projectId, branch)
+    return Array.isArray(data) ? data : []
+  }
+
+  const resolveEffectiveBranch = (explicit: string | undefined, projectDefault: string | null | undefined) => {
+    const typed = String(explicit ?? '').trim()
+    if (typed) return typed
+
+    const fallback = String(projectDefault ?? '').trim()
+    if (fallback) return fallback
+
+    return 'main'
+  }
+
+  const schedulePoll = (fn: () => void, delayMs: number) => {
+    if (pollTimeoutRef.current) window.clearTimeout(pollTimeoutRef.current)
+    pollTimeoutRef.current = window.setTimeout(fn, delayMs)
+  }
+
+  const clearPolling = () => {
+    if (pollTimeoutRef.current) window.clearTimeout(pollTimeoutRef.current)
+    pollTimeoutRef.current = null
+    pollAttemptRef.current = 0
+    pollInFlightRef.current = false
+  }
+
+  const nextDelayMs = (attempt: number) => {
+    if (attempt <= 1) return 2000
+    if (attempt === 2) return 3000
+    return 5000
+  }
+
+  const discoverEndpoints = async (options?: { branch?: string }) => {
+    if (!project) return
+    if (!project.repositoryUrl) return
+
+    clearPolling()
+
+    const explicitBranch = String(options?.branch ?? endpointBranch).trim() || undefined
+    const effectiveBranch = resolveEffectiveBranch(explicitBranch, project.defaultBranch)
+    const maxAttempts = 60
+
+    const step = async () => {
+      if (pollInFlightRef.current) {
+        schedulePoll(() => void step(), nextDelayMs(pollAttemptRef.current || 1))
+        return
+      }
+
+      pollInFlightRef.current = true
+      pollAttemptRef.current += 1
+      const attempt = pollAttemptRef.current
+
+      try {
+        const endpoints = await runDiscovery(project.id, effectiveBranch)
+
+        if (endpoints.length > 0) {
+          clearPolling()
+          setEndpointsState({ kind: 'done', endpoints })
+          return
+        }
+
+        if (attempt >= maxAttempts) {
+          clearPolling()
+          setEndpointsState({
+            kind: 'error',
+            message: 'Timed out waiting for discovery to finish. Please try again.',
+          })
+          return
+        }
+
+        setEndpointsState({ kind: 'running', attempt, maxAttempts })
+        schedulePoll(() => void step(), nextDelayMs(attempt))
+      } catch (err) {
+        clearPolling()
+        setEndpointsState({
+          kind: 'error',
+          message: err instanceof Error ? err.message : 'Failed to load endpoints',
+        })
+      } finally {
+        pollInFlightRef.current = false
+      }
+    }
+
+    setEndpointsState({ kind: 'loading' })
+    pollAttemptRef.current = 0
+    void step()
+  }
+
+  useEffect(() => {
+    const shouldDiscover = searchParams?.get('discover') === '1'
+    if (!shouldDiscover) return
+    if (!project?.id) return
+    if (!project.repositoryUrl) return
+    if (autoDiscoverRan.current) return
+
+    autoDiscoverRan.current = true
+
+    const branch = searchParams?.get('branch')
+    if (branch && branch.trim()) setEndpointBranch(branch.trim())
+
+    void discoverEndpoints({ branch: branch && branch.trim() ? branch.trim() : undefined })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id, project?.repositoryUrl])
 
   useEffect(() => {
     if (!isScanOpen) return
@@ -615,6 +788,165 @@ export default function ProjectDetailsPage({
               </>
             )}
           </Card>
+
+          <Card className="mt-6">
+            <CardHeader>
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 space-y-1">
+                  <CardTitle className="truncate">Endpoints</CardTitle>
+                  <CardDescription>
+                    Discover and display extracted API endpoints for this project.
+                  </CardDescription>
+                </div>
+
+                <Button
+                  type="button"
+                  onClick={() => void discoverEndpoints()}
+                  disabled={!project?.repositoryUrl || endpointsState.kind === 'loading' || endpointsState.kind === 'running'}
+                >
+                  {endpointsState.kind === 'loading'
+                    ? 'Loading…'
+                    : endpointsState.kind === 'running'
+                      ? 'Discovery running…'
+                      : endpointsState.kind === 'done'
+                        ? 'Refresh endpoints'
+                        : 'Discover endpoints'}
+                </Button>
+              </div>
+            </CardHeader>
+
+            <CardContent className="space-y-4">
+              {!project?.repositoryUrl ? (
+                <p className="text-sm text-muted-foreground">
+                  Repository URL is missing; discovery is disabled.
+                </p>
+              ) : null}
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="endpoint-branch">Branch (optional)</Label>
+                  <Input
+                    id="endpoint-branch"
+                    value={endpointBranch}
+                    onChange={(e) => setEndpointBranch(e.target.value)}
+                    placeholder={defaultBranchLabel ? `Fallback: ${defaultBranchLabel}` : 'Fallback: main'}
+                    disabled={endpointsState.kind === 'loading' || endpointsState.kind === 'running'}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="endpoint-search">Search by path</Label>
+                  <Input
+                    id="endpoint-search"
+                    value={endpointSearch}
+                    onChange={(e) => setEndpointSearch(e.target.value)}
+                    placeholder="/api/projects"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Method</Label>
+                    <Select value={endpointMethod} onValueChange={setEndpointMethod}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {methodOptions.map((m) => (
+                          <SelectItem key={m} value={m}>
+                            {m}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              {endpointsState.kind === 'error' ? (
+                <p className="text-sm text-destructive">{endpointsState.message}</p>
+              ) : endpointsState.kind === 'loading' ? (
+                <p className="text-sm text-muted-foreground">Loading endpoints…</p>
+              ) : endpointsState.kind === 'running' ? (
+                <p className="text-sm text-muted-foreground">
+                  Discovery running… polling every few seconds ({endpointsState.attempt}/{endpointsState.maxAttempts}).
+                </p>
+              ) : endpointsState.kind === 'done' && endpointsState.endpoints.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No endpoints found.</p>
+              ) : null}
+
+              {endpointsState.kind === 'done' && endpointsState.endpoints.length > 0 ? (
+                <div className="rounded-md border border-border">
+                  <div className="max-h-[420px] overflow-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-28">Method</TableHead>
+                          <TableHead>Path</TableHead>
+                          <TableHead>Summary</TableHead>
+                          <TableHead className="w-56 text-right">Schema</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredEndpoints.map((e) => (
+                          <TableRow key={e.id}>
+                            <TableCell>
+                              <Badge variant="secondary">{String(e.method).toUpperCase()}</Badge>
+                            </TableCell>
+                            <TableCell className="font-medium">{e.path}</TableCell>
+                            <TableCell className="text-muted-foreground">{e.summary ?? '—'}</TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="whitespace-nowrap"
+                                onClick={() =>
+                                  setSchemaDialog({
+                                    open: true,
+                                    title: `${String(e.method).toUpperCase()} ${e.path}`,
+                                    schema: e.requestSchema,
+                                  })
+                                }
+                              >
+                                View schema
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <Dialog
+            open={schemaDialog.open}
+            onOpenChange={(open) => setSchemaDialog((prev) => ({ ...prev, open }))}
+          >
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Request schema</DialogTitle>
+                <DialogDescription>{schemaDialog.title}</DialogDescription>
+              </DialogHeader>
+
+              {schemaDialog.schema ? (
+                <pre className="max-h-[60vh] overflow-auto rounded-md border border-border bg-muted/20 p-3 text-xs whitespace-pre-wrap">
+                  {schemaDialog.schema}
+                </pre>
+              ) : (
+                <p className="text-sm text-muted-foreground">No request schema available.</p>
+              )}
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setSchemaDialog((p) => ({ ...p, open: false }))}>
+                  Close
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           <Dialog
             open={isScanOpen}

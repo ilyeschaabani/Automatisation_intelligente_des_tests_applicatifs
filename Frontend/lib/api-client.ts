@@ -55,6 +55,16 @@ export interface TestExecutionInput {
   status: ExecutionStatus
 }
 
+export type EndpointDto = {
+  id: number
+  method: string
+  path: string
+  summary: string | null
+  source: string | null
+  confidence: number
+  requestSchema: string | null
+}
+
 export type GitProvider = 'GITHUB' | 'GITLAB'
 
 export type TestType = 'FUNCTIONAL' | 'PERFORMANCE' | 'REGRESSION' | 'SECURITY' | 'API'
@@ -263,6 +273,29 @@ export async function createProject(payload: CreateProjectPayload): Promise<Proj
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(normalizedPayload),
   })
+}
+
+export async function getProjectEndpoints(
+  projectId: number,
+  branch?: string,
+): Promise<EndpointDto[]> {
+  const query = new URLSearchParams()
+  if (branch && branch.trim()) query.set('branch', branch.trim())
+  const suffix = query.toString() ? `?${query.toString()}` : ''
+
+  return requestJson<EndpointDto[]>(
+    `/api/projects/${encodeURIComponent(String(projectId))}/endpoints${suffix}`,
+    { cache: 'no-store' },
+  )
+}
+
+export async function getCampaignEndpoints(
+  campaignId: number,
+): Promise<EndpointDto[]> {
+  return requestJson<EndpointDto[]>(
+    `/api/campaigns/${encodeURIComponent(String(campaignId))}/endpoints`,
+    { cache: 'no-store' },
+  )
 }
 
 export async function resolveRepo(payload: {

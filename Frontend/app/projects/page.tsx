@@ -699,6 +699,12 @@ export default function ProjectsPage() {
                       {getProvider(project)}
                     </p>
                   </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Default branch</p>
+                    <p className="text-sm font-semibold text-foreground mt-1">
+                      {project.defaultBranch ? String(project.defaultBranch) : '—'}
+                    </p>
+                  </div>
                 </div>
 
                 <div className="mt-4">
@@ -707,7 +713,10 @@ export default function ProjectsPage() {
                   </p>
                 </div>
 
-                <div className="mt-6">
+                <div className="mt-6 space-y-2">
+                  <Button asChild className="w-full" disabled={!project.repositoryUrl}>
+                    <Link href={`/projects/${project.id}?discover=1`}>Discover endpoints</Link>
+                  </Button>
                   <Button asChild variant="outline" className="w-full">
                     <Link href={`/projects/${project.id}`}>View details</Link>
                   </Button>
