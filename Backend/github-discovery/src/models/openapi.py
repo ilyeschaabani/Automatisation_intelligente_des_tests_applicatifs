@@ -577,7 +577,8 @@ class OpenAPISpec:
     title: str = "API Specification"
     version: str = "1.0.0"
     description: str = ""
-    servers: List[Dict[str, str]] = field(default_factory=lambda: [{"url": "https://api.example.com"}])
+    # Safe default: keep requests local when no base_url is known.
+    servers: List[Dict[str, str]] = field(default_factory=lambda: [{"url": "http://localhost"}])
     endpoints: List[Endpoint] = field(default_factory=list)
     repo_root: Optional[Path] = None
 

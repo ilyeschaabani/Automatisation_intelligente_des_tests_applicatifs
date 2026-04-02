@@ -1,11 +1,14 @@
 """Main pipeline orchestrator"""
 
 import json
+import re
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
 import concurrent.futures
+
+import yaml
 
 from .config import Config
 from .utils.logger import get_logger, setup_logger
@@ -155,6 +158,901 @@ class Pipeline:
 
         return filtered
 
+    def _enrich_openapi_with_discovery(
+        self,
+        openapi_dict: Dict[str, Any],
+        *,
+        repo_url: str,
+        branch: Optional[str],
+        repo_root: Path,
+    ) -> Dict[str, Any]:
+        """Attach a minimal runnable project config into OpenAPI as x-discovery.
+
+        The goal is to make the OpenAPI artifact self-contained for downstream
+        automation (run strategy, compose/service, base_url/health, auth/env hints).
+        """
+
+        def guess_provider(url: str) -> str:
+            u = (url or "").lower()
+            if "gitlab" in u:
+                return "gitlab"
+            return "github"
+
+        def find_compose_candidates(root: Path) -> List[Path]:
+            preferred = [
+                root / "docker-compose.yml",
+                root / "docker-compose.yaml",
+                root / "compose.yml",
+                root / "compose.yaml",
+            ]
+            out: List[Path] = [p for p in preferred if p.exists() and p.is_file()]
+
+            # Add docker-compose.* variants at root
+            for p in list(root.glob("docker-compose.*.yml")) + list(root.glob("docker-compose.*.yaml")):
+                if p.exists() and p.is_file() and p not in out:
+                    out.append(p)
+
+            # If none at root, do a bounded search (depth <= 3)
+            if not out:
+                try:
+                    for p in root.rglob("docker-compose.y*ml"):
+                        try:
+                            rel = p.relative_to(root)
+                        except Exception:
+                            continue
+                        if len(rel.parts) <= 4 and p.is_file():
+                            out.append(p)
+                            if len(out) >= 10:
+                                break
+                except Exception:
+                    pass
+            return out
+
+        def parse_ports(ports: Any) -> List[Dict[str, Optional[int]]]:
+            parsed: List[Dict[str, Optional[int]]] = []
+            if not ports:
+                return parsed
+            if isinstance(ports, list):
+                for item in ports:
+                    if isinstance(item, str):
+                        parts = item.split(":")
+                        published = None
+                        target = None
+                        try:
+                            if len(parts) == 1:
+                                target = int(parts[0])
+                            elif len(parts) == 2:
+                                published = int(parts[0])
+                                target = int(parts[1])
+                            elif len(parts) == 3:
+                                published = int(parts[1])
+                                target = int(parts[2])
+                        except Exception:
+                            continue
+                        parsed.append({"published": published, "target": target})
+                    elif isinstance(item, dict):
+                        try:
+                            target = int(item.get("target")) if item.get("target") is not None else None
+                            published = int(item.get("published")) if item.get("published") is not None else None
+                            parsed.append({"published": published, "target": target})
+                        except Exception:
+                            continue
+            return parsed
+
+        def _is_infra_service(name: str, svc: Any) -> bool:
+            nl = (name or "").lower()
+            if any(k in nl for k in [
+                "postgres",
+                "postgis",
+                "mysql",
+                "mariadb",
+                "mongodb",
+                "mongo",
+                "redis",
+                "memcached",
+                "rabbitmq",
+                "kafka",
+                "zookeeper",
+                "elasticsearch",
+                "opensearch",
+                "pgadmin",
+                "adminer",
+                "phpmyadmin",
+            ]):
+                return True
+
+            if isinstance(svc, dict):
+                img = (svc.get("image") or "").lower() if svc.get("image") else ""
+                if img:
+                    if any(img.startswith(p) for p in [
+                        "postgres",
+                        "postgis",
+                        "mysql",
+                        "mariadb",
+                        "mongo",
+                        "mongodb",
+                        "redis",
+                        "memcached",
+                        "rabbitmq",
+                        "confluentinc/cp-kafka",
+                        "bitnami/kafka",
+                        "bitnami/zookeeper",
+                        "elasticsearch",
+                        "opensearchproject/opensearch",
+                        "dpage/pgadmin",
+                        "dpage/pgadmin4",
+                        "adminer",
+                        "phpmyadmin",
+                    ]):
+                        return True
+            return False
+
+        def _is_httpish_port(p: Optional[int]) -> bool:
+            if not p:
+                return False
+            if p in {80, 443, 8000, 8001, 8080, 8081, 8082, 8085, 8088, 8089, 8090, 3000, 3001, 5000, 5001, 9000}:
+                return True
+            if 8080 <= p <= 8099:
+                return True
+            return False
+
+        def _select_published_port(port_entries: List[Dict[str, Optional[int]]]) -> Optional[int]:
+            if not port_entries:
+                return None
+
+            # Prefer published HTTP-ish ports
+            for pe in port_entries:
+                pub = pe.get("published")
+                if _is_httpish_port(pub):
+                    return pub
+
+            # Otherwise any published port
+            for pe in port_entries:
+                pub = pe.get("published")
+                if pub:
+                    return pub
+
+            # Fall back to target HTTP-ish ports
+            for pe in port_entries:
+                tgt = pe.get("target")
+                if _is_httpish_port(tgt):
+                    return tgt
+
+            # Otherwise any target
+            for pe in port_entries:
+                tgt = pe.get("target")
+                if tgt:
+                    return tgt
+
+            return None
+
+        def _service_http_endpoint(name: str, svc: Any) -> Dict[str, Any]:
+            """Compute an HTTP-ish endpoint for a compose service (best-effort).
+
+            Returns a dict with keys:
+              - is_infra: bool
+              - published_port: Optional[int]
+              - base_url: Optional[str]
+            """
+
+            svc_dict = svc if isinstance(svc, dict) else {}
+            port_entries = parse_ports(svc_dict.get("ports"))
+            is_infra = _is_infra_service(name, svc_dict)
+            published_port = _select_published_port(port_entries)
+            base_url = f"http://localhost:{published_port}" if published_port else None
+            return {
+                "is_infra": is_infra,
+                "published_port": published_port,
+                "base_url": base_url,
+            }
+
+        def choose_api_service(services: Dict[str, Any]) -> Optional[str]:
+            if not services:
+                return None
+
+            scored: List[Dict[str, Any]] = []
+            for name, svc in services.items():
+                if _is_infra_service(name, svc):
+                    continue
+                svc_dict = svc if isinstance(svc, dict) else {}
+                port_entries = parse_ports(svc_dict.get("ports"))
+                if not port_entries:
+                    continue
+
+                nl = (name or "").lower()
+                score = 0
+                if "gateway" in nl:
+                    score += 100
+                if any(k in nl for k in ["api", "backend", "server"]):
+                    score += 60
+                if any(k in nl for k in ["auth", "users", "service", "app"]):
+                    score += 10
+
+                if svc_dict.get("build") is not None:
+                    score += 15
+
+                if any(_is_httpish_port(pe.get("published") or pe.get("target")) for pe in port_entries):
+                    score += 40
+
+                scored.append({"name": name, "score": score})
+
+            if scored:
+                scored.sort(key=lambda x: x["score"], reverse=True)
+                return scored[0]["name"]
+
+            # No plausible HTTP entrypoint in this compose.
+            return None
+
+        def _score_compose_services(services: Dict[str, Any]) -> int:
+            if not services:
+                return -10
+
+            score = 0
+            http_candidates = 0
+            for name, svc in services.items():
+                if _is_infra_service(name, svc):
+                    continue
+                svc_dict = svc if isinstance(svc, dict) else {}
+                port_entries = parse_ports(svc_dict.get("ports"))
+                if not port_entries:
+                    continue
+                http_candidates += 1
+                nl = (name or "").lower()
+                score += 20
+                if "gateway" in nl:
+                    score += 80
+                if any(k in nl for k in ["api", "backend", "server"]):
+                    score += 40
+                if svc_dict.get("build") is not None:
+                    score += 10
+                if any(_is_httpish_port(pe.get("published") or pe.get("target")) for pe in port_entries):
+                    score += 30
+
+            if http_candidates == 0:
+                return -10
+            return score
+
+        def _choose_best_compose_file(candidates: List[Path]) -> Optional[Path]:
+            best: Optional[Path] = None
+            best_score = -10
+
+            for p in candidates:
+                try:
+                    text = p.read_text(encoding="utf-8", errors="replace")
+                    data = yaml.safe_load(text) if text else None
+                    d = data if isinstance(data, dict) else {}
+                    svcs = d.get("services") if isinstance(d, dict) else None
+                    svcs_dict = svcs if isinstance(svcs, dict) else {}
+                    score = _score_compose_services(svcs_dict)
+                except Exception:
+                    score = -10
+
+                if score > best_score:
+                    best = p
+                    best_score = score
+
+            # If everything looks infra-only, keep the first candidate as a fallback (for service inventory),
+            # but api_service will remain null.
+            if best is None and candidates:
+                return candidates[0]
+            return best
+
+        def extract_required_env_vars(text: str) -> List[str]:
+            # ${VAR} or ${VAR:-default}
+            pattern = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)[^}]*\}")
+            return sorted(set(pattern.findall(text or "")))
+
+        def health_guess_from_paths(paths_obj: Any) -> str:
+            if isinstance(paths_obj, dict):
+                for p in paths_obj.keys():
+                    ps = str(p)
+                    if "actuator" in ps:
+                        return "/actuator/health"
+            return "/health"
+
+        def auth_guess_from_paths(paths_obj: Any) -> Dict[str, Any]:
+            # Prefer explicit signin/login endpoints over signup/register.
+            # Do not guess the token field; leave it unset until validated.
+            login_endpoint: Optional[str] = None
+
+            def _has_post(ops: Any) -> bool:
+                return isinstance(ops, dict) and any(str(m).lower() == "post" for m in ops.keys())
+
+            if isinstance(paths_obj, dict):
+                candidates: List[str] = []
+                for p, ops in paths_obj.items():
+                    if not _has_post(ops):
+                        continue
+                    ps = str(p).lower()
+                    if any(k in ps for k in ["signup", "register"]):
+                        continue
+                    if any(k in ps for k in ["signin", "login"]):
+                        candidates.append(str(p))
+                    elif "authenticate" in ps:
+                        candidates.append(str(p))
+
+                if candidates:
+                    # stable order: prefer /signin then /login then others
+                    def _rank(x: str) -> int:
+                        xl = x.lower()
+                        if "signin" in xl:
+                            return 0
+                        if "/login" in xl or xl.endswith("login"):
+                            return 1
+                        return 2
+
+                    candidates.sort(key=_rank)
+                    login_endpoint = candidates[0]
+
+            if login_endpoint:
+                return {
+                    "type": "login_flow",
+                    "login": {
+                        "endpoint": login_endpoint,
+                        "username": None,
+                        "password": None,
+                        "token_field": None,
+                    },
+                    "static_token": None,
+                    "header_name": "Authorization",
+                    "header_template": "Bearer {token}",
+                }
+
+            return {
+                "type": "unknown",
+                "login": None,
+                "static_token": None,
+                "header_name": "Authorization",
+                "header_template": "Bearer {token}",
+            }
+
+        compose_path = None
+        compose_text = ""
+        compose_data: Dict[str, Any] = {}
+        compose_candidates = find_compose_candidates(repo_root)
+        if compose_candidates:
+            chosen = _choose_best_compose_file(compose_candidates) or compose_candidates[0]
+            compose_path = chosen.relative_to(repo_root).as_posix()
+            try:
+                compose_text = chosen.read_text(encoding="utf-8", errors="replace")
+                loaded = yaml.safe_load(compose_text) if compose_text else None
+                compose_data = loaded if isinstance(loaded, dict) else {}
+            except Exception:
+                compose_text = ""
+                compose_data = {}
+
+        services = compose_data.get("services") if isinstance(compose_data, dict) else None
+        services_dict: Dict[str, Any] = services if isinstance(services, dict) else {}
+
+        api_service = choose_api_service(services_dict)
+        base_url = None
+        published_port = None
+        if api_service and isinstance(services_dict.get(api_service), dict):
+            port_entries = parse_ports(services_dict[api_service].get("ports"))
+            published_port = _select_published_port(port_entries)
+            if published_port:
+                base_url = f"http://localhost:{published_port}"
+
+        healthcheck_path = health_guess_from_paths(openapi_dict.get("paths"))
+        auth = auth_guess_from_paths(openapi_dict.get("paths"))
+
+        # Collect env placeholders from compose
+        required_env_vars = extract_required_env_vars(compose_text)
+
+        # Minimal service inventory
+        services_inventory: Dict[str, Any] = {}
+        for name, svc in services_dict.items():
+            if not isinstance(svc, dict):
+                continue
+            http_ep = _service_http_endpoint(name, svc)
+            services_inventory[name] = {
+                "ports": parse_ports(svc.get("ports")),
+                "depends_on": svc.get("depends_on"),
+                "environment": svc.get("environment"),
+                "image": svc.get("image"),
+                "build": svc.get("build"),
+                "http": {
+                    "published_port": http_ep.get("published_port"),
+                    "base_url": http_ep.get("base_url"),
+                },
+                "is_infra": bool(http_ep.get("is_infra")),
+            }
+
+        # Ranked list of HTTP-capable services (non-infra), so runners can choose.
+        http_services: List[Dict[str, Any]] = []
+        for name, svc in services_dict.items():
+            if not isinstance(svc, dict):
+                continue
+            ep = _service_http_endpoint(name, svc)
+            if ep.get("is_infra"):
+                continue
+            if not ep.get("base_url"):
+                continue
+
+            nl = (name or "").lower()
+            score = 0
+            if "gateway" in nl:
+                score += 100
+            if any(k in nl for k in ["api", "backend", "server"]):
+                score += 60
+            if svc.get("build") is not None:
+                score += 15
+            if _is_httpish_port(ep.get("published_port")):
+                score += 25
+
+            http_services.append(
+                {
+                    "service": name,
+                    "base_url": ep.get("base_url"),
+                    "published_port": ep.get("published_port"),
+                    "score": score,
+                }
+            )
+
+        http_services.sort(key=lambda x: x.get("score", 0), reverse=True)
+
+        missing: List[str] = []
+        if not compose_path:
+            missing.append("run.compose_path")
+        if not api_service:
+            missing.append("run.api_service")
+        if not base_url:
+            missing.append("run.base_url")
+        if not healthcheck_path:
+            missing.append("run.healthcheck_path")
+        if auth.get("type") in {None, "unknown"}:
+            missing.append("auth")
+        if auth.get("type") == "login_flow":
+            missing.extend(["auth.login.username", "auth.login.password"])
+
+        discovery_payload: Dict[str, Any] = {
+            "repo": {
+                "provider": guess_provider(repo_url),
+                "url": repo_url,
+                "branch": branch or "main",
+            },
+            "run": {
+                "strategy": "docker_compose",
+                "compose_path": compose_path,
+                "api_service": api_service,
+                "published_port": published_port,
+                "base_url": base_url,
+                "healthcheck_path": healthcheck_path,
+                "http_services": http_services,
+            },
+            "auth": auth,
+            "secrets_env": {
+                "required_env_vars": required_env_vars,
+            },
+            "services": services_inventory,
+            "discovery": {
+                "missing": sorted(set(missing)),
+                "notes": [],
+            },
+        }
+
+        openapi_dict["x-discovery"] = discovery_payload
+
+        # Align OpenAPI server URL with discovered base_url when available.
+        if base_url:
+            servers = openapi_dict.get("servers")
+            if isinstance(servers, list) and servers and isinstance(servers[0], dict):
+                servers[0]["url"] = base_url
+            else:
+                openapi_dict["servers"] = [{"url": base_url}]
+
+            info = openapi_dict.get("info")
+            if isinstance(info, dict):
+                info["x-discovery-base-url"] = base_url
+
+        return openapi_dict
+
+    def _postprocess_openapi_for_autotest(
+        self,
+        openapi_dict: Dict[str, Any],
+        *,
+        repo_root: Path,
+    ) -> Dict[str, Any]:
+        """Make minimal, safe adjustments so the spec is executable for auto-tests.
+
+        - Keep global BearerAuth as-is.
+        - Mark known public auth/forgotPassword endpoints with operation-level `security: []`.
+        - For `/api/auth/signin`, replace the `{}` response schema with a concrete schema
+          only when the token field can be inferred (from code or an existing example).
+        """
+
+        if not isinstance(openapi_dict, dict):
+            return openapi_dict
+
+        paths = openapi_dict.get("paths")
+        if not isinstance(paths, dict):
+            return openapi_dict
+
+        def _is_http_method(k: str) -> bool:
+            return k.lower() in {"get", "post", "put", "patch", "delete", "head", "options"}
+
+        def _set_public_security(path_key: str, method: str) -> None:
+            ops = paths.get(path_key)
+            if not isinstance(ops, dict):
+                return
+            op = ops.get(method)
+            if not isinstance(op, dict):
+                return
+            op["security"] = []
+
+        def _op_uses_refresh_token(op: Dict[str, Any]) -> bool:
+            """Heuristic: refresh endpoints often accept a refresh token in body."""
+            rb = op.get("requestBody")
+            if not isinstance(rb, dict):
+                return False
+            content = rb.get("content")
+            if not isinstance(content, dict):
+                return False
+            app_json = content.get("application/json")
+            if not isinstance(app_json, dict):
+                return False
+            schema = app_json.get("schema")
+            if isinstance(schema, dict):
+                props = schema.get("properties")
+                if isinstance(props, dict):
+                    for k in props.keys():
+                        kl = str(k).lower()
+                        if kl in {"refreshtoken", "refresh_token"}:
+                            return True
+            ex = app_json.get("example")
+            if isinstance(ex, dict):
+                for k in ex.keys():
+                    kl = str(k).lower()
+                    if kl in {"refreshtoken", "refresh_token"}:
+                        return True
+            return False
+
+        def _should_mark_public(path_str: str, method: str, op: Dict[str, Any]) -> bool:
+            """Framework-agnostic best-effort public endpoint detection."""
+            if method.lower() != "post":
+                # forgot/reset may be GET/POST; handle separately below
+                return False
+
+            pl = (path_str or "").lower()
+            # Explicit auth patterns
+            if any(seg in pl for seg in ["/auth/signup", "/signup", "/register", "/auth/register"]):
+                return True
+            if any(seg in pl for seg in ["/auth/signin", "/signin", "/auth/login", "/login"]):
+                return True
+
+            # Refresh token endpoints vary a lot; only mark public when we see refresh-token semantics.
+            if "refresh" in pl and "token" in pl:
+                return _op_uses_refresh_token(op)
+            if "refreshtoken" in pl:
+                return _op_uses_refresh_token(op)
+
+            return False
+
+        # 1) Public endpoints overrides (general, but still bounded)
+        for p, ops in list(paths.items()):
+            if not isinstance(p, str) or not isinstance(ops, dict):
+                continue
+
+            pl = p.lower()
+
+            # forgot/reset password endpoints are typically public
+            if ("forgot" in pl and "password" in pl) or ("reset" in pl and "password" in pl) or ("forgotpassword" in pl):
+                for m, op in ops.items():
+                    if isinstance(m, str) and _is_http_method(m) and isinstance(op, dict):
+                        op["security"] = []
+
+            for m, op in ops.items():
+                if not (isinstance(m, str) and _is_http_method(m) and isinstance(op, dict)):
+                    continue
+                if _should_mark_public(p, m, op):
+                    op["security"] = []
+
+        # Explicit override requested: POST /api/auth/refreshToken is public
+        _set_public_security("/api/auth/refreshToken", "post")
+
+        # 2) Signin response schema upgrade (only if token field is inferable)
+        def _get_signin_200_schema_obj() -> Optional[Dict[str, Any]]:
+            ops = paths.get("/api/auth/signin")
+            if not isinstance(ops, dict):
+                return None
+            post = ops.get("post")
+            if not isinstance(post, dict):
+                return None
+            responses = post.get("responses")
+            if not isinstance(responses, dict):
+                return None
+            r200 = responses.get("200")
+            if not isinstance(r200, dict):
+                return None
+            content = r200.get("content")
+            if not isinstance(content, dict):
+                return None
+            app_json = content.get("application/json")
+            if not isinstance(app_json, dict):
+                return None
+            schema_obj = app_json.get("schema")
+            if isinstance(schema_obj, dict):
+                return app_json
+            return None
+
+        def _infer_token_field_from_example(example_obj: Any) -> Optional[str]:
+            if not isinstance(example_obj, dict):
+                return None
+            candidates = list(example_obj.keys())
+            if not candidates:
+                return None
+            priority = [
+                "access_token",
+                "accessToken",
+                "token",
+                "jwt",
+                "idToken",
+                "id_token",
+            ]
+            for k in priority:
+                if k in example_obj:
+                    return k
+            # fallback: any key containing token
+            for k in candidates:
+                if "token" in str(k).lower():
+                    return str(k)
+            return None
+
+        def _extract_java_fields(java_text: str) -> List[str]:
+            fields: List[str] = []
+            if not java_text:
+                return fields
+
+            # records: record Name(type field, ...)
+            m = re.search(r"\brecord\s+\w+\s*\(([^)]*)\)", java_text)
+            if m:
+                inside = m.group(1)
+                for part in inside.split(","):
+                    part = part.strip()
+                    if not part:
+                        continue
+                    # "Type name" -> capture name
+                    bits = part.split()
+                    if len(bits) >= 2:
+                        fields.append(bits[-1].strip())
+
+            # common private field declarations
+            for m2 in re.finditer(r"\bprivate\s+[\w<>\[\]]+\s+(\w+)\s*;", java_text):
+                fields.append(m2.group(1))
+
+            return sorted(set([f for f in fields if f]))
+
+        def _infer_token_field_from_repo(root: Path) -> Optional[str]:
+            """Infer token field name without framework assumptions.
+
+            Strategy:
+            - Search common config/docs/tests/postman files for token-like JSON keys.
+            - If Java DTOs exist, also check their fields (kept as a fallback).
+            """
+
+            token_priority = [
+                "access_token",
+                "accessToken",
+                "token",
+                "jwt",
+                "idToken",
+                "id_token",
+            ]
+
+            key_regex = re.compile(
+                r"(?i)(?:\"|')(?P<k>access_token|accesstoken|token|jwt|id_token|idtoken)(?:\"|')\s*:")
+
+            exts = {
+                ".json",
+                ".md",
+                ".txt",
+                ".yaml",
+                ".yml",
+                ".http",
+                ".rest",
+                ".js",
+                ".ts",
+                ".py",
+                ".java",
+                ".php",
+                ".go",
+                ".cs",
+                ".sh",
+            }
+
+            filename_hints = [
+                "auth",
+                "signin",
+                "login",
+                "jwt",
+                "token",
+                "postman",
+                "insomnia",
+                "collection",
+                "test",
+                "swagger",
+                "openapi",
+            ]
+
+            # 1) scan likely files first
+            files: List[Path] = []
+            try:
+                for p in root.rglob("*"):
+                    if not p.is_file():
+                        continue
+                    if p.suffix.lower() not in exts:
+                        continue
+                    rel = str(p.relative_to(root)).lower()
+                    score = sum(1 for h in filename_hints if h in rel)
+                    if score > 0:
+                        files.append(p)
+                    if len(files) >= 600:
+                        break
+            except Exception:
+                files = []
+
+            # 2) add a small fallback set if nothing matched
+            if not files:
+                try:
+                    for p in root.rglob("*.json"):
+                        if p.is_file():
+                            files.append(p)
+                        if len(files) >= 200:
+                            break
+                except Exception:
+                    pass
+
+            found_keys: List[str] = []
+            for p in files[:600]:
+                try:
+                    if p.stat().st_size > 600_000:
+                        continue
+                    txt = p.read_text(encoding="utf-8", errors="ignore")
+                except Exception:
+                    continue
+
+                # Try direct matches in priority order to keep stable
+                for k in token_priority:
+                    if re.search(rf"(?i)(?:\"|'){re.escape(k)}(?:\"|')\s*:", txt):
+                        found_keys.append(k)
+                if found_keys:
+                    # return best priority key seen
+                    for k in token_priority:
+                        if k in found_keys:
+                            return k
+
+                # fallback: generic regex match
+                m = key_regex.search(txt)
+                if m:
+                    raw = (m.group("k") or "").strip()
+                    # normalize known camel/snake
+                    if raw.lower() == "accesstoken":
+                        return "accessToken"
+                    if raw.lower() == "idtoken":
+                        return "idToken"
+                    if raw.lower() == "id_token":
+                        return "id_token"
+                    if raw.lower() == "access_token":
+                        return "access_token"
+                    if raw.lower() == "token":
+                        return "token"
+                    if raw.lower() == "jwt":
+                        return "jwt"
+
+            # 3) Java DTO field fallback (if repo is Java)
+            try:
+                java_files = list(root.rglob("*.java"))
+            except Exception:
+                java_files = []
+
+            name_hints = [
+                "jwtauthenticationresponse",
+                "authenticationresponse",
+                "authresponse",
+                "tokenresponse",
+                "jwtresponse",
+                "signinresponse",
+                "loginresponse",
+            ]
+
+            candidates: List[Path] = []
+            for p in java_files[:2000]:
+                n = p.name.lower()
+                if any(h in n for h in name_hints):
+                    candidates.append(p)
+                    if len(candidates) >= 30:
+                        break
+
+            for p in candidates:
+                try:
+                    txt = p.read_text(encoding="utf-8", errors="ignore")
+                except Exception:
+                    continue
+                fields = _extract_java_fields(txt)
+                if not fields:
+                    continue
+                for k in token_priority:
+                    if k in fields:
+                        return k
+                for f in fields:
+                    if "token" in f.lower():
+                        return f
+
+            return None
+
+        # Flexible token schema usable by runners even when the exact field name is unknown.
+        def _ensure_auth_tokens_schema() -> None:
+            components = openapi_dict.setdefault("components", {})
+            if not isinstance(components, dict):
+                return
+            schemas = components.setdefault("schemas", {})
+            if not isinstance(schemas, dict):
+                return
+            if "AuthTokensResponse" in schemas:
+                return
+
+            schemas["AuthTokensResponse"] = {
+                "type": "object",
+                "description": "Flexible auth token response (field names vary by implementation).",
+                "properties": {
+                    "access_token": {"type": "string"},
+                    "accessToken": {"type": "string"},
+                    "token": {"type": "string"},
+                    "jwt": {"type": "string"},
+                    "id_token": {"type": "string"},
+                    "idToken": {"type": "string"},
+                    "refresh_token": {"type": "string"},
+                    "refreshToken": {"type": "string"},
+                    "expiresIn": {"type": "integer"},
+                    "expires_in": {"type": "integer"},
+                    "tokenType": {"type": "string"},
+                    "token_type": {"type": "string"},
+                },
+                "additionalProperties": True,
+            }
+
+        def _set_200_response_schema_to_tokens(path_key: str) -> None:
+            ops = paths.get(path_key)
+            if not isinstance(ops, dict):
+                return
+            post = ops.get("post")
+            if not isinstance(post, dict):
+                return
+            responses = post.get("responses")
+            if not isinstance(responses, dict):
+                return
+            r200 = responses.get("200")
+            if not isinstance(r200, dict):
+                return
+            content = r200.get("content")
+            if not isinstance(content, dict):
+                return
+            app_json = content.get("application/json")
+            if not isinstance(app_json, dict):
+                return
+            _ensure_auth_tokens_schema()
+            app_json["schema"] = {"$ref": "#/components/schemas/AuthTokensResponse"}
+
+        # Apply to any login-ish endpoint (signin/login) rather than a single hard-coded path.
+        login_paths: List[str] = []
+        for p, ops in paths.items():
+            if not (isinstance(p, str) and isinstance(ops, dict)):
+                continue
+            pl = p.lower()
+            if any(k in pl for k in ["/signin", "/login"]):
+                if isinstance(ops.get("post"), dict):
+                    login_paths.append(p)
+
+        # If the repo contains any login endpoint, make the 200 response schema runnable.
+        if login_paths:
+            for login_path in login_paths:
+                _set_200_response_schema_to_tokens(login_path)
+
+        # Refresh token responses commonly return a new access token too.
+        _set_200_response_schema_to_tokens("/api/auth/refreshToken")
+
+        return openapi_dict
+
     def run(self, repo_url: str, branch: Optional[str] = None, keep_repo: bool = False) -> Dict[str, Any]:
         """
         Run the complete pipeline.
@@ -224,11 +1122,19 @@ class Pipeline:
                     openapi_out = openapi_spec.to_dict()
 
                 # Save outputs
+                openapi_out = self._enrich_openapi_with_discovery(
+                    openapi_out,
+                    repo_url=repo_url,
+                    branch=branch,
+                    repo_root=repo_path,
+                )
+                openapi_out = self._postprocess_openapi_for_autotest(openapi_out, repo_root=repo_path)
                 self._save_outputs(openapi_out, spec_result.endpoints, repo_id)
 
                 result = {
                     "success": True,
                     "repo_url": repo_url,
+                    "repo_id": repo_id,
                     "repo_cached": was_cached,
                     "openapi": openapi_out,
                     "raw_endpoints": [e.to_dict() for e in spec_result.endpoints],
@@ -319,17 +1225,27 @@ class Pipeline:
             )
 
             # Validate generated OpenAPI (best-effort). In strict verify mode, fail if invalid.
-            self._validate_openapi_or_fail(openapi_spec.to_dict())
+            openapi_out = openapi_spec.to_dict()
+            self._validate_openapi_or_fail(openapi_out)
+
+            openapi_out = self._enrich_openapi_with_discovery(
+                openapi_out,
+                repo_url=repo_url,
+                branch=branch,
+                repo_root=repo_path,
+            )
+            openapi_out = self._postprocess_openapi_for_autotest(openapi_out, repo_root=repo_path)
 
             # Step 8: Save outputs
-            self._save_outputs(openapi_spec, all_endpoints, repo_id)
+            self._save_outputs(openapi_out, all_endpoints, repo_id)
 
             # Return results (cleanup happens in finally block)
             result = {
                 "success": True,
                 "repo_url": repo_url,
+                "repo_id": repo_id,
                 "repo_cached": was_cached,
-                "openapi": openapi_spec.to_dict(),
+                "openapi": openapi_out,
                 "raw_endpoints": [e.to_dict() for e in all_endpoints],
                 "final_endpoints": [e.to_dict() for e in final_endpoints],
                 "stats": self.stats.to_dict(),

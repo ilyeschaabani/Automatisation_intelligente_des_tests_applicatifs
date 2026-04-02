@@ -96,6 +96,13 @@ The pipeline generates three files in the output directory:
 2. **`<repo>_endpoints.json`** - Raw extracted endpoints (for debugging)
 3. **`<repo>_stats.json`** - Pipeline execution statistics
 
+## Minimal project config for auto-run/auto-test
+
+For deterministic **auto-run + end-to-end auto-test**, the generator embeds a minimal runnable project config into the OpenAPI file under the `x-discovery` vendor extension.
+
+See:
+- `docs/DISCOVERY_CONTRACT.md`
+
 ## Supported Frameworks
 
 ### Node.js
@@ -163,6 +170,15 @@ The pipeline consists of the following components:
 - GraphQL support is limited to detection
 
 ## Troubleshooting
+
+### tree-sitter-language-pack download timeouts (offline / restricted network)
+
+On first use, `tree-sitter-language-pack` may try to download prebuilt parsers from GitHub Releases.
+If your environment blocks that (timeouts), you can disable AST parsing and rely on regex/spec/config layers:
+
+- Disable AST entirely: set `AST_DISABLE=1`
+- Disable language-pack downloads (also disables AST in this repo, since built-in loading is not shipped): set `AST_OFFLINE=1`
+- Disable specific languages: set `AST_DISABLE_LANGUAGES=python,typescript`
 
 ### No endpoints found
 - Check that the repository contains API code

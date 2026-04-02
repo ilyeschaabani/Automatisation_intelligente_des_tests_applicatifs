@@ -112,6 +112,8 @@ Artifacts are written under `output/` (configurable) using a stable `repo_id` de
 - `output/<repo_id>_endpoints.json` — raw endpoints (pre-normalization/dedup)
 - `output/<repo_id>_stats.json` — pipeline stats and counters
 
+The OpenAPI file also embeds a minimal runnable project config under `x-discovery` to support deterministic auto-run + auto-test.
+
 ## Configuration
 
 The pipeline is configured by CLI flags and environment variables (see `src/config.py`).
@@ -159,3 +161,4 @@ python -m pytest -q
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - [docs/USAGE.md](docs/USAGE.md)
+- [docs/DISCOVERY_CONTRACT.md](docs/DISCOVERY_CONTRACT.md)

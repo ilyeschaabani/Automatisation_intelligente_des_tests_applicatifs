@@ -26,6 +26,8 @@ public interface DiscoveryRepository extends JpaRepository<Discovery, Long> {
 """)
     List<Discovery> findLatestWithEndpoints(Long projectId, String branch, String status);
     Optional<Discovery> findTopByProjectIdAndStatusOrderByCreatedAtDesc(Long projectId, String status);
+
+    Optional<Discovery> findTopByProjectIdAndBranchOrderByCreatedAtDesc(Long projectId, String branch);
     @Query("""
     SELECT d FROM Discovery d
     LEFT JOIN FETCH d.endpoints
@@ -38,6 +40,21 @@ public interface DiscoveryRepository extends JpaRepository<Discovery, Long> {
 
     @Query("SELECT d FROM Discovery d LEFT JOIN FETCH d.endpoints WHERE d.project.id = :projectId")
     Optional<Discovery> findByProjectIdWithEndpoints(@Param("projectId") Long projectId);
+
+    @Query("SELECT d FROM Discovery d LEFT JOIN FETCH d.endpoints WHERE d.id = :id")
+    Optional<Discovery> findByIdWithEndpoints(@Param("id") Long id);
+
+    @Query("""
+        SELECT d FROM Discovery d
+        LEFT JOIN FETCH d.endpoints
+        WHERE d.project.id = :projectId
+        AND d.branch = :branch
+        ORDER BY d.createdAt DESC
+    """)
+    List<Discovery> findLatestByProjectAndBranchWithEndpoints(
+            @Param("projectId") Long projectId,
+            @Param("branch") String branch
+    );
 }
 
 

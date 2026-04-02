@@ -1,5 +1,6 @@
 package com.pfe.platform.testmanagementmicroservice.service.FastAPI;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -13,11 +14,18 @@ import java.util.Map;
 public class FastApiClient {
 
     private final RestTemplate restTemplate;
-    private final String baseUrl = "http://127.0.0.1:8000";
+    private final String baseUrl;
 
-    public FastApiClient() {
-        this.restTemplate = new RestTemplate();
-        System.out.println("Calling: " + baseUrl + "/discovery/jobs");
+    public FastApiClient(
+            RestTemplate restTemplate,
+            @Value("${discovery.base-url}") String baseUrl
+    ) {
+        this.restTemplate = restTemplate;
+        String normalized = baseUrl == null ? "" : baseUrl.trim();
+        while (normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        this.baseUrl = normalized;
     }
 
     public Map<String, Object> startDiscovery(String repoUrl, String branch) {
@@ -44,6 +52,26 @@ public class FastApiClient {
         return restTemplate.getForObject(baseUrl + "/discovery/jobs/{jobId}/openapi", Map.class, jobId);
     }
     public Map<String, Object> getJobendpoint(String jobId) {
-        return restTemplate.getForObject(baseUrl + "/discovery/jobs/{jobId}/endpoint", Map.class, jobId);
+        return restTemplate.getForObject(baseUrl + "/discovery/jobs/{jobId}/endpoints", Map.class, jobId);
+    }
+
+    public Map<String, Object> getContractQuestionnaire(String jobId) {
+        return restTemplate.getForObject(
+                baseUrl + "/discovery/jobs/{jobId}/contract/questionnaire",
+                Map.class,
+                jobId
+        );
+    }
+
+    public Map<String, Object> completeDiscovery(String jobId, Map<String, Object> body) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
+        return restTemplate.postForObject(
+                baseUrl + "/discovery/jobs/{jobId}/complete",
+                request,
+                Map.class,
+                jobId
+        );
     }
 }

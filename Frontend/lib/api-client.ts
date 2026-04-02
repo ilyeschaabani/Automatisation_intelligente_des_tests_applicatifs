@@ -65,6 +65,51 @@ export type EndpointDto = {
   requestSchema: string | null
 }
 
+export type DiscoveryStatus =
+  | 'queued'
+  | 'running'
+  | 'needs_user_input'
+  | 'done'
+  | 'error'
+  | (string & {})
+
+export type DiscoveryQuestionOption = string
+
+export type DiscoveryQuestion = {
+  json_path: string
+  reason: string
+  expected_format: string
+  example?: string | null
+  how_to_find?: string | null
+  options?: DiscoveryQuestionOption[] | null
+}
+
+export type DiscoveryQuestionnairePayload = {
+  questionnaire: {
+    questions: DiscoveryQuestion[]
+  }
+}
+
+export type DiscoveryFlowDto = {
+  discoveryId: string
+  status: DiscoveryStatus
+  jobId?: string | null
+  questionnaire?: DiscoveryQuestionnairePayload | null
+  endpoints?: EndpointDto[] | null
+  error?: unknown
+}
+
+export type DiscoveryAnswerDto = {
+  json_path: string
+  value: unknown
+}
+
+export type DiscoveryCompleteRequest = {
+  answers: DiscoveryAnswerDto[]
+  overwrite?: boolean
+  return_openapi?: boolean
+}
+
 export type GitProvider = 'GITHUB' | 'GITLAB'
 
 export type TestType = 'FUNCTIONAL' | 'PERFORMANCE' | 'REGRESSION' | 'SECURITY' | 'API'
@@ -286,6 +331,51 @@ export async function getProjectEndpoints(
   return requestJson<EndpointDto[]>(
     `/api/projects/${encodeURIComponent(String(projectId))}/endpoints${suffix}`,
     { cache: 'no-store' },
+  )
+}
+
+export async function startProjectDiscovery(
+  projectId: number,
+  params?: { branch?: string },
+): Promise<DiscoveryFlowDto> {
+  const query = new URLSearchParams()
+  if (params?.branch && params.branch.trim()) query.set('branch', params.branch.trim())
+  const suffix = query.toString() ? `?${query.toString()}` : ''
+
+  return requestJson<DiscoveryFlowDto>(
+    `/api/projects/${encodeURIComponent(String(projectId))}/discoveries${suffix}`,
+    {
+      method: 'POST',
+    },
+  )
+}
+
+export async function getLatestProjectDiscovery(
+  projectId: number,
+  params?: { branch?: string },
+): Promise<DiscoveryFlowDto> {
+  const query = new URLSearchParams()
+  if (params?.branch && params.branch.trim()) query.set('branch', params.branch.trim())
+  const suffix = query.toString() ? `?${query.toString()}` : ''
+
+  return requestJson<DiscoveryFlowDto>(
+    `/api/projects/${encodeURIComponent(String(projectId))}/discoveries/latest${suffix}`,
+    { cache: 'no-store' },
+  )
+}
+
+export async function completeProjectDiscovery(
+  projectId: number,
+  discoveryId: string,
+  payload: DiscoveryCompleteRequest,
+): Promise<DiscoveryFlowDto> {
+  return requestJson<DiscoveryFlowDto>(
+    `/api/projects/${encodeURIComponent(String(projectId))}/discoveries/${encodeURIComponent(String(discoveryId))}/complete`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
   )
 }
 

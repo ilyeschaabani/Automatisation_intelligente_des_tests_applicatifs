@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import { DiscoveryCompletionDialog } from '@/components/discovery-completion-dialog'
 import { Header } from '@/components/header'
 import { Sidebar } from '@/components/sidebar'
 import { Badge } from '@/components/ui/badge'
@@ -72,12 +73,20 @@ import {
   getProjects,
   getCampaignEndpoints,
   getProjectEndpoints,
+  startProjectDiscovery,
+  getLatestProjectDiscovery,
+  completeProjectDiscovery,
+  type DiscoveryFlowDto,
+  type DiscoveryStatus,
+  type DiscoveryQuestion,
   listTestCases,
   type EndpointDto,
   type Project,
   type TestCampaignDto,
   type TestCaseDto,
 } from '@/lib/api-client'
+
+import { toast } from '@/hooks/use-toast'
 
 type CampaignType = 'Functional' | 'API' | 'Regression'
 type CampaignStatus = 'Running' | 'Completed' | 'Failed' | 'Scheduled'
@@ -482,6 +491,7 @@ export default function CampaignDetailsPage() {
     | { kind: 'idle' }
     | { kind: 'loading' }
     | { kind: 'running'; attempt: number; maxAttempts: number }
+    | { kind: 'needs_user_input' }
     | { kind: 'done'; endpoints: EndpointDto[] }
     | { kind: 'error'; message: string }
   >({ kind: 'idle' })
@@ -491,9 +501,15 @@ export default function CampaignDetailsPage() {
     schema: string | null
   }>({ open: false, title: '', schema: null })
 
+  const [discoveryFlow, setDiscoveryFlow] = useState<DiscoveryFlowDto | null>(null)
+  const [discoveryDialogOpen, setDiscoveryDialogOpen] = useState(false)
+  const [discoveryAnswers, setDiscoveryAnswers] = useState<Record<string, string>>({})
+  const [discoverySubmitting, setDiscoverySubmitting] = useState(false)
+
   const pollTimeoutRef = useRef<number | null>(null)
   const pollAttemptRef = useRef(0)
   const pollInFlightRef = useRef(false)
+  const activeDiscoveryRef = useRef<{ projectId: number; branch: string } | null>(null)
   const [linkedProject, setLinkedProject] = useState<Project | null>(null)
 
   useEffect(() => {
@@ -620,28 +636,45 @@ export default function CampaignDetailsPage() {
     pollInFlightRef.current = false
   }
 
-  const nextDelayMs = (attempt: number) => {
-    if (attempt <= 1) return 2000
-    if (attempt === 2) return 3000
-    return 5000
+  const normalizeDiscoveryStatus = (value: DiscoveryStatus | null | undefined): string => {
+    return String(value ?? '').trim().toLowerCase()
   }
 
-  const discoverEndpoints = async (options?: { branch?: string }) => {
-    const projectId = campaign?.projectId
-    if (!projectId) return
-    if (!campaignNumericId) return
+  const extractDiscoveryQuestions = (flow: DiscoveryFlowDto | null): DiscoveryQuestion[] => {
+    if (!flow) return []
+    const candidateLists: unknown[] = [
+      (flow as any)?.questionnaire?.questionnaire?.questions,
+      (flow as any)?.questionnaire?.questions,
+      (flow as any)?.questionnaire?.questionnaire?.questionnaire?.questions,
+    ]
 
-    clearPolling()
+    const raw = candidateLists.find((c) => Array.isArray(c))
+    if (!Array.isArray(raw)) return []
 
-    const explicitBranch = String(options?.branch ?? endpointBranch).trim() || undefined
-    // If user leaves branch empty, rely on backend fallback:
-    // UI branch -> project.defaultBranch -> "main".
-    const branch = explicitBranch && explicitBranch.trim() ? explicitBranch.trim() : undefined
+    const normalizeOne = (q: any): DiscoveryQuestion | null => {
+      const json_path = String(q?.json_path ?? q?.jsonPath ?? '').trim()
+      if (!json_path) return null
+      return {
+        json_path,
+        reason: String(q?.reason ?? '').trim() || '—',
+        expected_format: String(q?.expected_format ?? q?.expectedFormat ?? '').trim() || '—',
+        example: q?.example ?? null,
+        how_to_find: q?.how_to_find ?? q?.howToFind ?? null,
+        options: Array.isArray(q?.options) ? q.options.map((o: any) => String(o)) : null,
+      }
+    }
+
+    return raw.map(normalizeOne).filter(Boolean) as DiscoveryQuestion[]
+  }
+
+  const startDiscoveryPolling = (params: { projectId: number; branch: string }) => {
+    const { projectId, branch } = params
     const maxAttempts = 60
+    const pollDelayMs = 2500
 
     const step = async () => {
       if (pollInFlightRef.current) {
-        schedulePoll(() => void step(), nextDelayMs(pollAttemptRef.current || 1))
+        schedulePoll(() => void step(), pollDelayMs)
         return
       }
 
@@ -650,40 +683,210 @@ export default function CampaignDetailsPage() {
       const attempt = pollAttemptRef.current
 
       try {
-        const endpoints = await getProjectEndpoints(projectId, branch)
-        const list = Array.isArray(endpoints) ? endpoints : []
+        const flow = await getLatestProjectDiscovery(projectId, { branch })
+        setDiscoveryFlow(flow)
 
-        if (list.length > 0) {
+        const status = normalizeDiscoveryStatus(flow.status)
+        if (status === 'needs_user_input') {
+          const questions = extractDiscoveryQuestions(flow)
+          if (questions.length > 0) {
+            clearPolling()
+            setEndpointsState({ kind: 'needs_user_input' })
+            setDiscoveryDialogOpen(true)
+            return
+          }
+
+          // Backend has not produced the questions yet; keep polling.
+          if (attempt >= maxAttempts) {
+            clearPolling()
+            const message = 'Timed out waiting for discovery questions. Please try again.'
+            setEndpointsState({ kind: 'error', message })
+            toast({ title: 'Discovery timed out', description: message, variant: 'destructive' })
+            return
+          }
+
+          setEndpointsState({ kind: 'running', attempt, maxAttempts })
+          schedulePoll(() => void step(), pollDelayMs)
+          return
+        }
+
+        if (status === 'done') {
           clearPolling()
-          setEndpointsState({ kind: 'done', endpoints: list })
+          setDiscoveryDialogOpen(false)
+
+          const endpoints = Array.isArray(flow.endpoints)
+            ? flow.endpoints
+            : await getProjectEndpoints(projectId, branch)
+          setEndpointsState({ kind: 'done', endpoints })
+          return
+        }
+
+        if (status === 'error') {
+          clearPolling()
+          const message =
+            typeof flow.error === 'string'
+              ? flow.error
+              : flow.error
+                ? JSON.stringify(flow.error)
+                : 'Discovery failed'
+          setDiscoveryDialogOpen(false)
+          setEndpointsState({ kind: 'error', message })
+          toast({ title: 'Discovery failed', description: message, variant: 'destructive' })
           return
         }
 
         if (attempt >= maxAttempts) {
           clearPolling()
-          setEndpointsState({
-            kind: 'error',
-            message: 'Timed out waiting for discovery to finish. Please try again.',
-          })
+          const message = 'Timed out waiting for discovery to finish. Please try again.'
+          setEndpointsState({ kind: 'error', message })
+          toast({ title: 'Discovery timed out', description: message, variant: 'destructive' })
           return
         }
 
         setEndpointsState({ kind: 'running', attempt, maxAttempts })
-        schedulePoll(() => void step(), nextDelayMs(attempt))
+        schedulePoll(() => void step(), pollDelayMs)
       } catch (err) {
         clearPolling()
-        setEndpointsState({
-          kind: 'error',
-          message: err instanceof Error ? err.message : 'Failed to load endpoints',
-        })
+        const message = err instanceof Error ? err.message : 'Failed to poll discovery'
+        setEndpointsState({ kind: 'error', message })
+        toast({ title: 'Discovery failed', description: message, variant: 'destructive' })
       } finally {
         pollInFlightRef.current = false
       }
     }
 
-    setEndpointsState({ kind: 'loading' })
     pollAttemptRef.current = 0
     void step()
+  }
+
+  const discoverEndpoints = async (options?: { branch?: string }) => {
+    const projectId = campaign?.projectId
+    if (!projectId) return
+    if (!campaignNumericId) return
+
+    if (endpointsState.kind === 'needs_user_input') {
+      setDiscoveryDialogOpen(true)
+      return
+    }
+
+    clearPolling()
+
+    const explicitBranch = String(options?.branch ?? endpointBranch).trim() || undefined
+
+    const branch = resolveEffectiveBranch(explicitBranch, linkedProject?.defaultBranch)
+
+    setEndpointsState({ kind: 'loading' })
+    setDiscoveryFlow(null)
+    setDiscoveryDialogOpen(false)
+    setDiscoveryAnswers({})
+    activeDiscoveryRef.current = { projectId, branch }
+
+    try {
+      const flow = await startProjectDiscovery(projectId, { branch })
+      setDiscoveryFlow(flow)
+
+      const status = normalizeDiscoveryStatus(flow.status)
+      if (status === 'needs_user_input') {
+        const questions = extractDiscoveryQuestions(flow)
+        if (questions.length > 0) {
+          setEndpointsState({ kind: 'needs_user_input' })
+          setDiscoveryDialogOpen(true)
+          return
+        }
+
+        setEndpointsState({ kind: 'running', attempt: 0, maxAttempts: 60 })
+        startDiscoveryPolling({ projectId, branch })
+        return
+      }
+
+      if (status === 'done') {
+        const endpoints = Array.isArray(flow.endpoints) ? flow.endpoints : await getProjectEndpoints(projectId, branch)
+        setEndpointsState({ kind: 'done', endpoints })
+        return
+      }
+
+      if (status === 'error') {
+        const message =
+          typeof flow.error === 'string'
+            ? flow.error
+            : flow.error
+              ? JSON.stringify(flow.error)
+              : 'Discovery failed'
+        setEndpointsState({ kind: 'error', message })
+        toast({ title: 'Discovery failed', description: message, variant: 'destructive' })
+        return
+      }
+
+      setEndpointsState({ kind: 'running', attempt: 0, maxAttempts: 60 })
+      startDiscoveryPolling({ projectId, branch })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to start discovery'
+      setEndpointsState({ kind: 'error', message })
+      toast({ title: 'Discovery failed', description: message, variant: 'destructive' })
+    }
+  }
+
+  const submitDiscoveryAnswers = async () => {
+    const projectId = campaign?.projectId
+    const discoveryId = discoveryFlow?.discoveryId
+    const branch = activeDiscoveryRef.current?.branch
+    if (!projectId || !discoveryId || !branch) return
+
+    setDiscoverySubmitting(true)
+    try {
+      const answers = Object.entries(discoveryAnswers)
+        .map(([json_path, raw]) => ({ json_path, raw: String(raw ?? '') }))
+        .map(({ json_path, raw }) => ({ json_path, value: raw.trim() }))
+        .filter((a) => a.value !== '')
+
+      const flow = await completeProjectDiscovery(projectId, discoveryId, { answers })
+      setDiscoveryFlow(flow)
+
+      const status = normalizeDiscoveryStatus(flow.status)
+      if (status === 'needs_user_input') {
+        const questions = extractDiscoveryQuestions(flow)
+        if (questions.length > 0) {
+          setEndpointsState({ kind: 'needs_user_input' })
+          setDiscoveryDialogOpen(true)
+          return
+        }
+
+        setDiscoveryDialogOpen(false)
+        setEndpointsState({ kind: 'running', attempt: 0, maxAttempts: 60 })
+        startDiscoveryPolling({ projectId, branch })
+        return
+      }
+
+      if (status === 'done') {
+        setDiscoveryDialogOpen(false)
+        clearPolling()
+        const endpoints = Array.isArray(flow.endpoints) ? flow.endpoints : await getProjectEndpoints(projectId, branch)
+        setEndpointsState({ kind: 'done', endpoints })
+        return
+      }
+
+      if (status === 'error') {
+        const message =
+          typeof flow.error === 'string'
+            ? flow.error
+            : flow.error
+              ? JSON.stringify(flow.error)
+              : 'Discovery failed'
+        setDiscoveryDialogOpen(false)
+        setEndpointsState({ kind: 'error', message })
+        toast({ title: 'Discovery failed', description: message, variant: 'destructive' })
+        return
+      }
+
+      setDiscoveryDialogOpen(false)
+      setEndpointsState({ kind: 'running', attempt: 0, maxAttempts: 60 })
+      startDiscoveryPolling({ projectId, branch })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to submit answers'
+      toast({ title: 'Discovery failed', description: message, variant: 'destructive' })
+    } finally {
+      setDiscoverySubmitting(false)
+    }
   }
 
   useEffect(() => {
@@ -1014,6 +1217,8 @@ export default function CampaignDetailsPage() {
                             ? 'Loading…'
                             : endpointsState.kind === 'running'
                               ? 'Discovery running…'
+                              : endpointsState.kind === 'needs_user_input'
+                                ? 'Answer questions…'
                               : endpointsState.kind === 'done'
                                 ? 'Refresh endpoints'
                                 : 'Discover endpoints'}
@@ -1035,7 +1240,7 @@ export default function CampaignDetailsPage() {
                             value={endpointBranch}
                             onChange={(e) => setEndpointBranch(e.target.value)}
                             placeholder={linkedDefaultBranchLabel ? `Fallback: ${linkedDefaultBranchLabel}` : 'Fallback: main'}
-                            disabled={endpointsState.kind === 'loading' || endpointsState.kind === 'running'}
+                            disabled={endpointsState.kind === 'loading' || endpointsState.kind === 'running' || endpointsState.kind === 'needs_user_input'}
                           />
                         </div>
 
@@ -1074,8 +1279,13 @@ export default function CampaignDetailsPage() {
                         <p className="text-sm text-muted-foreground">Loading endpoints…</p>
                       ) : endpointsState.kind === 'running' ? (
                         <p className="text-sm text-muted-foreground">
-                          Discovery running… polling every few seconds ({endpointsState.attempt}/{endpointsState.maxAttempts}).
+                          {normalizeDiscoveryStatus(discoveryFlow?.status) === 'needs_user_input' &&
+                          extractDiscoveryQuestions(discoveryFlow).length === 0
+                            ? `Waiting for discovery questions… polling every few seconds (${endpointsState.attempt}/${endpointsState.maxAttempts}).`
+                            : `Discovery running… polling every few seconds (${endpointsState.attempt}/${endpointsState.maxAttempts}).`}
                         </p>
+                      ) : endpointsState.kind === 'needs_user_input' ? (
+                        <p className="text-sm text-muted-foreground">Discovery is waiting for your answers.</p>
                       ) : endpointsState.kind === 'idle' && campaign?.projectId ? (
                         <p className="text-sm text-muted-foreground">
                           No endpoints loaded yet. Click “Discover endpoints” to start discovery.
@@ -1198,6 +1408,16 @@ export default function CampaignDetailsPage() {
             </>
           )}
         </div>
+
+        <DiscoveryCompletionDialog
+          open={discoveryDialogOpen}
+          onOpenChange={setDiscoveryDialogOpen}
+          questions={extractDiscoveryQuestions(discoveryFlow)}
+          answers={discoveryAnswers}
+          onAnswerChange={(jsonPath, value) => setDiscoveryAnswers((prev) => ({ ...prev, [jsonPath]: value }))}
+          onSubmit={() => void submitDiscoveryAnswers()}
+          submitting={discoverySubmitting}
+        />
 
         <Dialog
           open={schemaDialog.open}

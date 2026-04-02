@@ -333,3 +333,54 @@ Endpoints JSON:
         except Exception as e:
             self.logger.error("LLM verification failed", error=str(e))
             raise LLMError(f"LLM verification failed: {str(e)}") from e
+
+    def generate_json(
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: float = 0.0,
+        max_tokens: int = 2000,
+    ) -> Dict[str, Any]:
+        """Generate a JSON object from the LLM.
+
+        This is a small utility for non-endpoint tasks (e.g., contract interviews).
+        The caller is responsible for crafting prompts that require JSON-only output.
+        """
+
+        if not self.client:
+            raise LLMError("LLM client not initialized - missing API key")
+
+        import json
+
+        model = self.config.openrouter_model if self.use_openrouter else self.config.llm_model
+
+        try:
+            response = self.client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+
+            raw_response = response.choices[0].message.content or ""
+
+            json_start = raw_response.find("{")
+            json_end = raw_response.rfind("}") + 1
+            if json_start == -1 or json_end <= json_start:
+                raise LLMError("No JSON found in LLM response", details={"response": raw_response})
+
+            data = json.loads(raw_response[json_start:json_end])
+            if not isinstance(data, dict):
+                raise LLMError("LLM response JSON was not an object", details={"response": raw_response})
+
+            return data
+
+        except LLMError:
+            raise
+        except Exception as e:
+            self.logger.error("LLM JSON generation failed", error=str(e))
+            raise LLMError(f"LLM JSON generation failed: {str(e)}") from e

@@ -214,7 +214,7 @@ Output Structure:
 {
   "openapi": "3.0.3",
   "info": { "title", "version", "description" },
-  "servers": [{ "url": "https://api.example.com" }],
+    "servers": [{ "url": "http://localhost" }],
   "paths": { "/path": { "get": { ... } } },
   "components": { "securitySchemes": {...} },
   "tags": [...]

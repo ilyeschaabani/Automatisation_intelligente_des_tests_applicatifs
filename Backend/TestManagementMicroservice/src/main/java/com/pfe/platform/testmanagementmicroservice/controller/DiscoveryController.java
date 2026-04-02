@@ -4,6 +4,7 @@ import com.pfe.platform.testmanagementmicroservice.service.FastAPI.DiscoveryServ
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -37,6 +38,21 @@ public class DiscoveryController {
     @GetMapping("/jobs/{jobId}/openapi")
     public ResponseEntity<Map<String, Object>> getJobOpenApi(@PathVariable String jobId) {
         Map<String, Object> result = discoveryService.getJobOpenApi(jobId);
+        return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/jobs/{jobId}/contract/questionnaire")
+    public ResponseEntity<Map<String, Object>> getContractQuestionnaire(@PathVariable String jobId) {
+        Map<String, Object> result = discoveryService.getContractQuestionnaire(jobId);
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/jobs/{jobId}/complete")
+    public ResponseEntity<Map<String, Object>> completeDiscovery(
+            @PathVariable String jobId,
+            @RequestBody(required = false) Map<String, Object> body
+    ) {
+        Map<String, Object> result = discoveryService.completeDiscovery(jobId, body != null ? body : new HashMap<>());
         return ResponseEntity.ok(result);
     }
 }

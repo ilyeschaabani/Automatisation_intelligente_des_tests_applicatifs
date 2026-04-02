@@ -33,7 +33,15 @@ public class Discovery {
     String branch;
 
     @Column(nullable = false)
-    String status; // queued, running, done, error
+    String status; // queued, running, needs_user_input, done, error
+
+    // FastAPI discovery job identifiers (used to fetch questionnaire/openapi and apply completion patches)
+    String fastApiJobId;
+    String fastApiRepoId;
+
+    // Store JSON as plain text to avoid PostgreSQL large-object (oid) handling.
+    @Column(columnDefinition = "text")
+    String contractQuestionnaireJson;
 
     @Column(length = 4000)
     String error; // if discovery failed
@@ -49,5 +57,3 @@ public class Discovery {
         if (createdAt == null) createdAt = Instant.now();
     }
 }
-
-
