@@ -78,6 +78,7 @@ def build_findings(openapi: Dict[str, Any]) -> List[Finding]:
     # 2) Derived run checks
     run = _as_dict(xdisc.get("run"))
     services = _as_dict(xdisc.get("services"))
+    db = _as_dict(xdisc.get("db"))
 
     servers = _as_list(openapi.get("servers"))
     server_url = None
@@ -88,6 +89,8 @@ def build_findings(openapi: Dict[str, Any]) -> List[Finding]:
     api_service = run.get("api_service")
     compose_path = run.get("compose_path")
     http_services = _as_list(run.get("http_services"))
+    compose_score = run.get("compose_score")
+    healthcheck_path = run.get("healthcheck_path")
 
     paths_obj = openapi.get("paths")
     has_paths = isinstance(paths_obj, dict) and len(paths_obj) > 0
@@ -127,6 +130,43 @@ def build_findings(openapi: Dict[str, Any]) -> List[Finding]:
                 )
             )
 
+    # If a healthcheck_path is set but not present in the spec paths, we cannot trust it.
+    if has_paths and isinstance(healthcheck_path, str) and healthcheck_path:
+        if not isinstance(paths_obj, dict) or healthcheck_path not in paths_obj:
+            findings.append(
+                Finding(
+                    kind="missing",
+                    json_path="$.x-discovery.run.healthcheck_path",
+                    reason="Configured healthcheck_path is not present in OpenAPI paths; runner readiness check would be unreliable",
+                    evidence=f"healthcheck_path={healthcheck_path!r}",
+                )
+            )
+
+    # If compose was not confidently parsed (or yielded no services), treat compose/api_service as low-confidence.
+    services_dict = _as_dict(services)
+    if isinstance(compose_path, str) and compose_path:
+        score_bad = isinstance(compose_score, (int, float)) and compose_score <= 0
+        no_services = len(services_dict) == 0
+        no_http_candidates = len([s for s in http_services if isinstance(s, dict)]) == 0
+        if score_bad or no_services:
+            findings.append(
+                Finding(
+                    kind="low_confidence",
+                    json_path="$.x-discovery.run.compose_path",
+                    reason="compose_path could not be validated (compose_score low or no services parsed); may not start the API",
+                    evidence=f"compose_path={compose_path!r}, compose_score={compose_score!r}, services_count={len(services_dict)}",
+                )
+            )
+        if (score_bad or no_services or no_http_candidates) and api_service:
+            findings.append(
+                Finding(
+                    kind="missing",
+                    json_path="$.x-discovery.run.api_service",
+                    reason="api_service cannot be validated from compose (no services/http candidates parsed); user confirmation required",
+                    evidence=f"api_service={api_service!r}, compose_score={compose_score!r}",
+                )
+            )
+
     # If compose exists but contains only infra services, it cannot be used to run the API.
     # This commonly happens when the repo has a separate compose for DB/infra.
     if isinstance(compose_path, str) and compose_path:
@@ -161,6 +201,35 @@ def build_findings(openapi: Dict[str, Any]) -> List[Finding]:
                 )
             )
 
+    # 3) DB checks (explicitly required yes/no)
+    # Even if the pipeline didn't emit missing paths (older artifacts), we must ask.
+    db_required = db.get("required") if isinstance(db, dict) else None
+    if db_required is None:
+        findings.append(
+            Finding(
+                kind="missing",
+                json_path="$.x-discovery.db.required",
+                reason="Auto-run must know whether the API requires a database (so the runner can start/provision it)",
+            )
+        )
+    elif db_required is True:
+        if not db.get("type"):
+            findings.append(
+                Finding(
+                    kind="missing",
+                    json_path="$.x-discovery.db.type",
+                    reason="Database is required but its type is unknown",
+                )
+            )
+        if not db.get("url_env_var"):
+            findings.append(
+                Finding(
+                    kind="missing",
+                    json_path="$.x-discovery.db.url_env_var",
+                    reason="Database is required but the env var name for the connection URL is unknown",
+                )
+            )
+
     return findings
 
 
@@ -174,9 +243,12 @@ def render_questionnaire(openapi: Dict[str, Any], findings: List[Finding]) -> Di
     xdisc = _as_dict(openapi.get("x-discovery"))
     run = _as_dict(xdisc.get("run"))
     auth = _as_dict(xdisc.get("auth"))
+    db = _as_dict(xdisc.get("db"))
 
     compose_path = run.get("compose_path")
+    compose_candidates = [str(x) for x in _as_list(run.get("compose_candidates")) if x]
     http_services = [s for s in _as_list(run.get("http_services")) if isinstance(s, dict)]
+    login_candidates = [str(x) for x in _as_list(auth.get("login_candidates")) if x]
 
     missing_paths = {f.json_path for f in findings if f.kind == "missing"}
     low_conf_paths = {f.json_path for f in findings if f.kind == "low_confidence"}
@@ -213,6 +285,7 @@ def render_questionnaire(openapi: Dict[str, Any], findings: List[Finding]) -> Di
             expected_format="String path relative to repo root, or null if you don't use compose for the API",
             example="Backend/docker-compose.yml",
             how_to_find="Search the repo for docker-compose.yml/compose.yml that includes the API services (Spring/Node/etc.).",
+            options=compose_candidates if compose_candidates else None,
         )
 
     # Some generators report missing as "run" (object) when the whole run block is absent.
@@ -273,6 +346,48 @@ def render_questionnaire(openapi: Dict[str, Any], findings: List[Finding]) -> Di
             options=["none", "login_flow", "static_token"],
         )
 
+    # DB required yes/no
+    if "$.x-discovery.db.required" in missing_paths and "$.x-discovery.db.required" not in asked_paths:
+        _q(
+            json_path="$.x-discovery.db.required",
+            reason="Runner must know if a database is required to start and test the API.",
+            expected_format="Boolean (true/false)",
+            example="true",
+            how_to_find="Check your runtime config (Docker compose/services) or framework config (Symfony DATABASE_URL / doctrine).",
+            options=["true", "false"],
+        )
+
+    if "$.x-discovery.db.type" in missing_paths and "$.x-discovery.db.type" not in asked_paths:
+        _q(
+            json_path="$.x-discovery.db.type",
+            reason="DB type is needed to provision the right database service and defaults.",
+            expected_format="One of: postgres | mysql | mariadb | sqlite | mssql | mongodb",
+            example="mysql",
+            how_to_find="Look at your DATABASE_URL scheme (e.g. mysql://, pgsql://) or your docker-compose DB image.",
+            options=["postgres", "mysql", "mariadb", "sqlite", "mssql", "mongodb"],
+        )
+
+    if "$.x-discovery.db.url_env_var" in missing_paths and "$.x-discovery.db.url_env_var" not in asked_paths:
+        _q(
+            json_path="$.x-discovery.db.url_env_var",
+            reason="Runner needs the env var name that holds the DB connection URL.",
+            expected_format="String (env var name)",
+            example="DATABASE_URL",
+            how_to_find="Check your .env/.env.local or deployment docs; Symfony typically uses DATABASE_URL.",
+        )
+
+    # If login endpoint is missing but we detected candidates, ask with options even
+    # when auth.type is still unknown (single-round questionnaire).
+    if "$.x-discovery.auth.login.endpoint" in missing_paths and "$.x-discovery.auth.login.endpoint" not in asked_paths:
+        _q(
+            json_path="$.x-discovery.auth.login.endpoint",
+            reason="Login-flow auth needs the token/login endpoint path.",
+            expected_format="Path string starting with /",
+            example=(login_candidates[0] if login_candidates else "/api/auth/login"),
+            how_to_find="Search your backend for the login route or check README / Swagger security docs.",
+            options=login_candidates if login_candidates else None,
+        )
+
     # api_service selection
     if "$.x-discovery.run.api_service" in missing_paths:
         if http_services:
@@ -321,6 +436,7 @@ def render_questionnaire(openapi: Dict[str, Any], findings: List[Finding]) -> Di
                     expected_format="Path string starting with /",
                     example="/api/auth/login",
                     how_to_find="Search your backend for the login route or check README / Swagger security docs.",
+                    options=login_candidates if login_candidates else None,
                 )
             if "$.x-discovery.auth.login.username" not in asked_paths:
                 _q(
@@ -339,15 +455,16 @@ def render_questionnaire(openapi: Dict[str, Any], findings: List[Finding]) -> Di
                     how_to_find="Use the password of the test account; if unknown, check README/seed scripts or create one.",
                 )
 
-        if "$.x-discovery.auth.login.endpoint" in missing_paths:
+        if "$.x-discovery.auth.login.endpoint" in missing_paths and "$.x-discovery.auth.login.endpoint" not in asked_paths:
             _q(
                 json_path="$.x-discovery.auth.login.endpoint",
                 reason="Login-flow auth needs the token/login endpoint path.",
                 expected_format="Path string starting with /",
                 example="/api/auth/login",
                 how_to_find="Search your backend for the login route or check README / Swagger security docs.",
+                options=login_candidates if login_candidates else None,
             )
-        if "$.x-discovery.auth.login.username" in missing_paths:
+        if "$.x-discovery.auth.login.username" in missing_paths and "$.x-discovery.auth.login.username" not in asked_paths:
             _q(
                 json_path="$.x-discovery.auth.login.username",
                 reason="Login-flow auth needs a username/email for token acquisition.",
@@ -355,7 +472,7 @@ def render_questionnaire(openapi: Dict[str, Any], findings: List[Finding]) -> Di
                 example="user@example.com",
                 how_to_find="Use a test account in the project seed data, or create one via the signup endpoint.",
             )
-        if "$.x-discovery.auth.login.password" in missing_paths:
+        if "$.x-discovery.auth.login.password" in missing_paths and "$.x-discovery.auth.login.password" not in asked_paths:
             _q(
                 json_path="$.x-discovery.auth.login.password",
                 reason="Login-flow auth needs a password for token acquisition.",
@@ -415,6 +532,12 @@ def render_questionnaire(openapi: Dict[str, Any], findings: List[Finding]) -> Di
                 }
                 if auth.get("type") == "login_flow"
                 else {**auth, "static_token": auth.get("static_token")},
+            },
+            "db": {
+                "required": db.get("required"),
+                "type": db.get("type"),
+                "service": db.get("service"),
+                "url_env_var": db.get("url_env_var"),
             },
         }
     }

@@ -121,11 +121,17 @@ def test_infra_only_compose_has_no_api_entrypoint(tmp_path: Path):
     enriched = _enrich(repo_root, openapi_dict)
     run = enriched["x-discovery"]["run"]
 
+    # Conservative behavior: infra-only compose is not trusted; force user confirmation.
+    assert run["compose_path"] is None
     assert run["api_service"] is None
     assert run["base_url"] is None
     assert run["published_port"] is None
+    assert "run.compose_path" in enriched["x-discovery"]["discovery"]["missing"]
     assert "run.api_service" in enriched["x-discovery"]["discovery"]["missing"]
     assert "run.base_url" in enriched["x-discovery"]["discovery"]["missing"]
 
     assert enriched["x-discovery"]["run"]["http_services"] == []
+
+    # Avoid misleading infra inventory when compose is untrusted.
+    assert enriched["x-discovery"].get("services") == {}
 

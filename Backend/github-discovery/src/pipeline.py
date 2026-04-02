@@ -326,15 +326,94 @@ class Pipeline:
 
             return None
 
-        def _service_http_endpoint(name: str, svc: Any) -> Dict[str, Any]:
-            """Compute an HTTP-ish endpoint for a compose service (best-effort).
+        def health_guess_from_paths(paths_obj: Any) -> Optional[str]:
+            """Return a health path only when we can see it in the spec."""
+            if not isinstance(paths_obj, dict):
+                return None
+            if "/actuator/health" in paths_obj:
+                return "/actuator/health"
+            if "/health" in paths_obj:
+                return "/health"
+            return None
 
-            Returns a dict with keys:
-              - is_infra: bool
-              - published_port: Optional[int]
-              - base_url: Optional[str]
+        def auth_guess_from_paths(paths_obj: Any) -> Dict[str, Any]:
+            """Infer auth only when strongly supported by the spec.
+
+            If multiple plausible login endpoints exist, do not pick one.
+            Instead, return type=unknown and provide candidates so the UI can ask.
             """
 
+            def _has_post(ops: Any) -> bool:
+                return isinstance(ops, dict) and any(str(m).lower() == "post" for m in ops.keys())
+
+            if not isinstance(paths_obj, dict):
+                return {
+                    "type": "unknown",
+                    "login": None,
+                    "login_candidates": [],
+                    "static_token": None,
+                    "header_name": "Authorization",
+                    "header_template": "Bearer {token}",
+                }
+
+            candidates: List[str] = []
+            for p, ops in paths_obj.items():
+                if not _has_post(ops):
+                    continue
+                ps = str(p).lower()
+                if any(k in ps for k in ["signup", "register"]):
+                    continue
+                if any(k in ps for k in ["signin", "login"]):
+                    candidates.append(str(p))
+                elif "authenticate" in ps:
+                    candidates.append(str(p))
+
+            if candidates:
+                def _rank(x: str) -> int:
+                    xl = x.lower()
+                    if "signin" in xl:
+                        return 0
+                    if "/login" in xl or xl.endswith("login"):
+                        return 1
+                    return 2
+
+                candidates.sort(key=_rank)
+                if len(candidates) == 1:
+                    login_endpoint = candidates[0]
+                    return {
+                        "type": "login_flow",
+                        "login": {
+                            "endpoint": login_endpoint,
+                            "username": None,
+                            "password": None,
+                            "token_field": None,
+                        },
+                        "login_candidates": [login_endpoint],
+                        "static_token": None,
+                        "header_name": "Authorization",
+                        "header_template": "Bearer {token}",
+                    }
+
+                return {
+                    "type": "unknown",
+                    "login": None,
+                    "login_candidates": candidates,
+                    "static_token": None,
+                    "header_name": "Authorization",
+                    "header_template": "Bearer {token}",
+                }
+
+            return {
+                "type": "unknown",
+                "login": None,
+                "login_candidates": [],
+                "static_token": None,
+                "header_name": "Authorization",
+                "header_template": "Bearer {token}",
+            }
+
+        def _service_http_endpoint(name: str, svc: Any) -> Dict[str, Any]:
+            """Compute an HTTP-ish endpoint for a compose service (best-effort)."""
             svc_dict = svc if isinstance(svc, dict) else {}
             port_entries = parse_ports(svc_dict.get("ports"))
             is_infra = _is_infra_service(name, svc_dict)
@@ -367,21 +446,27 @@ class Pipeline:
                     score += 60
                 if any(k in nl for k in ["auth", "users", "service", "app"]):
                     score += 10
-
                 if svc_dict.get("build") is not None:
                     score += 15
-
                 if any(_is_httpish_port(pe.get("published") or pe.get("target")) for pe in port_entries):
                     score += 40
 
                 scored.append({"name": name, "score": score})
 
-            if scored:
-                scored.sort(key=lambda x: x["score"], reverse=True)
-                return scored[0]["name"]
+            if not scored:
+                return None
 
-            # No plausible HTTP entrypoint in this compose.
-            return None
+            scored.sort(key=lambda x: x.get("score", 0), reverse=True)
+
+            # Conservative: require a strong and non-ambiguous winner.
+            top = scored[0]
+            if top.get("score", 0) < 70:
+                return None
+            if len(scored) > 1:
+                second = scored[1]
+                if (top.get("score", 0) - second.get("score", 0)) <= 10:
+                    return None
+            return top.get("name")
 
         def _score_compose_services(services: Dict[str, Any]) -> int:
             if not services:
@@ -412,7 +497,7 @@ class Pipeline:
                 return -10
             return score
 
-        def _choose_best_compose_file(candidates: List[Path]) -> Optional[Path]:
+        def _choose_best_compose_file(candidates: List[Path]) -> tuple[Optional[Path], int]:
             best: Optional[Path] = None
             best_score = -10
 
@@ -431,98 +516,180 @@ class Pipeline:
                     best = p
                     best_score = score
 
-            # If everything looks infra-only, keep the first candidate as a fallback (for service inventory),
-            # but api_service will remain null.
+            # If everything looks infra-only, return the best guess + score;
+            # downstream logic decides whether to trust it.
             if best is None and candidates:
-                return candidates[0]
-            return best
+                return candidates[0], best_score
+            return best, best_score
 
         def extract_required_env_vars(text: str) -> List[str]:
             # ${VAR} or ${VAR:-default}
             pattern = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)[^}]*\}")
             return sorted(set(pattern.findall(text or "")))
 
-        def health_guess_from_paths(paths_obj: Any) -> str:
-            if isinstance(paths_obj, dict):
-                for p in paths_obj.keys():
-                    ps = str(p)
-                    if "actuator" in ps:
-                        return "/actuator/health"
-            return "/health"
+        def _detect_db_from_compose(services: Dict[str, Any]) -> Dict[str, Any]:
+            """Best-effort DB detection from trusted docker-compose services.
 
-        def auth_guess_from_paths(paths_obj: Any) -> Dict[str, Any]:
-            # Prefer explicit signin/login endpoints over signup/register.
-            # Do not guess the token field; leave it unset until validated.
-            login_endpoint: Optional[str] = None
+            Conservative rules:
+            - Only report a DB when we can see a known DB image/name.
+            - If multiple DB types exist, mark required but leave type unset.
+            """
 
-            def _has_post(ops: Any) -> bool:
-                return isinstance(ops, dict) and any(str(m).lower() == "post" for m in ops.keys())
+            if not services:
+                return {"required": None, "type": None, "service": None, "url_env_var": None}
 
-            if isinstance(paths_obj, dict):
-                candidates: List[str] = []
-                for p, ops in paths_obj.items():
-                    if not _has_post(ops):
-                        continue
-                    ps = str(p).lower()
-                    if any(k in ps for k in ["signup", "register"]):
-                        continue
-                    if any(k in ps for k in ["signin", "login"]):
-                        candidates.append(str(p))
-                    elif "authenticate" in ps:
-                        candidates.append(str(p))
+            candidates: List[Dict[str, str]] = []
+            for name, svc in services.items():
+                if not isinstance(svc, dict):
+                    continue
+                nl = (name or "").lower()
+                img = (svc.get("image") or "").lower() if svc.get("image") else ""
 
-                if candidates:
-                    # stable order: prefer /signin then /login then others
-                    def _rank(x: str) -> int:
-                        xl = x.lower()
-                        if "signin" in xl:
-                            return 0
-                        if "/login" in xl or xl.endswith("login"):
-                            return 1
-                        return 2
+                def _add(db_type: str) -> None:
+                    candidates.append({"type": db_type, "service": str(name)})
 
-                    candidates.sort(key=_rank)
-                    login_endpoint = candidates[0]
+                if "postgres" in nl or img.startswith("postgres") or img.startswith("postgis"):
+                    _add("postgres")
+                elif "mysql" in nl or img.startswith("mysql"):
+                    _add("mysql")
+                elif "mariadb" in nl or img.startswith("mariadb"):
+                    _add("mariadb")
+                elif "sqlserver" in nl or "mssql" in nl or img.startswith("mcr.microsoft.com/mssql"):
+                    _add("mssql")
+                elif "mongo" in nl or img.startswith("mongo") or img.startswith("mongodb"):
+                    _add("mongodb")
 
-            if login_endpoint:
-                return {
-                    "type": "login_flow",
-                    "login": {
-                        "endpoint": login_endpoint,
-                        "username": None,
-                        "password": None,
-                        "token_field": None,
-                    },
-                    "static_token": None,
-                    "header_name": "Authorization",
-                    "header_template": "Bearer {token}",
-                }
+            if not candidates:
+                return {"required": None, "type": None, "service": None, "url_env_var": None}
 
-            return {
-                "type": "unknown",
-                "login": None,
-                "static_token": None,
-                "header_name": "Authorization",
-                "header_template": "Bearer {token}",
-            }
+            types = sorted({c["type"] for c in candidates if c.get("type")})
+            if len(types) != 1:
+                return {"required": True, "type": None, "service": None, "url_env_var": None}
 
-        compose_path = None
+            db_type = types[0]
+            services_for_type = sorted({c["service"] for c in candidates if c.get("type") == db_type and c.get("service")})
+            service_name = services_for_type[0] if len(services_for_type) == 1 else None
+            return {"required": True, "type": db_type, "service": service_name, "url_env_var": None}
+
+        def _detect_db_from_repo_files(root: Path) -> Dict[str, Any]:
+            """Detect DB requirement/type from common framework config.
+
+            This is intentionally conservative: it only sets type when strongly supported
+            by a DATABASE_URL scheme or Doctrine driver.
+            """
+
+            candidates: List[Path] = []
+            for rel in [
+                ".env",
+                ".env.local",
+                ".env.dev",
+                ".env.test",
+                ".env.dist",
+                ".env.example",
+                "config/packages/doctrine.yaml",
+                "config/packages/doctrine.yml",
+                "config/packages/doctrine.yaml.dist",
+                "config/packages/doctrine.yml.dist",
+            ]:
+                p = root / rel
+                if p.exists() and p.is_file():
+                    candidates.append(p)
+
+            # Bounded search for doctrine.* at shallow depth
+            if not candidates:
+                try:
+                    for p in root.rglob("doctrine.y*ml"):
+                        try:
+                            rel = p.relative_to(root)
+                        except Exception:
+                            continue
+                        if len(rel.parts) <= 4 and p.is_file():
+                            candidates.append(p)
+                            if len(candidates) >= 5:
+                                break
+                except Exception:
+                    pass
+
+            scheme_re = re.compile(r"DATABASE_URL\s*=\s*['\"]?([A-Za-z][A-Za-z0-9+.-]*)://", re.IGNORECASE)
+            driver_re = re.compile(r"\bpdo_(mysql|pgsql|sqlite|sqlsrv)\b", re.IGNORECASE)
+
+            saw_database_url_key = False
+            inferred_type: Optional[str] = None
+
+            for p in candidates:
+                try:
+                    text = p.read_text(encoding="utf-8", errors="replace")
+                except Exception:
+                    continue
+
+                if "DATABASE_URL" in text:
+                    saw_database_url_key = True
+                    m = scheme_re.search(text)
+                    if m:
+                        scheme = (m.group(1) or "").lower()
+                        mapping = {
+                            "mysql": "mysql",
+                            "mariadb": "mariadb",
+                            "pgsql": "postgres",
+                            "postgres": "postgres",
+                            "postgresql": "postgres",
+                            "sqlite": "sqlite",
+                            "sqlsrv": "mssql",
+                            "mssql": "mssql",
+                        }
+                        mapped = mapping.get(scheme)
+                        if mapped:
+                            inferred_type = mapped
+                            break
+
+                dm = driver_re.search(text)
+                if dm and not inferred_type:
+                    drv = (dm.group(1) or "").lower()
+                    mapping2 = {
+                        "mysql": "mysql",
+                        "pgsql": "postgres",
+                        "sqlite": "sqlite",
+                        "sqlsrv": "mssql",
+                    }
+                    inferred_type = mapping2.get(drv)
+
+            if inferred_type:
+                return {"required": True, "type": inferred_type, "service": None, "url_env_var": "DATABASE_URL"}
+            if saw_database_url_key:
+                return {"required": True, "type": None, "service": None, "url_env_var": "DATABASE_URL"}
+            return {"required": None, "type": None, "service": None, "url_env_var": None}
+
+        compose_path: Optional[str] = None
         compose_text = ""
         compose_data: Dict[str, Any] = {}
         compose_candidates = find_compose_candidates(repo_root)
+        compose_candidate_paths = [p.relative_to(repo_root).as_posix() for p in compose_candidates]
+        compose_score = -10
+
         if compose_candidates:
-            chosen = _choose_best_compose_file(compose_candidates) or compose_candidates[0]
-            compose_path = chosen.relative_to(repo_root).as_posix()
-            try:
-                compose_text = chosen.read_text(encoding="utf-8", errors="replace")
-                loaded = yaml.safe_load(compose_text) if compose_text else None
-                compose_data = loaded if isinstance(loaded, dict) else {}
-            except Exception:
-                compose_text = ""
-                compose_data = {}
+            chosen, chosen_score = _choose_best_compose_file(compose_candidates)
+            compose_score = chosen_score
+
+            # Be conservative: if we cannot see any plausible HTTP API entrypoint in compose,
+            # do not treat it as authoritative. We'll ask the user to confirm.
+            if chosen is not None and chosen_score > 0:
+                compose_path = chosen.relative_to(repo_root).as_posix()
+                try:
+                    compose_text = chosen.read_text(encoding="utf-8", errors="replace")
+                    loaded = yaml.safe_load(compose_text) if compose_text else None
+                    compose_data = loaded if isinstance(loaded, dict) else {}
+                except Exception:
+                    compose_text = ""
+                    compose_data = {}
 
         services = compose_data.get("services") if isinstance(compose_data, dict) else None
         services_dict: Dict[str, Any] = services if isinstance(services, dict) else {}
+
+        # DB detection (compose is authoritative only when trusted, i.e., score > 0)
+        db_info = _detect_db_from_compose(services_dict) if compose_path else {"required": None, "type": None, "service": None, "url_env_var": None}
+        if not db_info.get("required"):
+            # Fall back to repo configuration hints (e.g., Symfony doctrine DATABASE_URL)
+            db_info = _detect_db_from_repo_files(repo_root)
 
         api_service = choose_api_service(services_dict)
         base_url = None
@@ -532,6 +699,16 @@ class Pipeline:
             published_port = _select_published_port(port_entries)
             if published_port:
                 base_url = f"http://localhost:{published_port}"
+
+        # If base_url is known (e.g., from prior completion) but published_port is missing,
+        # derive it deterministically from the URL.
+        if base_url and not published_port:
+            try:
+                m = re.search(r":(\d+)(?:/|$)", str(base_url))
+                if m:
+                    published_port = int(m.group(1))
+            except Exception:
+                pass
 
         healthcheck_path = health_guess_from_paths(openapi_dict.get("paths"))
         auth = auth_guess_from_paths(openapi_dict.get("paths"))
@@ -600,9 +777,33 @@ class Pipeline:
             missing.append("run.base_url")
         if not healthcheck_path:
             missing.append("run.healthcheck_path")
-        if auth.get("type") in {None, "unknown"}:
+
+        # DB is required to be explicitly known (yes/no). If required, type/url are required.
+        if db_info.get("required") is None:
+            missing.append("db.required")
+        elif db_info.get("required") is True:
+            if not db_info.get("type"):
+                missing.append("db.type")
+            if not db_info.get("url_env_var"):
+                missing.append("db.url_env_var")
+        auth_type = auth.get("type")
+        login_candidates = auth.get("login_candidates") if isinstance(auth, dict) else None
+        has_login_candidates = isinstance(login_candidates, list) and len(login_candidates) > 0
+
+        if auth_type in {None, "unknown"}:
             missing.append("auth")
-        if auth.get("type") == "login_flow":
+            # If we detected plausible login endpoints but cannot decide, ask for the full login flow
+            # fields in the same questionnaire so the UX doesn't need multiple rounds.
+            if has_login_candidates:
+                missing.extend([
+                    "auth.login.endpoint",
+                    "auth.login.username",
+                    "auth.login.password",
+                ])
+
+        if auth_type == "login_flow":
+            if not isinstance(auth.get("login"), dict) or not auth.get("login", {}).get("endpoint"):
+                missing.append("auth.login.endpoint")
             missing.extend(["auth.login.username", "auth.login.password"])
 
         discovery_payload: Dict[str, Any] = {
@@ -614,11 +815,19 @@ class Pipeline:
             "run": {
                 "strategy": "docker_compose",
                 "compose_path": compose_path,
+                "compose_candidates": compose_candidate_paths,
+                "compose_score": compose_score,
                 "api_service": api_service,
                 "published_port": published_port,
                 "base_url": base_url,
                 "healthcheck_path": healthcheck_path,
                 "http_services": http_services,
+            },
+            "db": {
+                "required": db_info.get("required"),
+                "type": db_info.get("type"),
+                "service": db_info.get("service"),
+                "url_env_var": db_info.get("url_env_var"),
             },
             "auth": auth,
             "secrets_env": {

@@ -71,6 +71,20 @@ def recompute_discovery_missing(openapi: Dict[str, Any]) -> List[str]:
         if not run.get("healthcheck_path"):
             missing.append("run.healthcheck_path")
 
+    # DB is required to be explicitly known (yes/no). If required, type/url are required.
+    db = xdisc.get("db")
+    if not isinstance(db, dict):
+        missing.append("db.required")
+    else:
+        required = db.get("required")
+        if required is None:
+            missing.append("db.required")
+        elif required is True:
+            if not db.get("type"):
+                missing.append("db.type")
+            if not db.get("url_env_var"):
+                missing.append("db.url_env_var")
+
     auth = xdisc.get("auth")
     if not isinstance(auth, dict):
         missing.append("auth")

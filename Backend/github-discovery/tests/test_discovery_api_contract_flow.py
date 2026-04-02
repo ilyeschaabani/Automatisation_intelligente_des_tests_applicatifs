@@ -35,6 +35,7 @@ def test_questionnaire_and_complete_aligns_servers(client, tmp_path):
         "servers": [{"url": "http://localhost"}],
         "paths": {"/ping": {"get": {"responses": {"200": {"description": "ok"}}}}},
         "x-discovery": {
+            "db": {"required": False, "type": None, "service": None, "url_env_var": None},
             "run": {
                 "strategy": "docker_compose",
                 "compose_path": "docker-compose.yml",
@@ -103,6 +104,7 @@ def test_questionnaire_includes_healthcheck_when_missing(client, tmp_path):
         "servers": [{"url": "http://localhost:8080"}],
         "paths": {"/ping": {"get": {"responses": {"200": {"description": "ok"}}}}},
         "x-discovery": {
+            "db": {"required": False, "type": None, "service": None, "url_env_var": None},
             "run": {
                 "strategy": "docker_compose",
                 "compose_path": "docker-compose.yml",

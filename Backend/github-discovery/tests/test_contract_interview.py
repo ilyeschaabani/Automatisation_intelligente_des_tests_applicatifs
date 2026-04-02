@@ -7,17 +7,16 @@ def test_infra_only_compose_flags_missing_base_url_when_paths_exist():
         "servers": [{"url": "http://localhost"}],
         "paths": {"/api/auth/signin": {"post": {}}},
         "x-discovery": {
+            "db": {"required": False, "type": None, "service": None, "url_env_var": None},
             "run": {
-                "compose_path": "infrastructure/docker-compose.yml",
+                "compose_path": None,
+                "compose_candidates": ["infrastructure/docker-compose.yml"],
                 "api_service": None,
                 "base_url": None,
                 "http_services": [],
             },
-            "services": {
-                "postgres": {"is_infra": True},
-                "pgadmin": {"is_infra": True},
-            },
-            "discovery": {"missing": ["run.api_service", "run.base_url"]},
+            "services": {},
+            "discovery": {"missing": ["run.compose_path", "run.api_service", "run.base_url"]},
         },
     }
 
@@ -27,10 +26,12 @@ def test_infra_only_compose_flags_missing_base_url_when_paths_exist():
 
     assert "$.x-discovery.run.base_url" in missing_paths
     assert "$.x-discovery.run.api_service" in missing_paths
-    assert "$.x-discovery.run.compose_path" in low_conf_paths
+    assert "$.x-discovery.run.compose_path" in missing_paths
 
     questionnaire = render_questionnaire(openapi, findings)
     assert isinstance(questionnaire.get("questions"), list)
+    qs = questionnaire["questions"]
+    assert any(q.get("json_path") == "$.x-discovery.run.compose_path" for q in qs)
 
 
 def test_multi_service_requires_routing_rules():
@@ -39,6 +40,7 @@ def test_multi_service_requires_routing_rules():
         "servers": [{"url": "http://localhost"}],
         "paths": {"/users": {"get": {}}, "/orders": {"get": {}}},
         "x-discovery": {
+            "db": {"required": False, "type": None, "service": None, "url_env_var": None},
             "run": {
                 "compose_path": "docker-compose.yml",
                 "api_service": None,

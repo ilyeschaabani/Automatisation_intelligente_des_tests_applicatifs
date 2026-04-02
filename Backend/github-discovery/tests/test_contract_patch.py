@@ -8,6 +8,7 @@ def test_apply_patch_aligns_servers_and_recomputes_missing():
         "info": {"title": "x"},
         "paths": {"/api/auth/signin": {"post": {}}},
         "x-discovery": {
+            "db": {"required": False, "type": None, "service": None, "url_env_var": None},
             "run": {
                 "compose_path": "infrastructure/docker-compose.yml",
                 "api_service": None,
