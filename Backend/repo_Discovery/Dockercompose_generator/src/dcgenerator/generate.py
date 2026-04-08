@@ -1,0 +1,652 @@
+from __future__ import annotations
+
+import dataclasses
+import pathlib
+from typing import Any, Optional
+
+import yaml
+
+
+@dataclasses.dataclass(frozen=True)
+class DockerfilePlan:
+    runtime: str
+    port: int
+    start_cmd: Optional[list[str]] = None
+    extra_env: Optional[dict[str, str]] = None
+    java_build_tool: Optional[str] = None  # 'maven' | 'gradle'
+    java_version: Optional[int] = None
+
+
+@dataclasses.dataclass(frozen=True)
+class ServiceArtifacts:
+    name: str
+    service_dir: pathlib.Path
+    project_kind: str
+    runtime: str
+    port: Optional[int]
+    db: Optional[str]
+    health_path: Optional[str]
+    dockerfile: Optional[DockerfilePlan]
+
+
+@dataclasses.dataclass(frozen=True)
+class ComposeArtifacts:
+    project_dir: pathlib.Path
+    services: list[ServiceArtifacts]
+
+
+@dataclasses.dataclass(frozen=True)
+class WriteResult:
+    compose_path: pathlib.Path
+    dockerfile_paths: list[pathlib.Path]
+    env_example_path: Optional[pathlib.Path]
+    notes: list[str]
+
+
+def render_and_write_artifacts(
+    *,
+    output_dir: pathlib.Path,
+    analysis: Any,
+    artifacts: ComposeArtifacts,
+    can_write_dockerfiles: bool,
+) -> WriteResult:
+    notes: list[str] = []
+
+    compose = _build_compose_dict(artifacts, base_dir=output_dir)
+
+    compose_path = output_dir / "docker-compose.yml"
+    # Avoid line-wrapping long CMD arguments (healthchecks), which can be surprising in YAML.
+    compose_text = yaml.safe_dump(compose, sort_keys=False, width=4096)
+    compose_path.write_text(compose_text, encoding="utf-8")
+
+    required_envs = _collect_required_env_vars(compose)
+    env_example_path: Optional[pathlib.Path] = None
+    if required_envs:
+        env_example_path = output_dir / ".env.example"
+        env_example_path.write_text(_render_env_example(required_envs), encoding="utf-8")
+        notes.append("Wrote .env.example with required variables for this compose.")
+
+    dockerfile_paths: list[pathlib.Path] = []
+    if can_write_dockerfiles:
+        for s in artifacts.services:
+            if s.dockerfile is None:
+                continue
+            # Write into the service directory (non-invasive: only if Dockerfile absent was detected)
+            df_path = s.service_dir / "Dockerfile"
+            if not df_path.exists():
+                df_path.write_text(_render_dockerfile(s.dockerfile), encoding="utf-8")
+                dockerfile_paths.append(df_path)
+        if dockerfile_paths:
+            notes.append("Dockerfile(s) generated for services that did not contain one.")
+    else:
+        missing = [s.name for s in artifacts.services if s.dockerfile is not None]
+        if missing:
+            notes.append(
+                "Some services are missing Dockerfile. Re-run with --in-place to allow generating Dockerfiles inside the repo."
+            )
+
+    dbs = {s.db for s in artifacts.services if s.db}
+    if not dbs:
+        notes.append("DB could not be inferred; compose contains only app services.")
+    else:
+        notes.append(
+            "DB detected: compose uses required env vars (no guessed credentials). Provide them via .env or shell env."
+        )
+
+    if all(s.health_path is None for s in artifacts.services):
+        notes.append("Health endpoint(s) could not be inferred; app healthchecks (if present) use TCP checks.")
+
+    return WriteResult(
+        compose_path=compose_path,
+        dockerfile_paths=dockerfile_paths,
+        env_example_path=env_example_path,
+        notes=notes,
+    )
+
+
+def render_compose_yaml_preview(*, artifacts: ComposeArtifacts, base_dir: pathlib.Path) -> str:
+    """Render a docker-compose.yml preview for LLM verification.
+
+    This uses the same compose builder as the writer, but does not touch disk.
+    """
+
+    compose = _build_compose_dict(artifacts, base_dir=base_dir)
+    return yaml.safe_dump(compose, sort_keys=False, width=4096)
+
+
+def _build_compose_dict(a: ComposeArtifacts, *, base_dir: pathlib.Path) -> dict[str, Any]:
+    services: dict[str, Any] = {}
+    volumes: dict[str, Any] = {}
+
+    network_name = "pi-network"
+
+    ports = [s.port for s in a.services if s.port is not None]
+    port_counts: dict[int, int] = {}
+    for p in ports:
+        port_counts[p] = port_counts.get(p, 0) + 1
+
+    db_types = {s.db for s in a.services if s.db}
+    db_service_names: dict[str, str] = {
+        "postgres": "postgres",
+        "mysql": "mysql",
+        "mongo": "mongo",
+        "redis": "redis",
+    }
+
+    service_names = {s.name for s in a.services}
+    # Heuristic naming used in many Spring Cloud repos
+    has_eureka = any(n.lower() in {"eurekaserver", "eureka-server"} for n in service_names)
+    has_gateway = any(n.lower() in {"gateway", "api-gateway"} for n in service_names)
+    eureka_name = next((n for n in service_names if n.lower() in {"eurekaserver", "eureka-server"}), None)
+    gateway_name = next((n for n in service_names if n.lower() in {"gateway", "api-gateway"}), None)
+
+    for s in a.services:
+        context = _relpath(base_dir, s.service_dir)
+        svc: dict[str, Any] = {
+            "container_name": s.name,
+            "build": {"context": context},
+            "environment": {},
+            "networks": [network_name],
+        }
+
+        # Basic service startup order (matches common Spring Cloud setup)
+        if has_eureka and eureka_name and s.name != eureka_name:
+            # gateway and apps usually need eureka
+            svc.setdefault("depends_on", {})[eureka_name] = {"condition": "service_started"}
+        if has_gateway and gateway_name and s.name not in {gateway_name, eureka_name}:
+            # apps often depend on gateway
+            svc.setdefault("depends_on", {})[gateway_name] = {"condition": "service_started"}
+
+        # If an explicit Dockerfile exists in the context, reference it (matches common compose style).
+        try:
+            if (s.service_dir / "Dockerfile").exists():
+                svc["build"]["dockerfile"] = "Dockerfile"
+        except Exception:
+            pass
+
+        # container port
+        if s.port is not None:
+            container_port = str(s.port)
+            if s.runtime == "java":
+                svc["environment"]["SERVER_PORT"] = container_port
+            else:
+                svc["environment"]["PORT"] = container_port
+        else:
+            env_key = f"{s.name.upper().replace('-', '_')}_PORT"
+            container_port = f"${{{env_key}:?set {env_key}}}"
+            if s.runtime == "java":
+                svc["environment"]["SERVER_PORT"] = container_port
+            else:
+                svc["environment"]["PORT"] = container_port
+
+        # host port mapping: avoid collisions without guessing
+        needs_host_env = s.port is None or (s.port is not None and port_counts.get(s.port, 0) > 1)
+        if needs_host_env:
+            host_env = f"{s.name.upper().replace('-', '_')}_HOST_PORT"
+            host_port = f"${{{host_env}:?set {host_env}}}"
+        else:
+            host_port = container_port
+
+        svc["ports"] = [f"{host_port}:{container_port}"]
+
+        hc = _service_healthcheck(s.runtime, s.port, s.health_path)
+        if hc is not None:
+            svc["healthcheck"] = hc
+
+        if s.db in db_service_names:
+            db_svc_name = db_service_names[s.db]
+            svc.setdefault("depends_on", {})[db_svc_name] = {"condition": "service_healthy"}
+            svc["environment"].update(_db_env_for_app(s.db, host=db_svc_name, runtime=s.runtime))
+
+        # Spring Cloud Eureka client configuration (only when eureka is present)
+        if s.runtime == "java" and has_eureka and eureka_name and s.name != eureka_name:
+            svc["environment"].setdefault(
+                "EUREKA_CLIENT_SERVICEURL_DEFAULTZONE",
+                f"http://{eureka_name}:8761/eureka",
+            )
+
+        services[s.name] = svc
+
+    for db in sorted([d for d in db_types if d is not None]):
+        db_svc_name = db_service_names.get(db)
+        if not db_svc_name:
+            continue
+        db_service, db_vols = _db_service(db, network_name=network_name)
+        services[db_svc_name] = db_service
+        volumes.update(db_vols)
+
+    compose: dict[str, Any] = {"services": services}
+    if volumes:
+        compose["volumes"] = volumes
+    compose["networks"] = {network_name: {"driver": "bridge"}}
+    compose["version"] = "3"
+    return compose
+
+
+def _db_env_for_app(db: str, *, host: str, runtime: str) -> dict[str, str]:
+    # For Spring Boot, prefer SPRING_* env vars (matches common compose setups).
+    if runtime == "java":
+        if db == "mysql":
+            return {
+                "MYSQL_DATABASE": "${MYSQL_DATABASE:?set MYSQL_DATABASE}",
+                "MYSQL_USER": "${MYSQL_USER:?set MYSQL_USER}",
+                "MYSQL_PASSWORD": "${MYSQL_PASSWORD:?set MYSQL_PASSWORD}",
+                "SPRING_DATASOURCE_URL": f"jdbc:mysql://{host}:3306/${{MYSQL_DATABASE}}",
+                "SPRING_DATASOURCE_USERNAME": "${MYSQL_USER}",
+                "SPRING_DATASOURCE_PASSWORD": "${MYSQL_PASSWORD}",
+            }
+        if db == "postgres":
+            return {
+                "POSTGRES_DB": "${POSTGRES_DB:?set POSTGRES_DB}",
+                "POSTGRES_USER": "${POSTGRES_USER:?set POSTGRES_USER}",
+                "POSTGRES_PASSWORD": "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}",
+                "SPRING_DATASOURCE_URL": f"jdbc:postgresql://{host}:5432/${{POSTGRES_DB}}",
+                "SPRING_DATASOURCE_USERNAME": "${POSTGRES_USER}",
+                "SPRING_DATASOURCE_PASSWORD": "${POSTGRES_PASSWORD}",
+            }
+        if db == "mongo":
+            return {
+                "MONGO_INITDB_DATABASE": "${MONGO_INITDB_DATABASE:?set MONGO_INITDB_DATABASE}",
+                "SPRING_DATA_MONGODB_URI": f"mongodb://{host}:27017/${{MONGO_INITDB_DATABASE}}",
+            }
+        if db == "redis":
+            return {
+                "SPRING_DATA_REDIS_HOST": host,
+                "SPRING_DATA_REDIS_PORT": "6379",
+            }
+
+    if db == "postgres":
+        return {
+            "POSTGRES_DB": "${POSTGRES_DB:?set POSTGRES_DB}",
+            "POSTGRES_USER": "${POSTGRES_USER:?set POSTGRES_USER}",
+            "POSTGRES_PASSWORD": "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}",
+            "DATABASE_URL": f"postgresql://${{POSTGRES_USER}}:${{POSTGRES_PASSWORD}}@{host}:5432/${{POSTGRES_DB}}",
+        }
+    if db == "mysql":
+        return {
+            "MYSQL_DATABASE": "${MYSQL_DATABASE:?set MYSQL_DATABASE}",
+            "MYSQL_USER": "${MYSQL_USER:?set MYSQL_USER}",
+            "MYSQL_PASSWORD": "${MYSQL_PASSWORD:?set MYSQL_PASSWORD}",
+            "DATABASE_URL": f"mysql://${{MYSQL_USER}}:${{MYSQL_PASSWORD}}@{host}:3306/${{MYSQL_DATABASE}}",
+        }
+    if db == "mongo":
+        return {
+            "MONGO_INITDB_DATABASE": "${MONGO_INITDB_DATABASE:?set MONGO_INITDB_DATABASE}",
+            "MONGODB_URI": f"mongodb://{host}:27017/${{MONGO_INITDB_DATABASE}}",
+        }
+    if db == "redis":
+        return {
+            "REDIS_URL": f"redis://{host}:6379/0",
+        }
+    return {}
+
+
+def _db_service(db: str, *, network_name: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    volumes: dict[str, Any] = {}
+
+    if db == "postgres":
+        svc = {
+            "image": "postgres:16-alpine",
+            "environment": {
+                "POSTGRES_DB": "${POSTGRES_DB:?set POSTGRES_DB}",
+                "POSTGRES_USER": "${POSTGRES_USER:?set POSTGRES_USER}",
+                "POSTGRES_PASSWORD": "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}",
+            },
+            "volumes": ["pgdata:/var/lib/postgresql/data"],
+            "networks": [network_name],
+            "ports": ["5432:5432"],
+            "healthcheck": {
+                "test": ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"],
+                "interval": "5s",
+                "timeout": "3s",
+                "retries": 20,
+            },
+        }
+        volumes["pgdata"] = {}
+        return svc, volumes
+
+    if db == "mysql":
+        svc = {
+            "image": "mysql:8",
+            "environment": {
+                "MYSQL_DATABASE": "${MYSQL_DATABASE:?set MYSQL_DATABASE}",
+                "MYSQL_USER": "${MYSQL_USER:?set MYSQL_USER}",
+                "MYSQL_PASSWORD": "${MYSQL_PASSWORD:?set MYSQL_PASSWORD}",
+                "MYSQL_ROOT_PASSWORD": "${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD}",
+            },
+            "volumes": ["mysqldata:/var/lib/mysql"],
+            "networks": [network_name],
+            "ports": ["3306:3306"],
+            "healthcheck": {
+                "test": ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD}"],
+                "interval": "5s",
+                "timeout": "5s",
+                "retries": 30,
+            },
+        }
+        volumes["mysqldata"] = {}
+        return svc, volumes
+
+    if db == "mongo":
+        svc = {
+            "image": "mongo:7",
+            "environment": {
+                "MONGO_INITDB_DATABASE": "${MONGO_INITDB_DATABASE:?set MONGO_INITDB_DATABASE}",
+            },
+            "volumes": ["mongodata:/data/db"],
+            "networks": [network_name],
+            "ports": ["27017:27017"],
+            "healthcheck": {
+                "test": [
+                    "CMD-SHELL",
+                    "mongosh --quiet --eval 'db.adminCommand({ ping: 1 })' || exit 1",
+                ],
+                "interval": "5s",
+                "timeout": "5s",
+                "retries": 30,
+            },
+        }
+        volumes["mongodata"] = {}
+        return svc, volumes
+
+    if db == "redis":
+        svc = {
+            "image": "redis:7-alpine",
+            "networks": [network_name],
+            "ports": ["6379:6379"],
+            "healthcheck": {
+                "test": ["CMD", "redis-cli", "ping"],
+                "interval": "5s",
+                "timeout": "3s",
+                "retries": 30,
+            },
+        }
+        return svc, volumes
+
+    return {"image": "alpine:3.20"}, volumes
+
+
+def _service_healthcheck(runtime: str, port: Optional[int], health_path: Optional[str]) -> Optional[dict[str, Any]]:
+    if runtime not in {"python", "node"}:
+        return None
+    if port is None:
+        return None
+
+    # If we know a health path, do an HTTP check using the runtime we know exists.
+    if health_path:
+        url = f"http://127.0.0.1:{port}{health_path}"
+        if runtime == "node":
+            js = (
+                "const http=require('http');"
+                f"const req=http.get('{url}',res=>{{process.exit(res.statusCode>=200 && res.statusCode<400?0:1)}});"
+                "req.on('error',()=>process.exit(1));"
+            )
+            test = ["CMD", "node", "-e", js]
+        else:
+            # Python is assumed present in most base images for python runtime.
+            py = f"import urllib.request; urllib.request.urlopen('{url}', timeout=2).read()"
+            test = ["CMD", "python", "-c", py]
+
+        return {
+            "test": test,
+            "interval": "10s",
+            "timeout": "3s",
+            "retries": 12,
+            "start_period": "20s",
+        }
+
+    # Fallback: TCP check on the port (no need for curl/wget)
+    if runtime == "node":
+        js = (
+            "const net=require('net');"
+            f"const s=net.createConnection({port},'127.0.0.1');"
+            "s.on('connect',()=>{s.end();process.exit(0)});"
+            "s.on('error',()=>process.exit(1));"
+        )
+        test = ["CMD", "node", "-e", js]
+    else:
+        py = (
+            "import socket; s=socket.socket(); s.settimeout(2); "
+            f"s.connect(('127.0.0.1',{port})); s.close()"
+        )
+        test = ["CMD", "python", "-c", py]
+
+    return {
+        "test": test,
+        "interval": "10s",
+        "timeout": "3s",
+        "retries": 12,
+        "start_period": "20s",
+    }
+
+
+def _render_dockerfile(plan: DockerfilePlan) -> str:
+    # Minimal best-effort Dockerfile per runtime.
+    if plan.runtime == "node":
+        cmd = plan.start_cmd or ["npm", "start"]
+        return "\n".join(
+            [
+                "FROM node:20-alpine",
+                "WORKDIR /app",
+                "COPY package*.json ./",
+                "RUN npm ci --omit=dev || npm install",
+                "COPY . .",
+                f"EXPOSE {plan.port}",
+                "ENV NODE_ENV=production",
+                f"CMD {_render_json_array(cmd)}",
+                "",
+            ]
+        )
+
+    if plan.runtime == "python":
+        env_lines = []
+        if plan.extra_env:
+            for k, v in plan.extra_env.items():
+                env_lines.append(f"ENV {k}={_shell_escape_env(v)}")
+
+        cmd = plan.start_cmd
+        return "\n".join(
+            [
+                "FROM python:3.12-slim",
+                "WORKDIR /app",
+                "ENV PYTHONDONTWRITEBYTECODE=1",
+                "ENV PYTHONUNBUFFERED=1",
+                "COPY . .",
+                "RUN if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; \\",
+                "    elif [ -f pyproject.toml ]; then pip install --no-cache-dir .; \\",
+                "    else echo 'TODO: add dependency install step'; fi",
+                *env_lines,
+                f"EXPOSE {plan.port}",
+                "# TODO: adjust the startup command for your framework",
+                (
+                    f"CMD {_render_json_array(cmd)}"
+                    if cmd is not None
+                    else f"CMD {_render_json_array(['python','-m','http.server',str(plan.port)])}"
+                ),
+                "",
+            ]
+        )
+
+    if plan.runtime == "java":
+        java_version = plan.java_version or 17
+
+        # Prefer a build stage so "docker compose build" works from a repo URL clone.
+        if plan.java_build_tool == "maven":
+            return "\n".join(
+                [
+                    f"ARG JAVA_VERSION={java_version}",
+                    "FROM maven:3.9-eclipse-temurin-${JAVA_VERSION} AS build",
+                    "WORKDIR /src",
+                    "COPY . .",
+                    "RUN mvn -DskipTests package",
+                    "RUN set -eux; \\",
+                    "    mkdir -p /out; \\",
+                    "    JAR=\"$(find target -maxdepth 1 -type f -name '*.jar' ! -name '*.jar.original' | head -n 1)\"; \\",
+                    "    test -n \"$JAR\"; \\",
+                    "    cp \"$JAR\" /out/app.jar",
+                    "",
+                    "FROM eclipse-temurin:${JAVA_VERSION}-jre",
+                    "WORKDIR /app",
+                    "COPY --from=build /out/app.jar /app/app.jar",
+                    f"EXPOSE {plan.port}",
+                    "CMD [\"java\", \"-jar\", \"/app/app.jar\"]",
+                    "",
+                ]
+            )
+
+        if plan.java_build_tool == "gradle":
+            # Wrapper-first build. Many Gradle projects include gradlew; if not, the build may need manual adjustment.
+            return "\n".join(
+                [
+                    f"ARG JAVA_VERSION={java_version}",
+                    "FROM eclipse-temurin:${JAVA_VERSION}-jdk AS build",
+                    "WORKDIR /src",
+                    "COPY . .",
+                    "RUN chmod +x gradlew || true",
+                    "RUN if [ -f ./gradlew ]; then ./gradlew build -x test; else echo 'Missing gradlew; add Gradle wrapper or adjust Dockerfile.'; exit 1; fi",
+                    "RUN set -eux; \\",
+                    "    mkdir -p /out; \\",
+                    "    JAR=\"$(find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-plain.jar' | head -n 1)\"; \\",
+                    "    test -n \"$JAR\"; \\",
+                    "    cp \"$JAR\" /out/app.jar",
+                    "",
+                    "FROM eclipse-temurin:${JAVA_VERSION}-jre",
+                    "WORKDIR /app",
+                    "COPY --from=build /out/app.jar /app/app.jar",
+                    f"EXPOSE {plan.port}",
+                    "CMD [\"java\", \"-jar\", \"/app/app.jar\"]",
+                    "",
+                ]
+            )
+
+        # Fallback: keep it minimal, but still try Maven first since it's the most common.
+        return "\n".join(
+            [
+                f"ARG JAVA_VERSION={java_version}",
+                "FROM maven:3.9-eclipse-temurin-${JAVA_VERSION} AS build",
+                "WORKDIR /src",
+                "COPY . .",
+                "RUN mvn -DskipTests package",
+                "RUN set -eux; mkdir -p /out; JAR=\"$(find target -maxdepth 1 -type f -name '*.jar' ! -name '*.jar.original' | head -n 1)\"; test -n \"$JAR\"; cp \"$JAR\" /out/app.jar",
+                "",
+                "FROM eclipse-temurin:${JAVA_VERSION}-jre",
+                "WORKDIR /app",
+                "COPY --from=build /out/app.jar /app/app.jar",
+                f"EXPOSE {plan.port}",
+                "CMD [\"java\", \"-jar\", \"/app/app.jar\"]",
+                "",
+            ]
+        )
+
+    if plan.runtime == "dotnet":
+        return "\n".join(
+            [
+                "FROM mcr.microsoft.com/dotnet/aspnet:8.0",
+                "WORKDIR /app",
+                "# TODO: publish your app and copy published output here",
+                "COPY . .",
+                f"EXPOSE {plan.port}",
+                "# TODO: replace with your dll name",
+                "CMD [\"dotnet\", \"YourApp.dll\"]",
+                "",
+            ]
+        )
+
+    if plan.runtime == "go":
+        return "\n".join(
+            [
+                "FROM golang:1.22-alpine as build",
+                "WORKDIR /src",
+                "COPY . .",
+                "RUN go build -o /out/app ./...",
+                "",
+                "FROM alpine:3.20",
+                "WORKDIR /app",
+                "COPY --from=build /out/app /app/app",
+                f"EXPOSE {plan.port}",
+                "CMD [\"/app/app\"]",
+                "",
+            ]
+        )
+
+    return "\n".join(
+        [
+            "# TODO: No Dockerfile template for this runtime",
+            "FROM alpine:3.20",
+            "WORKDIR /app",
+            "COPY . .",
+            "CMD [\"sh\", \"-lc\", \"echo TODO\"]",
+            "",
+        ]
+    )
+
+
+def _render_json_array(items: list[str]) -> str:
+    import json
+
+    return json.dumps(items)
+
+
+def _shell_escape_env(value: str) -> str:
+    # Keep it simple: quote if it contains spaces or special chars.
+    if re_needs_quotes(value):
+        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{escaped}"'
+    return value
+
+
+def re_needs_quotes(value: str) -> bool:
+    import re
+
+    return bool(re.search(r"[^a-zA-Z0-9_./:-]", value))
+
+
+def _collect_required_env_vars(compose: dict[str, Any]) -> list[str]:
+    """Find variables referenced as required placeholders like ${VAR:?set VAR}."""
+
+    import re
+
+    found: set[str] = set()
+    pattern = re.compile(r"\$\{([A-Z0-9_]+):\?[^}]*\}")
+
+    def walk(v: Any) -> None:
+        if isinstance(v, dict):
+            for vv in v.values():
+                walk(vv)
+        elif isinstance(v, list):
+            for vv in v:
+                walk(vv)
+        elif isinstance(v, str):
+            for m in pattern.finditer(v):
+                found.add(m.group(1))
+
+    walk(compose)
+    return sorted(found)
+
+
+def _render_env_example(vars_list: list[str]) -> str:
+    lines = [
+        "# Copy to .env and fill values before running: docker compose up",
+        "# Required variables were detected from ${VAR:?} placeholders.",
+        "",
+    ]
+    for v in vars_list:
+        lines.append(f"{v}=")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _relpath(base: pathlib.Path, target: pathlib.Path) -> str:
+    import os
+
+    try:
+        rel = os.path.relpath(str(target), start=str(base))
+        rel = rel.replace("\\", "/")
+        if rel == ".":
+            return "."
+        if not rel.startswith("./") and not rel.startswith("../"):
+            rel = "./" + rel
+        return rel
+    except Exception:
+        # Different drive or other issue: fall back to absolute
+        return str(target)
