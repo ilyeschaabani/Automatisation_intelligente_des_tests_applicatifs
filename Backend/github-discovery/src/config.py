@@ -92,6 +92,12 @@ class Config:
     git_timeout: int = 300
     git_retries: int = field(default_factory=lambda: _getenv_int("GIT_RETRIES", 3))
 
+    # Docker / Environment runner (disabled by default for safety)
+    allow_docker: bool = field(default_factory=lambda: _getenv_bool("DISCOVERY_ALLOW_DOCKER", False))
+    docker_compose_command: str = field(default_factory=lambda: os.getenv("DISCOVERY_DOCKER_COMPOSE_COMMAND", "docker"))
+    docker_compose_subcommand: str = field(default_factory=lambda: os.getenv("DISCOVERY_DOCKER_COMPOSE_SUBCOMMAND", "compose"))
+    docker_compose_project_prefix: str = field(default_factory=lambda: os.getenv("DISCOVERY_DOCKER_PROJECT_PREFIX", "gd"))
+
     def __post_init__(self):
         """Create necessary directories"""
         os.makedirs(self.repos_dir, exist_ok=True)

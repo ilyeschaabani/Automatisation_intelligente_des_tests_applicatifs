@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from src.config import Config
 from src.contract_interview import build_findings, render_questionnaire
 from src.contract_patch import apply_discovery_patch
+from src.env_runner import start_environment, stop_environment
 from src.pipeline import Pipeline
 
 app = FastAPI(title="Discovery Service")
@@ -26,6 +27,9 @@ class CreateJobIn(BaseModel):
     repo_url: str
     branch: Optional[str] = None
     keep_repo: bool = False
+    # Optional: bring up the target project environment via docker compose.
+    # This is disabled by default and also requires DISCOVERY_ALLOW_DOCKER=true.
+    run_environment: bool = False
 
 
 class AnswerIn(BaseModel):
@@ -37,6 +41,11 @@ class CompleteJobIn(BaseModel):
     answers: List[AnswerIn]
     overwrite: bool = True
     return_openapi: bool = True
+
+
+class EnvStartIn(BaseModel):
+    dockerfile_path: Optional[str] = None
+    app_port: Optional[int] = None
 
 
 def _openapi_path_for_repo_id(cfg: Config, repo_id: str) -> Path:
@@ -91,15 +100,27 @@ async def create_job(body: CreateJobIn):
     job_id = uuid.uuid4().hex
     repo_id = compute_repo_id(body.repo_url)
 
+    # If we plan to run an environment, we must keep the repo around.
+    keep_repo_effective = bool(body.keep_repo or body.run_environment)
+
     jobs[job_id] = {
         "job_id": job_id,
         "repo_url": body.repo_url,
         "branch": body.branch,
         "repo_id": repo_id,
+        "keep_repo": keep_repo_effective,
+        "repo_path": None,
         "status": "queued",
         "created_at": datetime.utcnow().isoformat() + "Z",
         "error": None,
         "stats": None,
+        "environment": {
+            "status": "not_started",
+            "message": None,
+            "compose_file": None,
+            "project_name": None,
+            "base_url": None,
+        },
     }
 
     async def run_job():
@@ -113,7 +134,7 @@ async def create_job(body: CreateJobIn):
                 pipeline.run,
                 body.repo_url,
                 body.branch,
-                body.keep_repo,
+                keep_repo_effective,
             )
 
             jobs[job_id]["status"] = "done"
@@ -121,12 +142,50 @@ async def create_job(body: CreateJobIn):
             # Align API-visible repo_id with the pipeline's repo_id to avoid output path mismatches.
             if result.get("repo_id"):
                 jobs[job_id]["repo_id"] = result.get("repo_id")
+
+            # Keep repo path so we can run docker-compose later (or now).
+            if result.get("repo_path"):
+                jobs[job_id]["repo_path"] = result.get("repo_path")
+
+            # Optional: start environment
+            if body.run_environment:
+                openapi_obj = result.get("openapi") if isinstance(result, dict) else None
+                repo_path_str = jobs[job_id].get("repo_path")
+                if not repo_path_str:
+                    jobs[job_id]["environment"] = {
+                        "status": "error",
+                        "message": "Repo path unavailable; rerun job with keep_repo=true.",
+                        "compose_file": None,
+                        "project_name": None,
+                        "base_url": None,
+                    }
+                else:
+                    env_res = start_environment(
+                        cfg=cfg,
+                        repo_root=Path(repo_path_str),
+                        openapi_obj=openapi_obj if isinstance(openapi_obj, dict) else None,
+                        job_id=job_id,
+                    )
+                    jobs[job_id]["environment"] = {
+                        "status": env_res.status,
+                        "message": env_res.message,
+                        "compose_file": env_res.compose_file,
+                        "project_name": env_res.project_name,
+                        "base_url": env_res.detected_base_url,
+                        "questions": env_res.questions,
+                        "details": env_res.details,
+                    }
         except Exception as e:
             jobs[job_id]["status"] = "error"
             jobs[job_id]["error"] = str(e)
 
     asyncio.create_task(run_job())
-    return {"job_id": job_id, "repo_id": repo_id, "status": jobs[job_id]["status"]}
+    return {
+        "job_id": job_id,
+        "repo_id": repo_id,
+        "status": jobs[job_id]["status"],
+        "keep_repo": keep_repo_effective,
+    }
 
 @app.get("/discovery/jobs/{job_id}")
 def get_job(job_id: str):
@@ -134,6 +193,74 @@ def get_job(job_id: str):
     if not job:
         raise HTTPException(status_code=404, detail="Unknown job_id")
     return job
+
+
+@app.post("/discovery/jobs/{job_id}/environment/start")
+def env_start(job_id: str, body: Optional[EnvStartIn] = None):
+    job = jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Unknown job_id")
+    if job.get("status") != "done":
+        raise HTTPException(status_code=409, detail=f"Job not done (status={job.get('status')})")
+
+    cfg = Config()
+    repo_path_str = job.get("repo_path")
+    if not repo_path_str:
+        raise HTTPException(status_code=409, detail="Repo not kept for this job (keep_repo=false)")
+
+    # Load OpenAPI from disk (authoritative for compose candidates)
+    openapi_path = _openapi_path_for_repo_id(cfg, job.get("repo_id"))
+    openapi_obj: Optional[Dict[str, Any]] = None
+    if openapi_path.exists():
+        try:
+            openapi_obj = json.loads(openapi_path.read_text(encoding="utf-8"))
+        except Exception:
+            openapi_obj = None
+
+    overrides = body.model_dump() if body is not None else None
+    env_res = start_environment(
+        cfg=cfg,
+        repo_root=Path(repo_path_str),
+        openapi_obj=openapi_obj,
+        job_id=job_id,
+        overrides=overrides,
+    )
+
+    job["environment"] = {
+        "status": env_res.status,
+        "message": env_res.message,
+        "compose_file": env_res.compose_file,
+        "project_name": env_res.project_name,
+        "base_url": env_res.detected_base_url,
+        "questions": env_res.questions,
+        "details": env_res.details,
+    }
+    return job["environment"]
+
+
+@app.post("/discovery/jobs/{job_id}/environment/stop")
+def env_stop(job_id: str):
+    job = jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Unknown job_id")
+
+    env = job.get("environment") or {}
+    compose_file = env.get("compose_file")
+    project_name = env.get("project_name")
+    if not compose_file or not project_name:
+        raise HTTPException(status_code=409, detail="Environment was not started for this job")
+
+    cfg = Config()
+    env_res = stop_environment(cfg=cfg, compose_file=str(compose_file), project_name=str(project_name))
+    job["environment"] = {
+        "status": env_res.status,
+        "message": env_res.message,
+        "compose_file": env_res.compose_file,
+        "project_name": env_res.project_name,
+        "base_url": env.get("base_url"),
+        "details": env_res.details,
+    }
+    return job["environment"]
 
 @app.get("/discovery/jobs/{job_id}/openapi")
 def get_openapi(job_id: str):
