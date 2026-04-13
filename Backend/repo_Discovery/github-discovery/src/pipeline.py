@@ -160,12 +160,22 @@ class Pipeline:
                 self.logger.info("Generating OpenAPI specification")
                 from .models.openapi import OpenAPISpec  # local import for endpoints-only mode
 
-                openapi_spec = OpenAPISpec.from_endpoints(
-                    endpoints=final_endpoints,
-                    title=f"API Specification - {repo_path.name}",
-                    description=f"Auto-generated from repository {repo_url}",
-                    version="1.0.0",
-                )
+                has_java_endpoints = any(str(e.file_path).lower().endswith(".java") for e in final_endpoints)
+                if has_java_endpoints:
+                    openapi_spec = OpenAPISpec.from_endpoints_with_repo(
+                        endpoints=final_endpoints,
+                        repo_root=repo_path,
+                        title=f"API Specification - {repo_path.name}",
+                        description=f"Auto-generated from repository {repo_url}",
+                        version="1.0.0",
+                    )
+                else:
+                    openapi_spec = OpenAPISpec.from_endpoints(
+                        endpoints=final_endpoints,
+                        title=f"API Specification - {repo_path.name}",
+                        description=f"Auto-generated from repository {repo_url}",
+                        version="1.0.0",
+                    )
                 openapi_dict = openapi_spec.to_dict()
 
             # Step 8: Save outputs (OpenAPI optional)
@@ -293,12 +303,22 @@ class Pipeline:
             self.logger.info("Generating OpenAPI specification")
             from .models.openapi import OpenAPISpec  # local import
 
-            openapi_spec = OpenAPISpec.from_endpoints(
-                endpoints=final_endpoints,
-                title=f"API Specification - {repo_path.name}",
-                description=f"Auto-generated from repository {repo_url}",
-                version="1.0.0",
-            )
+            has_java_endpoints = any(str(e.file_path).lower().endswith(".java") for e in final_endpoints)
+            if has_java_endpoints:
+                openapi_spec = OpenAPISpec.from_endpoints_with_repo(
+                    endpoints=final_endpoints,
+                    repo_root=repo_path,
+                    title=f"API Specification - {repo_path.name}",
+                    description=f"Auto-generated from repository {repo_url}",
+                    version="1.0.0",
+                )
+            else:
+                openapi_spec = OpenAPISpec.from_endpoints(
+                    endpoints=final_endpoints,
+                    title=f"API Specification - {repo_path.name}",
+                    description=f"Auto-generated from repository {repo_url}",
+                    version="1.0.0",
+                )
             openapi_dict = openapi_spec.to_dict()
 
         # Step 8: Save outputs

@@ -890,12 +890,8 @@ def _run_github_discovery(
     # Reduce accidental repo writes outside our workdir (repos_dir used only when cloning).
     config.repos_dir = str(_base_workdir() / "github_discovery_repos")
 
-    # Keep github-discovery focused on endpoint extraction by default.
-    # OpenAPI can be enabled later via OUTPUT_OPENAPI=true if needed.
-    try:
-        config.output_openapi = False
-    except Exception:
-        pass
+    # By default, github-discovery runs in endpoints-only mode (Config.output_openapi defaults to false).
+    # To enable OpenAPI output, set OUTPUT_OPENAPI=true in the environment before starting this service.
 
     if use_ollama:
         config.ollama_enabled = True

@@ -76,6 +76,10 @@ import {
   startProjectDiscovery,
   getLatestProjectDiscovery,
   completeProjectDiscovery,
+  startCampaignRun,
+  continueCampaignRun,
+  type CampaignRunContinueRequest,
+  type CampaignRunResponse,
   type DiscoveryFlowDto,
   type DiscoveryStatus,
   type DiscoveryQuestion,
@@ -84,6 +88,7 @@ import {
   type Project,
   type TestCampaignDto,
   type TestCaseDto,
+  type TestExecutionDto,
 } from '@/lib/api-client'
 
 import { toast } from '@/hooks/use-toast'
@@ -115,6 +120,24 @@ type CampaignTest = {
   name: string
   area: string
   kind: 'UI' | 'API' | 'DB'
+}
+function mapExecutionDtoToCampaignExecution(
+  execution: TestExecutionDto,
+  fallbackCampaignId: string,
+): CampaignExecution {
+  const campaignId =
+    execution.campaignId !== undefined && execution.campaignId !== null
+      ? String(execution.campaignId)
+      : fallbackCampaignId
+
+  return {
+    id: 'exec-' + String(execution.id),
+    campaignId,
+    scope: 'CAMPAIGN',
+    status: execution.status as CampaignExecutionStatus,
+    createdAt: execution.executionDate,
+    duration: '—',
+  }
 }
 
 function mapBackendStatus(value: string | null | undefined): CampaignStatus {
@@ -164,6 +187,8 @@ function slugify(value: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '')
 }
+
+  
 
 const statusStyle: Record<CampaignStatus, string> = {
   Running: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-400',
@@ -380,6 +405,15 @@ export default function CampaignDetailsPage() {
     if (!id) return null
     return campaigns.find((c) => c.id === id) ?? null
   }, [campaigns, id])
+
+  const [runSubmitting, setRunSubmitting] = useState(false)
+  const [runDialogOpen, setRunDialogOpen] = useState(false)
+  const [runSessionId, setRunSessionId] = useState<string | null>(null)
+  const [runMissingDb, setRunMissingDb] = useState(false)
+  const [runDbOptions, setRunDbOptions] = useState<string[]>(['postgres', 'mysql', 'mongo', 'redis'])
+  const [runDbValue, setRunDbValue] = useState('')
+  const [runMissingEnvVars, setRunMissingEnvVars] = useState<string[]>([])
+  const [runEnvValues, setRunEnvValues] = useState<Record<string, string>>({})
 
   const [remoteCampaign, setRemoteCampaign] = useState<Campaign | null>(null)
   const [remoteLoading, setRemoteLoading] = useState(false)
@@ -898,11 +932,156 @@ export default function CampaignDetailsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignNumericId, campaign?.projectId])
 
-  const runCampaign = () => {
-    if (!campaign) return
-    const created = createCampaignExecution({ campaignId: campaign.id, scope: 'CAMPAIGN' })
-    setStoredRuns((prev) => [created, ...prev])
+
+  // -------------------------------------------------------------------------------------------------------------------
+
+   const applyRunResponse = async (response: CampaignRunResponse) => {
+    const status = String(response.status ?? '').trim().toLowerCase()
+
+    if (status === 'needs_user_input') {
+      const sessionId = String(response.sessionId ?? '').trim()
+      if (!sessionId) {
+        throw new Error('Backend requires user inputs but did not return sessionId')
+      }
+
+      setRunSessionId(sessionId)
+      setRunMissingDb(Boolean(response.missingDb))
+
+      const options = Array.isArray(response.dbOptions)
+        ? response.dbOptions.map((v) => String(v)).filter((v) => v.length > 0)
+        : []
+      setRunDbOptions(options.length > 0 ? options : ['postgres', 'mysql', 'mongo', 'redis'])
+
+      const missingEnv = Array.isArray(response.missingEnvVars)
+        ? response.missingEnvVars.map((v) => String(v)).filter((v) => v.length > 0)
+        : []
+      setRunMissingEnvVars(missingEnv)
+      setRunEnvValues((prev) => {
+        const next = { ...prev }
+        for (const key of missingEnv) {
+          if (!(key in next)) next[key] = ''
+        }
+        return next
+      })
+      setRunDialogOpen(true)
+
+      toast({
+        title: 'More information needed',
+        description: 'Please provide DB and environment values to continue running this campaign.',
+      })
+      return
+    }
+
+    if (status !== 'started') {
+      throw new Error(response.message ?? 'Unexpected run response')
+    }
+
+    if (response.execution) {
+      const mapped = mapExecutionDtoToCampaignExecution(response.execution, campaign?.id ?? '')
+      setStoredRuns((prev) => [mapped, ...prev.filter((r) => r.id !== mapped.id)])
+    } else if (campaign) {
+      const created = createCampaignExecution({ campaignId: campaign.id, scope: 'CAMPAIGN' })
+      setStoredRuns((prev) => [created, ...prev])
+    }
+
+    if (Array.isArray(response.endpoints) && response.endpoints.length > 0) {
+      setEndpointsState({ kind: 'done', endpoints: response.endpoints })
+    } else {
+      await loadExistingEndpoints()
+    }
+
+    setRunDialogOpen(false)
+    setRunSessionId(null)
+
+    toast({
+      title: 'Campaign started',
+      description: 'Repo prepared, docker files generated, and endpoints extracted.',
+    })
   }
+
+  const runCampaign = async () => {
+    if (!campaign) return
+
+    if (!campaignNumericId) {
+      const created = createCampaignExecution({ campaignId: campaign.id, scope: 'CAMPAIGN' })
+      setStoredRuns((prev) => [created, ...prev])
+      return
+    }
+
+    if (!campaign.projectId) {
+      toast({
+        title: 'Cannot run campaign',
+        description: 'This campaign is not linked to a project.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setRunSubmitting(true)
+    try {
+      const branchValue = String(endpointBranch ?? '').trim()
+      const response = await startCampaignRun(campaignNumericId, {
+        branch: branchValue || undefined,
+      })
+      await applyRunResponse(response)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to start campaign run'
+      toast({ title: 'Run failed', description: message, variant: 'destructive' })
+    } finally {
+      setRunSubmitting(false)
+    }
+  }
+
+  const submitRunInputs = async () => {
+    if (!campaignNumericId || !runSessionId) return
+
+    if (runMissingDb && String(runDbValue).trim().length === 0) {
+      toast({
+        title: 'Database is required',
+        description: 'Select a database type to continue.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    const unresolvedEnvVars = runMissingEnvVars.filter(
+      (key) => String(runEnvValues[key] ?? '').trim().length === 0,
+    )
+    if (unresolvedEnvVars.length > 0) {
+      toast({
+        title: 'Missing environment values',
+        description: 'Please fill all required variables before continuing.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    const envValues: Record<string, string> = {}
+    for (const [key, rawValue] of Object.entries(runEnvValues)) {
+      const value = String(rawValue ?? '').trim()
+      if (value) envValues[key] = value
+    }
+
+    const payload: CampaignRunContinueRequest = {
+      sessionId: runSessionId,
+    }
+
+    if (runMissingDb) payload.db = String(runDbValue).trim()
+    if (Object.keys(envValues).length > 0) payload.envValues = envValues
+
+    setRunSubmitting(true)
+    try {
+      const response = await continueCampaignRun(campaignNumericId, payload)
+      await applyRunResponse(response)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to continue campaign run'
+      toast({ title: 'Run failed', description: message, variant: 'destructive' })
+    } finally {
+      setRunSubmitting(false)
+    }
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
 
   const runSelectedTests = () => {
     if (!campaign) return
@@ -995,6 +1174,8 @@ export default function CampaignDetailsPage() {
                       ))}
                     </div>
 
+                    
+
                     <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Clock className="h-4 w-4" />
@@ -1008,10 +1189,77 @@ export default function CampaignDetailsPage() {
                       <Button asChild variant="outline" size="sm">
                         <Link href={`/executions?campaignId=${campaign.id}`}>View executions</Link>
                       </Button>
-                      <Button size="sm" className="gap-2" onClick={runCampaign}>
-                        <Play className="h-4 w-4" />
-                        Run campaign
-                      </Button>
+                      <Button
+  type="button"
+  size="sm"
+  onClick={() => void runCampaign()}
+  disabled={runSubmitting}
+>
+  {runSubmitting ? "Running..." : "Run campaign"}
+</Button>
+
+   {/* --------------------------------------------------------------------------------------------------- */}
+        <Dialog open={runDialogOpen} onOpenChange={setRunDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Run campaign needs more inputs</DialogTitle>
+              <DialogDescription>
+                The project preparation needs extra values before execution can start.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {runMissingDb ? (
+                <div className="space-y-2">
+                  <Label>Database type</Label>
+                  <Select value={runDbValue} onValueChange={setRunDbValue}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select database" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {runDbOptions.map((db) => (
+                        <SelectItem key={db} value={db}>
+                          {db}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+
+              {runMissingEnvVars.map((key) => (
+                <div key={key} className="space-y-2">
+                  <Label htmlFor={'run-env-' + key}>{key}</Label>
+                  <Input
+                    id={'run-env-' + key}
+                    value={runEnvValues[key] ?? ''}
+                    onChange={(e) =>
+                      setRunEnvValues((prev) => ({
+                        ...prev,
+                        [key]: e.target.value,
+                      }))
+                    }
+                    placeholder={'Value for ' + key}
+                  />
+                </div>
+              ))}
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setRunDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void submitRunInputs()}
+                disabled={runSubmitting || (runMissingDb && String(runDbValue).trim().length === 0)}
+              >
+                {runSubmitting ? 'Submitting…' : 'Continue run'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        {/* --------------------------------------------------------------------------------------------------- */}
                     </div>
                   </div>
 

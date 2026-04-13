@@ -43,7 +43,7 @@ export interface TestExecutionDto {
   executionDate: string
   executionType: ExecutionType
   status: ExecutionStatus
-  sessionId: number
+  campaignId: number
 }
 
 export type TestExecution = TestExecutionDto
@@ -64,6 +64,38 @@ export type EndpointDto = {
   confidence: number
   requestSchema: string | null
 }
+
+// ---------------------------------------------------------------------
+export type CampaignRunRequest = {
+  branch?: string | null
+  db?: string | null
+  envValues?: Record<string, string>
+  hostPortBase?: number | null
+  useOllama?: boolean
+  ollamaModel?: string | null
+}
+
+export type CampaignRunContinueRequest = {
+  sessionId: string
+  db?: string | null
+  envValues?: Record<string, string>
+  hostPortBase?: number | null
+  useOllama?: boolean
+  ollamaModel?: string | null
+}
+
+export type CampaignRunResponse = {
+  status: string
+  message?: string | null
+  sessionId?: string | null
+  execution?: TestExecutionDto | null
+  endpoints?: EndpointDto[] | null
+  missingDb?: boolean | null
+  missingEnvVars?: string[] | null
+  dbOptions?: string[] | null
+  notes?: string[] | null
+}
+// ---------------------------------------------------------------------
 
 export type DiscoveryStatus =
   | 'queued'
@@ -475,34 +507,34 @@ export async function getSessions(projectId: number): Promise<TestSession[]> {
   return listSessions({ projectId })
 }
 
-export async function getExecutions(sessionId: number): Promise<TestExecution[]> {
-  return listExecutions({ sessionId })
+export async function getExecutions(campaignId: number): Promise<TestExecution[]> {
+  return listExecutions({ campaignId })
 }
 
 export async function createExecution(
-  sessionId: number,
+  campaignId: number,
   input: TestExecutionInput,
 ): Promise<TestExecution> {
-  return createExecutionDto(sessionId, input)
+  return createExecutionDto(campaignId, input)
 }
 
 export async function listExecutions(params?: {
-  sessionId?: number
+  campaignId?: number
 }): Promise<TestExecutionDto[]> {
   const query = new URLSearchParams()
-  if (params?.sessionId !== undefined) query.set('sessionId', String(params.sessionId))
-  const suffix = query.toString() ? `?${query.toString()}` : ''
-  return requestJson<TestExecutionDto[]>(`/api/executions${suffix}`, { cache: 'no-store' })
+  if (params?.campaignId !== undefined) query.set('campaignId', String(params.campaignId))
+  const suffix = query.toString() ? '?' + query.toString() : ''
+  return requestJson<TestExecutionDto[]>('/api/executions' + suffix, { cache: 'no-store' })
 }
 
 export async function getExecution(id: number): Promise<TestExecutionDto> {
-  return requestJson<TestExecutionDto>(`/api/executions/${encodeURIComponent(String(id))}`, {
+  return requestJson<TestExecutionDto>('/api/executions/' + encodeURIComponent(String(id)), {
     cache: 'no-store',
   })
 }
 
 export async function createExecutionDto(
-  sessionId: number,
+  campaignId: number,
   input: TestExecutionInput,
 ): Promise<TestExecutionDto> {
   const body: Record<string, unknown> = {
@@ -513,11 +545,14 @@ export async function createExecutionDto(
   if ('executionNumber' in input) body.executionNumber = input.executionNumber ?? null
   if (input.executionDate !== undefined) body.executionDate = input.executionDate
 
-  return requestJson<TestExecutionDto>(`/api/executions?sessionId=${encodeURIComponent(String(sessionId))}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
+  return requestJson<TestExecutionDto>(
+    '/api/executions?campaignId=' + encodeURIComponent(String(campaignId)),
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+  )
 }
 
 export async function updateExecution(
@@ -628,3 +663,63 @@ export async function createTestCase(input: TestCaseCreateRequest): Promise<Test
     }),
   })
 }
+
+// --------------------------------------------------
+export async function startCampaignRun(
+campaignId: number,
+payload: CampaignRunRequest = {},
+): Promise<CampaignRunResponse> {
+const response = await fetch(
+'/api/campaigns/' + encodeURIComponent(String(campaignId)) + '/Run',
+{
+method: 'POST',
+credentials: 'include',
+headers: {
+accept: 'application/json',
+'content-type': 'application/json',
+},
+body: JSON.stringify(payload),
+},
+)
+
+const data = (await response.json().catch(() => null)) as CampaignRunResponse | null
+
+if (response.status === 409 && data) return data
+
+if (!response.ok) {
+const message = await readReadableError(response)
+throw new Error(message)
+}
+
+return (data ?? { status: 'started' }) as CampaignRunResponse
+}
+
+export async function continueCampaignRun(
+campaignId: number,
+payload: CampaignRunContinueRequest,
+): Promise<CampaignRunResponse> {
+const response = await fetch(
+'/api/campaigns/' + encodeURIComponent(String(campaignId)) + '/Run/continue',
+{
+method: 'POST',
+credentials: 'include',
+headers: {
+accept: 'application/json',
+'content-type': 'application/json',
+},
+body: JSON.stringify(payload),
+},
+)
+
+const data = (await response.json().catch(() => null)) as CampaignRunResponse | null
+
+if (response.status === 409 && data) return data
+
+if (!response.ok) {
+const message = await readReadableError(response)
+throw new Error(message)
+}
+
+return (data ?? { status: 'started' }) as CampaignRunResponse
+}
+// --------------------------------------------------

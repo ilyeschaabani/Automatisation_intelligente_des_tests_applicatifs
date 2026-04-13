@@ -963,7 +963,14 @@ class OpenAPISpec:
 
                 schema = it.get("schema")
                 if not isinstance(schema, dict):
-                    schema = {"type": "string"}
+                    java_type = it.get("java_type")
+                    if isinstance(java_type, str) and java_type.strip() and java_type_to_schema is not None:
+                        try:
+                            schema = java_type_to_schema(java_type)
+                        except Exception:
+                            schema = {"type": "string"}
+                    else:
+                        schema = {"type": "string"}
 
                 param_obj: Dict[str, Any] = {
                     "name": name,
@@ -1059,12 +1066,34 @@ class OpenAPISpec:
         if not isinstance(body, dict):
             return None
 
+        required = bool(body.get("required", True))
         content_type = body.get("content_type") or "application/json"
+
         schema = body.get("schema")
         if not isinstance(schema, dict):
-            schema = {"type": "object"}
-
-        required = bool(body.get("required", True))
+            # Spring visitor stores dto_type (Java type string) but not an explicit schema.
+            # We can deterministically map it to an OpenAPI schema fragment.
+            if str(content_type).lower() == "multipart/form-data":
+                field = body.get("multipart_field")
+                if isinstance(field, str) and field.strip():
+                    schema = {
+                        "type": "object",
+                        "properties": {
+                            field: {"type": "string", "format": "binary"},
+                        },
+                        "required": [field] if required else [],
+                    }
+                else:
+                    schema = {"type": "object"}
+            else:
+                dto_type = body.get("dto_type")
+                if isinstance(dto_type, str) and dto_type.strip() and java_type_to_schema is not None:
+                    try:
+                        schema = java_type_to_schema(dto_type)
+                    except Exception:
+                        schema = {"type": "object"}
+                else:
+                    schema = {"type": "object"}
 
         media_obj: Dict[str, Any] = {"schema": schema}
         if "example" in body:

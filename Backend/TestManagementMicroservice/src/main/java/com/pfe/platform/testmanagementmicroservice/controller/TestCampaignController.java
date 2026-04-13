@@ -2,6 +2,7 @@ package com.pfe.platform.testmanagementmicroservice.controller;
 
 import com.pfe.platform.testmanagementmicroservice.DTO.*;
 import com.pfe.platform.testmanagementmicroservice.entity.TestCampaign;
+import com.pfe.platform.testmanagementmicroservice.service.TestCompagne.CampaignRunService;
 import com.pfe.platform.testmanagementmicroservice.service.TestCompagne.TestCampaignMapper;
 import com.pfe.platform.testmanagementmicroservice.service.TestCompagne.TestCampaignService;
 import org.springframework.http.HttpStatus;
@@ -15,9 +16,11 @@ import java.util.List;
 public class TestCampaignController {
 
     private final TestCampaignService testCampaignService;
+    private final CampaignRunService campaignRunService;
 
-    public TestCampaignController(TestCampaignService testCampaignService) {
+    public TestCampaignController(TestCampaignService testCampaignService , CampaignRunService campaignRunService) {
         this.testCampaignService = testCampaignService;
+        this.campaignRunService = campaignRunService;
     }
 
     @GetMapping
@@ -61,6 +64,22 @@ public class TestCampaignController {
     public ResponseEntity<List<EndpointDto>> getEndpointsForTestCampaign(@PathVariable Long campaignId) {
         List<EndpointDto> endpoints = testCampaignService.getEndpointsForTestCampaign(campaignId);
         return ResponseEntity.ok(endpoints);
+    }
+
+    @PostMapping("/{campaignId}/run")
+    public ResponseEntity<CampaignRunResponse> runCampaign(
+            @PathVariable Long campaignId,
+            @RequestBody(required = false) CampaignRunRequest request
+    ) {
+        return campaignRunService.run(campaignId, request);
+    }
+
+    @PostMapping("/{campaignId}/run/continue")
+    public ResponseEntity<CampaignRunResponse> continueCampaignRun(
+            @PathVariable Long campaignId,
+            @RequestBody CampaignRunContinueRequest request
+    ) {
+        return campaignRunService.continueRun(campaignId, request);
     }
 
 }
