@@ -5,6 +5,7 @@ import pathlib
 from typing import Any, Optional
 
 import yaml
+import re
 
 
 @dataclasses.dataclass(frozen=True)
@@ -114,6 +115,20 @@ def render_compose_yaml_preview(*, artifacts: ComposeArtifacts, base_dir: pathli
     return yaml.safe_dump(compose, sort_keys=False, width=4096)
 
 
+def _sanitize_compose_service_name(name: str) -> str:
+    """Return a docker-compose-compatible service name."""
+
+    normalized = re.sub(r"[^a-z0-9-]+", "-", name.lower()).strip("-")
+    return normalized or "service"
+
+
+def _env_prefix_from_service_name(name: str) -> str:
+    """Return an env-var-safe prefix derived from a service name."""
+
+    normalized = re.sub(r"[^A-Z0-9]+", "_", name.upper()).strip("_")
+    return normalized or "SERVICE"
+
+
 def _build_compose_dict(a: ComposeArtifacts, *, base_dir: pathlib.Path) -> dict[str, Any]:
     services: dict[str, Any] = {}
     volumes: dict[str, Any] = {}
@@ -133,29 +148,51 @@ def _build_compose_dict(a: ComposeArtifacts, *, base_dir: pathlib.Path) -> dict[
         "redis": "redis",
     }
 
-    service_names = {s.name for s in a.services}
+    service_name_by_original: dict[str, str] = {}
+    used_service_names: set[str] = set()
+    for s in a.services:
+        base_name = _sanitize_compose_service_name(s.name)
+        candidate = base_name
+        suffix = 2
+        # Ensure generated app service names do not collide with each other or DB service names.
+        while candidate in used_service_names or candidate in db_service_names.values():
+            candidate = f"{base_name}-{suffix}"
+            suffix += 1
+        used_service_names.add(candidate)
+        service_name_by_original[s.name] = candidate
+
+    service_names = [s.name for s in a.services]
     # Heuristic naming used in many Spring Cloud repos
-    has_eureka = any(n.lower() in {"eurekaserver", "eureka-server"} for n in service_names)
-    has_gateway = any(n.lower() in {"gateway", "api-gateway"} for n in service_names)
-    eureka_name = next((n for n in service_names if n.lower() in {"eurekaserver", "eureka-server"}), None)
-    gateway_name = next((n for n in service_names if n.lower() in {"gateway", "api-gateway"}), None)
+    has_eureka = any(_sanitize_compose_service_name(n) in {"eurekaserver", "eureka-server"} for n in service_names)
+    has_gateway = any(_sanitize_compose_service_name(n) in {"gateway", "api-gateway"} for n in service_names)
+    eureka_name = next(
+        (n for n in service_names if _sanitize_compose_service_name(n) in {"eurekaserver", "eureka-server"}),
+        None,
+    )
+    gateway_name = next(
+        (n for n in service_names if _sanitize_compose_service_name(n) in {"gateway", "api-gateway"}),
+        None,
+    )
+    eureka_service_name = service_name_by_original.get(eureka_name) if eureka_name else None
+    gateway_service_name = service_name_by_original.get(gateway_name) if gateway_name else None
 
     for s in a.services:
+        compose_service_name = service_name_by_original[s.name]
         context = _relpath(base_dir, s.service_dir)
         svc: dict[str, Any] = {
-            "container_name": s.name,
+            "container_name": compose_service_name,
             "build": {"context": context},
             "environment": {},
             "networks": [network_name],
         }
 
         # Basic service startup order (matches common Spring Cloud setup)
-        if has_eureka and eureka_name and s.name != eureka_name:
+        if has_eureka and eureka_service_name and s.name != eureka_name:
             # gateway and apps usually need eureka
-            svc.setdefault("depends_on", {})[eureka_name] = {"condition": "service_started"}
-        if has_gateway and gateway_name and s.name not in {gateway_name, eureka_name}:
+            svc.setdefault("depends_on", {})[eureka_service_name] = {"condition": "service_started"}
+        if has_gateway and gateway_service_name and s.name not in {gateway_name, eureka_name}:
             # apps often depend on gateway
-            svc.setdefault("depends_on", {})[gateway_name] = {"condition": "service_started"}
+            svc.setdefault("depends_on", {})[gateway_service_name] = {"condition": "service_started"}
 
         # If an explicit Dockerfile exists in the context, reference it (matches common compose style).
         try:
@@ -172,7 +209,7 @@ def _build_compose_dict(a: ComposeArtifacts, *, base_dir: pathlib.Path) -> dict[
             else:
                 svc["environment"]["PORT"] = container_port
         else:
-            env_key = f"{s.name.upper().replace('-', '_')}_PORT"
+            env_key = f"{_env_prefix_from_service_name(compose_service_name)}_PORT"
             container_port = f"${{{env_key}:?set {env_key}}}"
             if s.runtime == "java":
                 svc["environment"]["SERVER_PORT"] = container_port
@@ -182,7 +219,7 @@ def _build_compose_dict(a: ComposeArtifacts, *, base_dir: pathlib.Path) -> dict[
         # host port mapping: avoid collisions without guessing
         needs_host_env = s.port is None or (s.port is not None and port_counts.get(s.port, 0) > 1)
         if needs_host_env:
-            host_env = f"{s.name.upper().replace('-', '_')}_HOST_PORT"
+            host_env = f"{_env_prefix_from_service_name(compose_service_name)}_HOST_PORT"
             host_port = f"${{{host_env}:?set {host_env}}}"
         else:
             host_port = container_port
@@ -199,13 +236,13 @@ def _build_compose_dict(a: ComposeArtifacts, *, base_dir: pathlib.Path) -> dict[
             svc["environment"].update(_db_env_for_app(s.db, host=db_svc_name, runtime=s.runtime))
 
         # Spring Cloud Eureka client configuration (only when eureka is present)
-        if s.runtime == "java" and has_eureka and eureka_name and s.name != eureka_name:
+        if s.runtime == "java" and has_eureka and eureka_service_name and s.name != eureka_name:
             svc["environment"].setdefault(
                 "EUREKA_CLIENT_SERVICEURL_DEFAULTZONE",
-                f"http://{eureka_name}:8761/eureka",
+                f"http://{eureka_service_name}:8761/eureka",
             )
 
-        services[s.name] = svc
+        services[compose_service_name] = svc
 
     for db in sorted([d for d in db_types if d is not None]):
         db_svc_name = db_service_names.get(db)

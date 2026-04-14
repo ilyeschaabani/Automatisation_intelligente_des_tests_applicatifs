@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/campaigns")
@@ -80,6 +81,15 @@ public class TestCampaignController {
             @RequestBody CampaignRunContinueRequest request
     ) {
         return campaignRunService.continueRun(campaignId, request);
+    }
+
+    @PostMapping("/{campaignId}/run/{executionId}/cleanup")
+    public ResponseEntity<Map<String, Object>> cleanupCampaignRun(
+            @PathVariable Long campaignId,
+            @PathVariable Long executionId
+    ) {
+        campaignRunService.cleanupRun(campaignId, executionId);
+        return ResponseEntity.ok(Map.of("status", "cleaned"));
     }
 
 }

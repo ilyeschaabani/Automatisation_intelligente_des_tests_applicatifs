@@ -39,6 +39,26 @@ public class TestExecution {
     @JoinColumn(name = "campaign_id", nullable = false)
     TestCampaign campaign;
 
+    @Column(length = 128)
+    String runSessionId;
+
+    @Column(length = 1024)
+    String tempRepoPath;
+
+    @Column(length = 1024)
+    String composePath;
+
+    @Column(length = 128)
+    String composeProjectName;
+
+    @Column(length = 512)
+    String healthUrl;
+
+    @Column(columnDefinition = "TEXT")
+    String runtimeError;
+
+    Instant cleanedAt;
+
     @PrePersist
     void onCreate() {
         if (executionDate == null) executionDate = Instant.now();
