@@ -36,6 +36,7 @@ import { Progress } from '@/components/ui/progress'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import {
   Select,
@@ -80,6 +81,7 @@ import {
   continueCampaignRun,
   type CampaignRunContinueRequest,
   type CampaignRunResponse,
+  type EditableFileDto,
   type DiscoveryFlowDto,
   type DiscoveryStatus,
   type DiscoveryQuestion,
@@ -410,10 +412,12 @@ export default function CampaignDetailsPage() {
   const [runDialogOpen, setRunDialogOpen] = useState(false)
   const [runSessionId, setRunSessionId] = useState<string | null>(null)
   const [runMissingDb, setRunMissingDb] = useState(false)
-  const [runDbOptions, setRunDbOptions] = useState<string[]>(['postgres', 'mysql', 'mongo', 'redis'])
+  const [runDbOptions, setRunDbOptions] = useState<string[]>(['postgres', 'mysql', 'mongodb', 'redis'])
   const [runDbValue, setRunDbValue] = useState('')
   const [runMissingEnvVars, setRunMissingEnvVars] = useState<string[]>([])
   const [runEnvValues, setRunEnvValues] = useState<Record<string, string>>({})
+  const [runEditableFiles, setRunEditableFiles] = useState<EditableFileDto[]>([])
+  const [runFileEdits, setRunFileEdits] = useState<Record<string, string>>({})
 
   const [remoteCampaign, setRemoteCampaign] = useState<Campaign | null>(null)
   const [remoteLoading, setRemoteLoading] = useState(false)
@@ -938,7 +942,7 @@ export default function CampaignDetailsPage() {
    const applyRunResponse = async (response: CampaignRunResponse) => {
     const status = String(response.status ?? '').trim().toLowerCase()
 
-    if (status === 'needs_user_input') {
+    if (status === 'needs_user_input' || status === 'needs_review') {
       const sessionId = String(response.sessionId ?? '').trim()
       if (!sessionId) {
         throw new Error('Backend requires user inputs but did not return sessionId')
@@ -950,7 +954,7 @@ export default function CampaignDetailsPage() {
       const options = Array.isArray(response.dbOptions)
         ? response.dbOptions.map((v) => String(v)).filter((v) => v.length > 0)
         : []
-      setRunDbOptions(options.length > 0 ? options : ['postgres', 'mysql', 'mongo', 'redis'])
+      setRunDbOptions(options.length > 0 ? options : ['postgres', 'mysql', 'mongodb', 'redis'])
 
       const missingEnv = Array.isArray(response.missingEnvVars)
         ? response.missingEnvVars.map((v) => String(v)).filter((v) => v.length > 0)
@@ -963,12 +967,37 @@ export default function CampaignDetailsPage() {
         }
         return next
       })
+
+      const editable = Array.isArray(response.editableFiles)
+        ? response.editableFiles
+            .map((f) => ({
+              path: String(f?.path ?? '').trim(),
+              content: String(f?.content ?? ''),
+            }))
+            .filter((f) => f.path.length > 0)
+        : []
+      setRunEditableFiles(editable)
+      setRunFileEdits(() => {
+        const next: Record<string, string> = {}
+        for (const file of editable) {
+          next[file.path] = file.content
+        }
+        return next
+      })
+
       setRunDialogOpen(true)
 
-      toast({
-        title: 'More information needed',
-        description: 'Please provide DB and environment values to continue running this campaign.',
-      })
+      if (status === 'needs_user_input') {
+        toast({
+          title: 'More information needed',
+          description: 'Please provide DB and environment values, then review docker files to continue.',
+        })
+      } else {
+        toast({
+          title: 'Review docker artifacts',
+          description: 'Review and edit docker-compose.yml / Dockerfiles, then start the run.',
+        })
+      }
       return
     }
 
@@ -992,6 +1021,8 @@ export default function CampaignDetailsPage() {
 
     setRunDialogOpen(false)
     setRunSessionId(null)
+    setRunEditableFiles([])
+    setRunFileEdits({})
 
     toast({
       title: 'Campaign started',
@@ -1068,6 +1099,7 @@ export default function CampaignDetailsPage() {
 
     if (runMissingDb) payload.db = String(runDbValue).trim()
     if (Object.keys(envValues).length > 0) payload.envValues = envValues
+    if (Object.keys(runFileEdits).length > 0) payload.fileOverrides = runFileEdits
 
     setRunSubmitting(true)
     try {
@@ -1200,11 +1232,12 @@ export default function CampaignDetailsPage() {
 
    {/* --------------------------------------------------------------------------------------------------- */}
         <Dialog open={runDialogOpen} onOpenChange={setRunDialogOpen}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Run campaign needs more inputs</DialogTitle>
+              <DialogTitle>Review docker artifacts</DialogTitle>
               <DialogDescription>
-                The project preparation needs extra values before execution can start.
+                Review and edit the generated docker-compose.yml and Dockerfiles. Provide any missing DB/env values,
+                then start the run.
               </DialogDescription>
             </DialogHeader>
 
@@ -1243,6 +1276,31 @@ export default function CampaignDetailsPage() {
                   />
                 </div>
               ))}
+
+              {runEditableFiles.length > 0 ? (
+                <>
+                  <Separator />
+                  <div className="space-y-4">
+                    {runEditableFiles.map((file) => (
+                      <div key={file.path} className="space-y-2">
+                        <Label htmlFor={'run-file-' + slugify(file.path)}>{file.path}</Label>
+                        <Textarea
+                          id={'run-file-' + slugify(file.path)}
+                          value={runFileEdits[file.path] ?? file.content ?? ''}
+                          onChange={(e) =>
+                            setRunFileEdits((prev) => ({
+                              ...prev,
+                              [file.path]: e.target.value,
+                            }))
+                          }
+                          className="min-h-[220px] font-mono text-xs"
+                          spellCheck={false}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : null}
             </div>
 
             <DialogFooter>
@@ -1254,7 +1312,7 @@ export default function CampaignDetailsPage() {
                 onClick={() => void submitRunInputs()}
                 disabled={runSubmitting || (runMissingDb && String(runDbValue).trim().length === 0)}
               >
-                {runSubmitting ? 'Submitting…' : 'Continue run'}
+                {runSubmitting ? 'Submitting…' : 'Start run'}
               </Button>
             </DialogFooter>
           </DialogContent>

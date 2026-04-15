@@ -79,9 +79,15 @@ export type CampaignRunContinueRequest = {
   sessionId: string
   db?: string | null
   envValues?: Record<string, string>
+  fileOverrides?: Record<string, string>
   hostPortBase?: number | null
   useOllama?: boolean
   ollamaModel?: string | null
+}
+
+export type EditableFileDto = {
+  path: string
+  content: string
 }
 
 export type CampaignRunResponse = {
@@ -94,6 +100,7 @@ export type CampaignRunResponse = {
   missingEnvVars?: string[] | null
   dbOptions?: string[] | null
   notes?: string[] | null
+  editableFiles?: EditableFileDto[] | null
 }
 // ---------------------------------------------------------------------
 

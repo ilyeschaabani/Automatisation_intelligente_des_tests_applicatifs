@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import pathlib
+import shlex
 from typing import Optional
 
 import typer
 
-from .pipeline import generate_compose_for_target
+from .pipeline import MissingInputsError, generate_compose_for_target
 from .git_ops import ensure_local_checkout
 from .analyze import analyze_project
 
@@ -34,6 +36,14 @@ def generate(
         "--in-place/--no-in-place",
         help="Write files into the analyzed project directory (default true).",
     ),
+    write_dockerfiles_in_repo: bool = typer.Option(
+        False,
+        "--write-dockerfiles-in-repo/--no-write-dockerfiles-in-repo",
+        help=(
+            "Allow generating Dockerfiles inside service build contexts even when --no-in-place. "
+            "(Required to build services that have no Dockerfile.)"
+        ),
+    ),
     use_ollama: bool = typer.Option(
         False, "--use-ollama/--no-ollama", help="Use Ollama if available (default false)."
     ),
@@ -49,6 +59,22 @@ def generate(
     health_path: Optional[str] = typer.Option(
         None,
         help="Force HTTP health path (e.g. /health). If omitted, detection is used.",
+    ),
+    api_service: Optional[str] = typer.Option(
+        None,
+        "--api-service",
+        help=(
+            "Override which service is treated as the main API and exposed on the host. "
+            "Accepts either a service folder name or its sanitized compose name."
+        ),
+    ),
+    strict: bool = typer.Option(
+        True,
+        "--strict/--no-strict",
+        help=(
+            "Strict mode: do not generate non-runnable artifacts. If a runnable start command cannot be inferred, "
+            "dcgen will prompt for it (or fail if non-interactive)."
+        ),
     ),
     ask_missing_env: bool = typer.Option(
         True,
@@ -94,18 +120,57 @@ def generate(
         if not detected:
             chosen_db = _maybe_prompt_for_db_type()
 
-    result = generate_compose_for_target(
-        target=target,
-        branch=branch,
-        out_dir=out,
-        in_place=in_place,
-        use_ollama=use_ollama,
-        ollama_model=ollama_model,
-        forced_db=chosen_db,
-        forced_port=port,
-        forced_health_path=health_path,
-        service_port_overrides=service_port_overrides or None,
-    )
+    service_start_cmd_overrides: dict[str, list[str]] = {}
+    service_extra_env_overrides: dict[str, dict[str, str]] = {}
+
+    result = None
+    last_missing: list[dict[str, str]] = []
+    for _round in range(10):
+        try:
+            result = generate_compose_for_target(
+                target=target,
+                branch=branch,
+                out_dir=out,
+                in_place=in_place,
+                use_ollama=use_ollama,
+                ollama_model=ollama_model,
+                forced_db=chosen_db,
+                forced_port=port,
+                forced_health_path=health_path,
+                api_service=api_service,
+                strict=strict,
+                service_start_cmd_overrides=service_start_cmd_overrides or None,
+                service_extra_env_overrides=service_extra_env_overrides or None,
+                service_port_overrides=service_port_overrides or None,
+                write_dockerfiles_in_repo=write_dockerfiles_in_repo,
+            )
+            break
+        except MissingInputsError as exc:
+            last_missing = list(getattr(exc, "missing", []) or [])
+            if not strict:
+                raise
+            if not _maybe_prompt_for_missing_inputs(
+                missing=last_missing,
+                service_start_cmd_overrides=service_start_cmd_overrides,
+            ):
+                typer.echo("\nStrict generation cannot proceed without additional inputs:")
+                for item in last_missing:
+                    svc = item.get("service") or "(unknown)"
+                    reason = item.get("reason") or "(no reason)"
+                    typer.echo(f"- {svc}: {reason}")
+                typer.echo(
+                    "\nHint: add a Dockerfile to the service build context, re-run with --in-place, "
+                    "or use --no-strict for a best-effort draft."
+                )
+                raise typer.Exit(code=2)
+
+    if result is None:
+        typer.echo("Too many strict-mode missing-input rounds; aborting.")
+        for item in last_missing:
+            svc = item.get("service") or "(unknown)"
+            reason = item.get("reason") or "(no reason)"
+            typer.echo(f"- {svc}: {reason}")
+        raise typer.Exit(code=2)
 
     typer.echo(f"Project dir: {result.project_dir}")
     typer.echo(f"Wrote: {result.compose_path}")
@@ -125,6 +190,78 @@ def generate(
         typer.echo("\nNotes:")
         for n in result.notes:
             typer.echo(f"- {n}")
+
+
+def _maybe_prompt_for_missing_inputs(
+    *,
+    missing: list[dict[str, str]],
+    service_start_cmd_overrides: dict[str, list[str]],
+) -> bool:
+    """Try to satisfy MissingInputsError items via interactive prompts.
+
+    Returns True if any overrides were collected and the caller should retry.
+    """
+
+    if not missing:
+        return False
+
+    start_cmd_items: list[dict[str, str]] = []
+    for item in missing:
+        reason = (item.get("reason") or "").lower()
+        if "start command" in reason or "service_start_cmd_overrides" in reason:
+            start_cmd_items.append(item)
+
+    if not start_cmd_items:
+        return False
+
+    typer.echo("\nSome services need an explicit start command to generate a runnable Dockerfile.")
+    typer.echo("Enter either a shell-style command or a JSON array, e.g.:")
+    typer.echo("  - npm start")
+    typer.echo("  - [\"npm\", \"start\"]")
+
+    changed = False
+    for item in start_cmd_items:
+        service = (item.get("service") or "").strip()
+        if not service:
+            continue
+        if service in service_start_cmd_overrides:
+            continue
+
+        typer.echo(f"\nService: {service}")
+        if item.get("reason"):
+            typer.echo(f"Reason: {item['reason']}")
+
+        while True:
+            raw = typer.prompt("Start command", default="", show_default=False)
+            cmd = _parse_start_cmd_input(raw)
+            if cmd:
+                service_start_cmd_overrides[service] = cmd
+                changed = True
+                break
+            typer.echo("Start command cannot be empty")
+
+    return changed
+
+
+def _parse_start_cmd_input(raw: str) -> list[str]:
+    raw = (raw or "").strip()
+    if not raw:
+        return []
+
+    if raw.startswith("["):
+        try:
+            parsed = json.loads(raw)
+        except Exception as exc:  # noqa: BLE001
+            raise typer.BadParameter("Start command JSON is invalid") from exc
+        if not isinstance(parsed, list) or not parsed or not all(isinstance(x, str) and x.strip() for x in parsed):
+            raise typer.BadParameter("Start command JSON must be a non-empty array of strings")
+        return [x.strip() for x in parsed]
+
+    try:
+        parts = shlex.split(raw)
+    except Exception as exc:  # noqa: BLE001
+        raise typer.BadParameter("Start command could not be parsed (check quotes)") from exc
+    return [p for p in parts if p.strip()]
 
 
 def _maybe_prompt_and_write_env(*, env_example_path: pathlib.Path, env_path: pathlib.Path) -> None:

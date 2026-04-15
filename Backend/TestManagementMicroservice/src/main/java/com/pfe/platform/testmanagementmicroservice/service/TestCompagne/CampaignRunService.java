@@ -21,9 +21,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriUtils;
+import org.yaml.snakeyaml.Yaml;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
@@ -99,7 +101,7 @@ public class CampaignRunService {
                 req.ollamaModel()
         );
 
-        return callCloneRepo(campaign, project, repoUrl, branch, payload, null, effectiveHostPortBase);
+        return callCloneRepo(campaign, project, repoUrl, payload, null, effectiveHostPortBase, false, null);
     }
 
     @Transactional
@@ -108,11 +110,17 @@ public class CampaignRunService {
         if (incomingSessionId == null) {
             throw new IllegalArgumentException("sessionId is required");
         }
+        log.info("continueRun: sessionId={}, db={}, envValues={}", incomingSessionId, request.db(), request.envValues());
+        if (request.db() == null || request.db().isBlank()) {
+            log.warn("continueRun: db is missing or blank!");
+        }
+        if (request.envValues() == null || request.envValues().isEmpty()) {
+            log.warn("continueRun: envValues is missing or empty!");
+        }
 
         TestCampaign campaign = loadCampaign(campaignId);
         Project project = campaign.getProject();
         String repoUrl = requireRepositoryUrl(project);
-        String branch = firstNonBlank(project.getDefaultBranch(), "main");
 
         Integer effectiveHostPortBase = resolveHostPortBaseForContinue(incomingSessionId, request.hostPortBase());
 
@@ -130,10 +138,11 @@ public class CampaignRunService {
                 campaign,
                 project,
                 repoUrl,
-                branch,
                 payload,
                 incomingSessionId,
-                effectiveHostPortBase
+            effectiveHostPortBase,
+            true,
+            request.fileOverrides()
         );
     }
 
@@ -192,10 +201,11 @@ public class CampaignRunService {
             TestCampaign campaign,
             Project project,
             String repoUrl,
-            String branch,
             Map<String, Object> payload,
             String incomingSessionId,
-            Integer hostPortBase
+            Integer hostPortBase,
+            boolean startCompose,
+            Map<String, String> fileOverrides
     ) {
         String base = normalizeBaseUrl(discoveryBaseUrl);
         String url = (incomingSessionId == null)
@@ -203,16 +213,26 @@ public class CampaignRunService {
                 : base + "/continue/" + UriUtils.encodePathSegment(incomingSessionId, StandardCharsets.UTF_8);
 
         try {
+            log.info("Payload sent to Python service: {}", payload);
             Map<String, Object> result = postJson(url, payload);
-            CampaignRunResponse response = handleSuccess(campaign, project, repoUrl, branch, result, hostPortBase);
+
+            CampaignRunResponse response = startCompose
+                    ? handleStartedSuccess(campaign, project, repoUrl, result, hostPortBase, fileOverrides)
+                    : handlePreparedSuccess(campaign, project, repoUrl, result, hostPortBase);
 
             String sid = trimToNull(response.sessionId());
             if (sid != null) {
-                hostPortBaseBySession.remove(sid);
+                if (startCompose && "started".equalsIgnoreCase(trimToNull(response.status()))) {
+                    hostPortBaseBySession.remove(sid);
+                } else if (hostPortBase != null) {
+                    // Preserve hostPortBase for the follow-up /run/continue.
+                    hostPortBaseBySession.put(sid, hostPortBase);
+                }
             }
             return ResponseEntity.ok(response);
 
         } catch (HttpStatusCodeException ex) {
+            log.error("Python service error {}: {}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
             if (ex.getStatusCode().value() == 409) {
                 CampaignRunResponse response = handleNeedsInput(ex);
                 String sid = trimToNull(response.sessionId());
@@ -258,6 +278,21 @@ public class CampaignRunService {
         List<String> dbOptions = asStringList(detail.get("db_options"));
         List<String> notes = asStringList(detail.get("notes"));
 
+        List<EditableFileDto> editableFiles = List.of();
+        String repoPathRaw = trimToNull(asString(detail.get("repo_path")));
+        String composePathRaw = trimToNull(asString(detail.get("compose_path")));
+        if (repoPathRaw != null && composePathRaw != null) {
+            try {
+                Path repoPath = Paths.get(repoPathRaw);
+                Path composePath = Paths.get(composePathRaw);
+                if (!composePath.isAbsolute()) {
+                    composePath = repoPath.resolve(composePath).normalize();
+                }
+                editableFiles = loadEditableFiles(repoPath, composePath);
+            } catch (Exception ignored) {
+            }
+        }
+
         return new CampaignRunResponse(
                 "needs_user_input",
                 "Run requires additional inputs",
@@ -267,21 +302,69 @@ public class CampaignRunService {
                 missingDb,
                 missingEnvVars,
                 dbOptions,
-                notes
+                notes,
+                editableFiles
         );
     }
 
-    private CampaignRunResponse handleSuccess(
+    private CampaignRunResponse handlePreparedSuccess(
             TestCampaign campaign,
             Project project,
             String repoUrl,
-            String branch,
             Map<String, Object> result,
             Integer hostPortBase
     ) {
         String sessionId = trimToNull(asString(result.get("session_id")));
         String repoPathRaw = trimToNull(asString(result.get("repo_path")));
         String composePathRaw = trimToNull(asString(result.get("compose_path")));
+        String branch = firstNonBlank(trimToNull(asString(result.get("branch"))), "main");
+
+        if (sessionId == null) {
+            throw new IllegalArgumentException("clone_repo did not return session_id");
+        }
+        if (repoPathRaw == null || composePathRaw == null) {
+            throw new IllegalArgumentException("clone_repo did not return repo_path/compose_path");
+        }
+
+        Path repoPath = Paths.get(repoPathRaw);
+        Path composePath = Paths.get(composePathRaw);
+        if (!composePath.isAbsolute()) {
+            composePath = repoPath.resolve(composePath).normalize();
+        }
+
+        List<Map<String, Object>> rawEndpoints = asMapList(result.get("endpoints"));
+        List<String> notes = new ArrayList<>(asStringList(result.get("notes")));
+
+        List<EndpointDto> endpointDtos = persistDiscoveryAndEndpoints(project, repoUrl, branch, rawEndpoints);
+        List<EditableFileDto> editableFiles = loadEditableFiles(repoPath, composePath);
+
+        return new CampaignRunResponse(
+                "needs_review",
+                "Review docker-compose.yml and Dockerfiles before starting the run",
+                sessionId,
+                null,
+                endpointDtos,
+                false,
+                List.of(),
+                List.of(),
+                notes,
+                editableFiles
+        );
+    }
+
+    private CampaignRunResponse handleStartedSuccess(
+            TestCampaign campaign,
+            Project project,
+            String repoUrl,
+            Map<String, Object> result,
+            Integer hostPortBase,
+            Map<String, String> fileOverrides
+    ) {
+        String sessionId = trimToNull(asString(result.get("session_id")));
+        String repoPathRaw = trimToNull(asString(result.get("repo_path")));
+        String composePathRaw = trimToNull(asString(result.get("compose_path")));
+        String apiService = trimToNull(asString(result.get("api_service")));
+        String branch = firstNonBlank(trimToNull(asString(result.get("branch"))), "main");
 
         if (sessionId == null) {
             throw new IllegalArgumentException("clone_repo did not return session_id");
@@ -309,32 +392,44 @@ public class CampaignRunService {
 
         String composeProjectName = dockerComposeRuntimeService.newProjectName(execution.getId());
         Integer apiPort = resolveApiPort(hostPortBase);
-        URI healthUri = buildHealthUri(apiPort);
+        URI requestedHealthUri = buildHealthUri(apiPort);
 
         execution.setRunSessionId(sessionId);
         execution.setTempRepoPath(repoPath.toString());
         execution.setComposePath(composePath.toString());
         execution.setComposeProjectName(composeProjectName);
-        execution.setHealthUrl(healthUri.toString());
+        execution.setHealthUrl(requestedHealthUri.toString());
         execution = testExecutionRepository.save(execution);
 
         try {
-            dockerComposeRuntimeService.composeUpAndWait(
+            List<String> applied = applyFileOverrides(repoPath, composePath, fileOverrides);
+            if (!applied.isEmpty()) {
+                notes.add("Applied overrides: " + String.join(", ", applied));
+            }
+
+            URI effectiveHealthUri = dockerComposeRuntimeService.composeUpAndWait(
                     repoPath,
                     composePath,
                     composeProjectName,
-                    healthUri,
+                    requestedHealthUri,
+                    apiService,
                     Duration.ofSeconds(runComposeStartTimeoutSeconds),
                     Duration.ofSeconds(runApiHealthTimeoutSeconds),
                     Duration.ofMillis(runApiHealthPollIntervalMs)
             );
+
+            // Persist the resolved URL (may differ when compose exposes a dynamic host port).
+            execution.setHealthUrl(effectiveHealthUri.toString());
 
             execution.setStatus(ExecutionStatus.RUNNING);
             execution.setRuntimeError(null);
             execution = testExecutionRepository.save(execution);
 
             notes.add("compose_project=" + composeProjectName);
-            notes.add("health_url=" + healthUri);
+            if (apiService != null) {
+                notes.add("api_service=" + apiService);
+            }
+            notes.add("health_url=" + effectiveHealthUri);
             if (hostPortBase != null) {
                 notes.add("host_port_base=" + hostPortBase);
             }
@@ -358,8 +453,243 @@ public class CampaignRunService {
                 false,
                 List.of(),
                 List.of(),
-                notes
+                notes,
+                List.of()
         );
+    }
+
+    private List<EditableFileDto> loadEditableFiles(Path repoPath, Path composePath) {
+        try {
+            Path repo = repoPath.toAbsolutePath().normalize();
+            Path compose = composePath.toAbsolutePath().normalize();
+
+            List<EditableFileDto> out = new ArrayList<>();
+
+            String composeRel = toRepoRelativePath(repo, compose);
+            String composeContent = safeReadUtf8(compose);
+            if (composeContent != null) {
+                out.add(new EditableFileDto(composeRel, composeContent));
+            }
+
+            for (Path dockerfile : findDockerfilesFromCompose(repo, compose)) {
+                String rel = toRepoRelativePath(repo, dockerfile);
+                String content = safeReadUtf8(dockerfile);
+                out.add(new EditableFileDto(rel, content != null ? content : ""));
+            }
+
+            return out;
+        } catch (Exception ex) {
+            return List.of();
+        }
+    }
+
+    private List<Path> findDockerfilesFromCompose(Path repoPath, Path composePath) {
+        String composeText = safeReadUtf8(composePath);
+        if (composeText == null) {
+            return List.of();
+        }
+
+        Object data;
+        try {
+            data = new Yaml().load(composeText);
+        } catch (Exception ex) {
+            return List.of();
+        }
+        if (!(data instanceof Map<?, ?> root)) {
+            return List.of();
+        }
+
+        Object servicesObj = root.get("services");
+        if (!(servicesObj instanceof Map<?, ?> services)) {
+            return List.of();
+        }
+
+        Path composeDir = composePath.getParent();
+        if (composeDir == null) {
+            return List.of();
+        }
+
+        Path repo = repoPath.toAbsolutePath().normalize();
+        List<Path> out = new ArrayList<>();
+        Set<Path> seen = new LinkedHashSet<>();
+
+        for (Object svcObj : services.values()) {
+            if (!(svcObj instanceof Map<?, ?> svc)) {
+                continue;
+            }
+
+            Object buildObj = svc.get("build");
+            if (buildObj == null) {
+                continue;
+            }
+
+            String contextRel;
+            String dockerfileRel;
+
+            if (buildObj instanceof String s) {
+                contextRel = s;
+                dockerfileRel = "Dockerfile";
+            } else if (buildObj instanceof Map<?, ?> buildMap) {
+                Object ctxObj = buildMap.get("context");
+                contextRel = (ctxObj instanceof String ss) ? ss : ".";
+
+                Object dfObj = buildMap.get("dockerfile");
+                dockerfileRel = (dfObj instanceof String ss) ? ss : "Dockerfile";
+            } else {
+                continue;
+            }
+
+            try {
+                Path contextDir = composeDir.resolve(contextRel).normalize();
+                Path dockerfile = contextDir.resolve(dockerfileRel).normalize().toAbsolutePath();
+                if (!dockerfile.startsWith(repo)) {
+                    continue;
+                }
+                if (seen.add(dockerfile)) {
+                    out.add(dockerfile);
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        return out;
+    }
+
+    private List<String> applyFileOverrides(Path repoPath, Path composePath, Map<String, String> overrides) {
+        if (overrides == null || overrides.isEmpty()) {
+            return List.of();
+        }
+
+        Path repo = repoPath.toAbsolutePath().normalize();
+        Path compose = composePath.toAbsolutePath().normalize();
+        String composeRel = normalizeOverrideKey(toRepoRelativePath(repo, compose));
+
+        Map<String, String> sanitized = new LinkedHashMap<>();
+        for (Map.Entry<String, String> e : overrides.entrySet()) {
+            String key = trimToNull(e.getKey());
+            String value = e.getValue();
+            if (key != null && value != null) {
+                sanitized.put(normalizeOverrideKey(key), value);
+            }
+        }
+        if (sanitized.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> applied = new ArrayList<>();
+
+        // Apply compose override first (if any), then compute allowed Dockerfiles.
+        String composeOverride = sanitized.get(composeRel);
+        if (composeOverride != null) {
+            safeWriteUtf8(compose, composeOverride);
+            applied.add(composeRel);
+        }
+
+        Map<String, Path> allowedDockerfilesByRel = new LinkedHashMap<>();
+        for (Path dockerfile : findDockerfilesFromCompose(repo, compose)) {
+            String rel = normalizeOverrideKey(toRepoRelativePath(repo, dockerfile));
+            allowedDockerfilesByRel.put(rel, dockerfile);
+        }
+
+        for (Map.Entry<String, String> e : sanitized.entrySet()) {
+            String rel = e.getKey();
+            if (composeRel.equals(rel)) {
+                continue;
+            }
+
+            Path target = allowedDockerfilesByRel.get(rel);
+            if (target == null) {
+                throw new IllegalArgumentException("Override path is not a docker artifact: " + rel);
+            }
+
+            safeWriteUtf8(target, e.getValue());
+            applied.add(rel);
+        }
+
+        return applied;
+    }
+
+    private Path resolveUnderRepo(Path repoPath, String repoRelativePath) {
+        String rel = trimToNull(repoRelativePath);
+        if (rel == null) {
+            throw new IllegalArgumentException("override path is required");
+        }
+        if (rel.contains("\u0000")) {
+            throw new IllegalArgumentException("Invalid override path");
+        }
+
+        Path p;
+        try {
+            p = Paths.get(rel);
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("Invalid override path: " + rel);
+        }
+
+        if (p.isAbsolute()) {
+            throw new IllegalArgumentException("Override path must be repo-relative: " + rel);
+        }
+
+        Path resolved = repoPath.resolve(p).normalize().toAbsolutePath();
+        if (!resolved.startsWith(repoPath)) {
+            throw new IllegalArgumentException("Override path escapes repo: " + rel);
+        }
+        return resolved;
+    }
+
+    private String normalizeOverrideKey(String raw) {
+        String key = trimToNull(raw);
+        if (key == null) {
+            return "";
+        }
+
+        key = key.replace('\\', '/').trim();
+        while (key.startsWith("./")) {
+            key = key.substring(2);
+        }
+        while (key.startsWith("/")) {
+            key = key.substring(1);
+        }
+        while (key.contains("//")) {
+            key = key.replace("//", "/");
+        }
+        return key;
+    }
+
+    private String toRepoRelativePath(Path repoPath, Path absolutePath) {
+        try {
+            Path rel = repoPath.relativize(absolutePath);
+            String out = rel.toString().replace('\\', '/');
+            return out.isEmpty() ? absolutePath.getFileName().toString() : out;
+        } catch (Exception ex) {
+            return absolutePath.getFileName().toString();
+        }
+    }
+
+    private String safeReadUtf8(Path path) {
+        try {
+            if (!Files.exists(path) || !Files.isRegularFile(path)) {
+                return null;
+            }
+            return Files.readString(path, StandardCharsets.UTF_8);
+        } catch (Exception ex) {
+            try {
+                return Files.readString(path);
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+    }
+
+    private void safeWriteUtf8(Path path, String content) {
+        try {
+            Path parent = path.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            Files.writeString(path, content, StandardCharsets.UTF_8);
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("Failed to write override file: " + path.getFileName(), ex);
+        }
     }
 
     private List<EndpointDto> persistDiscoveryAndEndpoints(
@@ -445,9 +775,7 @@ public class CampaignRunService {
         }
 
         Map<String, String> sanitizedEnv = sanitizeEnvValues(envValues);
-        if (!sanitizedEnv.isEmpty()) {
-            payload.put("env_values", sanitizedEnv);
-        }
+        payload.put("env_values", sanitizedEnv); // Always include, even if empty
 
         if (hostPortBase != null) {
             payload.put("host_port_base", hostPortBase);

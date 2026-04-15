@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 import typer
 
-from .pipeline import generate_compose_for_target
+from .pipeline import MissingInputsError, generate_compose_for_target
 from .git_ops import ensure_local_checkout
 from .analyze import analyze_project
 
@@ -35,6 +35,33 @@ class GenerateRequest(BaseModel):
     db: Optional[str] = Field(None, description="postgres|mysql|mongo|redis")
     port: Optional[int] = None
     health_path: Optional[str] = None
+    api_service: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional override for the main API service name (service root folder name or its sanitized compose name)."
+        ),
+    )
+    strict: bool = Field(
+        default=True,
+        description=(
+            "If true, do not generate non-runnable artifacts. Missing entrypoints/Dockerfiles will return HTTP 409 "
+            "with structured missing information so the caller can provide overrides."
+        ),
+    )
+    service_start_cmd_overrides: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description=(
+            "Optional per-service start command overrides used when a runnable start command cannot be inferred. "
+            "Keys are service names; values are JSON arrays, e.g. {\"app\": [\"npm\", \"start\"]}."
+        ),
+    )
+    service_extra_env_overrides: dict[str, dict[str, str]] = Field(
+        default_factory=dict,
+        description=(
+            "Optional per-service extra environment variables to bake into generated Dockerfiles. "
+            "Keys are service names; values are maps of env var name -> value."
+        ),
+    )
     env_values: dict[str, str] = Field(
         default_factory=dict,
         description=(
@@ -67,6 +94,7 @@ class GenerateResponse(BaseModel):
     run_id: str
     project_dir: str
     output_dir: str
+    api_service: Optional[str] = None
     compose_yml: str
     dockerfile: Optional[str]
     dockerfile_paths: list[str] = []
@@ -129,9 +157,23 @@ def generate(req: GenerateRequest) -> GenerateResponse:
             forced_db=req.db,
             forced_port=req.port,
             forced_health_path=req.health_path,
+            api_service=req.api_service,
+            strict=req.strict,
+            service_start_cmd_overrides=req.service_start_cmd_overrides,
+            service_extra_env_overrides=req.service_extra_env_overrides,
             service_port_overrides=None,
             write_dockerfiles_in_repo=req.write_dockerfiles_in_repo,
         )
+    except MissingInputsError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "run_id": run_id,
+                "output_dir": str(output_dir),
+                "missing": getattr(exc, "missing", []),
+                "notes": ["Strict mode enabled: provide overrides and retry."],
+            },
+        ) from exc
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -199,6 +241,7 @@ def generate(req: GenerateRequest) -> GenerateResponse:
         run_id=run_id,
         project_dir=str(result.project_dir),
         output_dir=str(output_dir),
+        api_service=result.api_service,
         compose_yml=compose_text,
         dockerfile=docker_text,
         dockerfile_paths=dockerfile_paths,

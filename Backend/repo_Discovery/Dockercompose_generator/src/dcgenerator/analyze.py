@@ -36,8 +36,17 @@ class ProjectAnalysis:
     project_dir: pathlib.Path
     services: list[ServiceAnalysis]
 
-    def to_artifacts(self) -> ComposeArtifacts:
+    def to_artifacts(
+        self,
+        *,
+        service_start_cmd_overrides: Optional[dict[str, list[str]]] = None,
+        service_extra_env_overrides: Optional[dict[str, dict[str, str]]] = None,
+    ) -> ComposeArtifacts:
         service_artifacts: list[ServiceArtifacts] = []
+
+        start_overrides = service_start_cmd_overrides or {}
+        env_overrides = service_extra_env_overrides or {}
+
         for s in self.services:
             dockerfile = None
             if not s.has_dockerfile and s.port is not None:
@@ -49,20 +58,64 @@ class ProjectAnalysis:
                     start = detect_python_start(s.service_dir, port=s.port)
                     start_cmd = start.start_cmd
                     extra_env = start.extra_env
+                    if start_cmd is None:
+                        start_cmd = start_overrides.get(s.name)
+                    extra_env_override = env_overrides.get(s.name)
+                    if extra_env_override:
+                        merged_env: dict[str, str] = {}
+                        if extra_env:
+                            merged_env.update(extra_env)
+                        merged_env.update(extra_env_override)
+                        extra_env = merged_env
+                    if start_cmd is None:
+                        # Strict mode: do not generate a non-runnable Dockerfile.
+                        # The pipeline/API layer can ask the user for a start command.
+                        dockerfile = None
+                    else:
+                        dockerfile = DockerfilePlan(
+                            runtime=s.runtime,
+                            port=s.port,
+                            start_cmd=start_cmd,
+                            extra_env=extra_env,
+                            java_build_tool=None,
+                            java_version=None,
+                        )
                 elif s.runtime == "node":
                     start_cmd = detect_node_start(s.service_dir)
+                    if start_cmd is None:
+                        start_cmd = start_overrides.get(s.name)
+                    if start_cmd is None:
+                        dockerfile = None
+                    else:
+                        dockerfile = DockerfilePlan(
+                            runtime=s.runtime,
+                            port=s.port,
+                            start_cmd=start_cmd,
+                            extra_env=None,
+                            java_build_tool=None,
+                            java_version=None,
+                        )
                 elif s.runtime == "java":
                     java_build_tool = detect_java_build_tool(s.service_dir)
                     java_version = detect_java_version(s.service_dir)
-
-                dockerfile = DockerfilePlan(
-                    runtime=s.runtime,
-                    port=s.port,
-                    start_cmd=start_cmd,
-                    extra_env=extra_env,
-                    java_build_tool=java_build_tool,
-                    java_version=java_version,
-                )
+                    dockerfile = DockerfilePlan(
+                        runtime=s.runtime,
+                        port=s.port,
+                        start_cmd=None,
+                        extra_env=None,
+                        java_build_tool=java_build_tool,
+                        java_version=java_version,
+                    )
+                else:
+                    # Best-effort templates for other runtimes (may still require strict-mode validation).
+                    dockerfile = DockerfilePlan(
+                        runtime=s.runtime,
+                        port=s.port,
+                        start_cmd=None,
+                        extra_env=None,
+                        java_build_tool=None,
+                        java_version=None,
+                    )
 
             service_artifacts.append(
                 ServiceArtifacts(

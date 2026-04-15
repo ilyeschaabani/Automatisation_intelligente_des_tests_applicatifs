@@ -20,6 +20,14 @@ python -m pip install -e .
 dcgen generate .
 ```
 
+Par défaut, `dcgen` est en **mode strict**: si un service n'a pas de `Dockerfile` et que le générateur ne peut pas déduire une commande de démarrage runnable (Node/Python), il **demande** la commande à l'utilisateur.
+
+Pour forcer un mode best-effort (draft) si besoin:
+
+```bash
+dcgen generate . --no-strict
+```
+
 - Forcer l’utilisation d’Ollama :
 
 ```bash
@@ -67,7 +75,19 @@ Le générateur écrit :
 - `docker-compose.yml`
 - (si nécessaire) un `Dockerfile` minimal pour builder l’app
 
+Le compose est **parallel-safe**:
+- pas de `container_name`
+- pas de ports DB publiés sur l'hôte
+- **un seul service** (le *main API service*) est publié sur l'hôte via un port dynamique: `0:<containerPort>`
+
+Pour retrouver le port hôte assigné:
+
+```bash
+docker compose port <api_service> <containerPort>
+```
+
 ## Notes
 
 - Si `dcgen` ne peut pas déduire la DB ou un endpoint de health, il **n’invente pas** : il met des `TODO` ou n’ajoute pas la DB.
 - Vous pouvez forcer certaines valeurs via options CLI (`--db`, `--port`, `--health-path`).
+- Vous pouvez forcer quel service est considéré comme l'API principale via `--api-service`.

@@ -10,5 +10,6 @@ public record CampaignRunResponse(String status,
                                   Boolean missingDb,
                                   List<String> missingEnvVars,
                                   List<String> dbOptions,
-                                  List<String> notes) {
+                                  List<String> notes,
+                                  List<EditableFileDto> editableFiles) {
 }

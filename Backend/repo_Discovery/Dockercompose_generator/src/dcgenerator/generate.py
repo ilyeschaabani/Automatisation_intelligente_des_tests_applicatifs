@@ -42,6 +42,7 @@ class WriteResult:
     dockerfile_paths: list[pathlib.Path]
     env_example_path: Optional[pathlib.Path]
     notes: list[str]
+    api_service: Optional[str] = None
 
 
 def render_and_write_artifacts(
@@ -50,10 +51,22 @@ def render_and_write_artifacts(
     analysis: Any,
     artifacts: ComposeArtifacts,
     can_write_dockerfiles: bool,
+    api_service: Optional[str] = None,
 ) -> WriteResult:
     notes: list[str] = []
 
-    compose = _build_compose_dict(artifacts, base_dir=output_dir)
+    api_original_name = _resolve_api_service_original_name(artifacts.services, override=api_service)
+    service_name_by_original = _make_compose_service_name_map(artifacts.services)
+    api_compose_name = service_name_by_original.get(api_original_name, _sanitize_compose_service_name(api_original_name))
+    api_port = next((s.port for s in artifacts.services if s.name == api_original_name), None)
+    if isinstance(api_port, int):
+        notes.append(
+            f"Main API service: {api_compose_name} (container port {api_port}, published as dynamic host port 0:{api_port})"
+        )
+    else:
+        notes.append(f"Main API service: {api_compose_name}")
+
+    compose = _build_compose_dict(artifacts, base_dir=output_dir, api_service=api_service)
 
     compose_path = output_dir / "docker-compose.yml"
     # Avoid line-wrapping long CMD arguments (healthchecks), which can be surprising in YAML.
@@ -102,16 +115,17 @@ def render_and_write_artifacts(
         dockerfile_paths=dockerfile_paths,
         env_example_path=env_example_path,
         notes=notes,
+        api_service=api_compose_name,
     )
 
 
-def render_compose_yaml_preview(*, artifacts: ComposeArtifacts, base_dir: pathlib.Path) -> str:
+def render_compose_yaml_preview(*, artifacts: ComposeArtifacts, base_dir: pathlib.Path, api_service: Optional[str] = None) -> str:
     """Render a docker-compose.yml preview for LLM verification.
 
     This uses the same compose builder as the writer, but does not touch disk.
     """
 
-    compose = _build_compose_dict(artifacts, base_dir=base_dir)
+    compose = _build_compose_dict(artifacts, base_dir=base_dir, api_service=api_service)
     return yaml.safe_dump(compose, sort_keys=False, width=4096)
 
 
@@ -129,16 +143,11 @@ def _env_prefix_from_service_name(name: str) -> str:
     return normalized or "SERVICE"
 
 
-def _build_compose_dict(a: ComposeArtifacts, *, base_dir: pathlib.Path) -> dict[str, Any]:
+def _build_compose_dict(a: ComposeArtifacts, *, base_dir: pathlib.Path, api_service: Optional[str] = None) -> dict[str, Any]:
     services: dict[str, Any] = {}
     volumes: dict[str, Any] = {}
 
     network_name = "pi-network"
-
-    ports = [s.port for s in a.services if s.port is not None]
-    port_counts: dict[int, int] = {}
-    for p in ports:
-        port_counts[p] = port_counts.get(p, 0) + 1
 
     db_types = {s.db for s in a.services if s.db}
     db_service_names: dict[str, str] = {
@@ -148,18 +157,7 @@ def _build_compose_dict(a: ComposeArtifacts, *, base_dir: pathlib.Path) -> dict[
         "redis": "redis",
     }
 
-    service_name_by_original: dict[str, str] = {}
-    used_service_names: set[str] = set()
-    for s in a.services:
-        base_name = _sanitize_compose_service_name(s.name)
-        candidate = base_name
-        suffix = 2
-        # Ensure generated app service names do not collide with each other or DB service names.
-        while candidate in used_service_names or candidate in db_service_names.values():
-            candidate = f"{base_name}-{suffix}"
-            suffix += 1
-        used_service_names.add(candidate)
-        service_name_by_original[s.name] = candidate
+    service_name_by_original = _make_compose_service_name_map(a.services)
 
     service_names = [s.name for s in a.services]
     # Heuristic naming used in many Spring Cloud repos
@@ -176,11 +174,13 @@ def _build_compose_dict(a: ComposeArtifacts, *, base_dir: pathlib.Path) -> dict[
     eureka_service_name = service_name_by_original.get(eureka_name) if eureka_name else None
     gateway_service_name = service_name_by_original.get(gateway_name) if gateway_name else None
 
+    api_original_name = _resolve_api_service_original_name(a.services, override=api_service)
+    api_service_name = service_name_by_original.get(api_original_name)
+
     for s in a.services:
         compose_service_name = service_name_by_original[s.name]
         context = _relpath(base_dir, s.service_dir)
         svc: dict[str, Any] = {
-            "container_name": compose_service_name,
             "build": {"context": context},
             "environment": {},
             "networks": [network_name],
@@ -208,23 +208,11 @@ def _build_compose_dict(a: ComposeArtifacts, *, base_dir: pathlib.Path) -> dict[
                 svc["environment"]["SERVER_PORT"] = container_port
             else:
                 svc["environment"]["PORT"] = container_port
-        else:
-            env_key = f"{_env_prefix_from_service_name(compose_service_name)}_PORT"
-            container_port = f"${{{env_key}:?set {env_key}}}"
-            if s.runtime == "java":
-                svc["environment"]["SERVER_PORT"] = container_port
-            else:
-                svc["environment"]["PORT"] = container_port
 
-        # host port mapping: avoid collisions without guessing
-        needs_host_env = s.port is None or (s.port is not None and port_counts.get(s.port, 0) > 1)
-        if needs_host_env:
-            host_env = f"{_env_prefix_from_service_name(compose_service_name)}_HOST_PORT"
-            host_port = f"${{{host_env}:?set {host_env}}}"
-        else:
-            host_port = container_port
-
-        svc["ports"] = [f"{host_port}:{container_port}"]
+            # Expose only the main API service, and do it with a dynamic host port to allow
+            # multiple runs in parallel without host port collisions.
+            if api_service_name and compose_service_name == api_service_name:
+                svc["ports"] = [f"0:{container_port}"]
 
         hc = _service_healthcheck(s.runtime, s.port, s.health_path)
         if hc is not None:
@@ -258,6 +246,83 @@ def _build_compose_dict(a: ComposeArtifacts, *, base_dir: pathlib.Path) -> dict[
     compose["networks"] = {network_name: {"driver": "bridge"}}
     compose["version"] = "3"
     return compose
+
+
+def _make_compose_service_name_map(services: list[ServiceArtifacts]) -> dict[str, str]:
+    """Return stable, collision-free docker-compose service names for service artifacts."""
+
+    db_service_names = {"postgres", "mysql", "mongo", "redis"}
+    service_name_by_original: dict[str, str] = {}
+    used_service_names: set[str] = set()
+
+    for s in services:
+        base_name = _sanitize_compose_service_name(s.name)
+        candidate = base_name
+        suffix = 2
+        # Ensure generated app service names do not collide with each other or DB service names.
+        while candidate in used_service_names or candidate in db_service_names:
+            candidate = f"{base_name}-{suffix}"
+            suffix += 1
+        used_service_names.add(candidate)
+        service_name_by_original[s.name] = candidate
+
+    return service_name_by_original
+
+
+def _resolve_api_service_original_name(services: list[ServiceArtifacts], *, override: Optional[str]) -> str:
+    """Resolve an override to an existing service name, or choose a sensible default."""
+
+    if override:
+        override_norm = _sanitize_compose_service_name(str(override))
+        for s in services:
+            if s.name == override:
+                return s.name
+            if _sanitize_compose_service_name(s.name) == override_norm:
+                return s.name
+
+    return _choose_api_service_original_name(services)
+
+
+def _choose_api_service_original_name(services: list[ServiceArtifacts]) -> str:
+    """Pick the most likely main HTTP API service.
+
+    This is a best-effort heuristic to decide which service should be exposed on the host.
+    It should be stable/deterministic, and it must not require user input.
+    """
+
+    if not services:
+        return "app"
+    if len(services) == 1:
+        return services[0].name
+
+    def score(svc: ServiceArtifacts) -> tuple[int, int, str]:
+        n = _sanitize_compose_service_name(svc.name)
+        pts = 0
+
+        # Strong indicators
+        if n in {"gateway", "api-gateway"} or "gateway" in n:
+            pts += 100
+        if "api" in n:
+            pts += 80
+        if "backend" in n:
+            pts += 70
+        if "server" in n:
+            pts += 30
+
+        # Soft/default indicators
+        if n in {"app", "service"}:
+            pts += 10
+
+        # Prefer runtimes we can reasonably treat as HTTP APIs.
+        if svc.runtime in {"java", "node", "python"}:
+            pts += 5
+
+        # Tie-breakers: prefer having a known port, then stable name ordering.
+        has_port = 1 if isinstance(svc.port, int) else 0
+        return (pts, has_port, n)
+
+    best = sorted(services, key=score, reverse=True)[0]
+    return best.name
 
 
 def _db_env_for_app(db: str, *, host: str, runtime: str) -> dict[str, str]:
@@ -331,7 +396,6 @@ def _db_service(db: str, *, network_name: str) -> tuple[dict[str, Any], dict[str
             },
             "volumes": ["pgdata:/var/lib/postgresql/data"],
             "networks": [network_name],
-            "ports": ["5432:5432"],
             "healthcheck": {
                 "test": ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"],
                 "interval": "5s",
@@ -353,7 +417,6 @@ def _db_service(db: str, *, network_name: str) -> tuple[dict[str, Any], dict[str
             },
             "volumes": ["mysqldata:/var/lib/mysql"],
             "networks": [network_name],
-            "ports": ["3306:3306"],
             "healthcheck": {
                 "test": ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD}"],
                 "interval": "5s",
@@ -372,7 +435,6 @@ def _db_service(db: str, *, network_name: str) -> tuple[dict[str, Any], dict[str
             },
             "volumes": ["mongodata:/data/db"],
             "networks": [network_name],
-            "ports": ["27017:27017"],
             "healthcheck": {
                 "test": [
                     "CMD-SHELL",
@@ -390,7 +452,6 @@ def _db_service(db: str, *, network_name: str) -> tuple[dict[str, Any], dict[str
         svc = {
             "image": "redis:7-alpine",
             "networks": [network_name],
-            "ports": ["6379:6379"],
             "healthcheck": {
                 "test": ["CMD", "redis-cli", "ping"],
                 "interval": "5s",
@@ -491,10 +552,9 @@ def _render_dockerfile(plan: DockerfilePlan) -> str:
                 "COPY . .",
                 "RUN if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; \\",
                 "    elif [ -f pyproject.toml ]; then pip install --no-cache-dir .; \\",
-                "    else echo 'TODO: add dependency install step'; fi",
+                "    else true; fi",
                 *env_lines,
                 f"EXPOSE {plan.port}",
-                "# TODO: adjust the startup command for your framework",
                 (
                     f"CMD {_render_json_array(cmd)}"
                     if cmd is not None

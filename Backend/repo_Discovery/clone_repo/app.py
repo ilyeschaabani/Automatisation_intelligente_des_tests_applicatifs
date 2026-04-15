@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import getpass
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -13,6 +14,7 @@ from typing import Dict, Optional
 
 from fastapi import FastAPI, HTTPException
 from pydantic import AliasChoices, BaseModel, Field
+import yaml
 
 
 class CloneRequest(BaseModel):
@@ -55,6 +57,34 @@ class PrepareRequest(BaseModel):
     )
     port: Optional[int] = Field(default=None, description="Force app port (only for single-service repos).")
     health_path: Optional[str] = Field(default=None, description="Force HTTP health path (only for single-service).")
+
+    api_service: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional override for the main API service name (service root folder name or its sanitized compose name)."
+        ),
+    )
+    strict: bool = Field(
+        default=True,
+        description=(
+            "If true, do not generate non-runnable artifacts. Missing entrypoints/Dockerfiles will return HTTP 409 "
+            "with structured missing information so the caller can provide overrides."
+        ),
+    )
+    service_start_cmd_overrides: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description=(
+            "Optional per-service start command overrides used when a runnable start command cannot be inferred. "
+            "Keys are service names; values are JSON arrays, e.g. {\"app\": [\"npm\", \"start\"]}."
+        ),
+    )
+    service_extra_env_overrides: dict[str, dict[str, str]] = Field(
+        default_factory=dict,
+        description=(
+            "Optional per-service extra environment variables to bake into generated Dockerfiles. "
+            "Keys are service names; values are maps of env var name -> value."
+        ),
+    )
     use_ollama: bool = Field(default=False, description="Use Ollama refinement if available.")
     ollama_model: str = Field(default="llama3.1", description="Ollama model name (if enabled).")
 
@@ -106,6 +136,7 @@ class PrepareResponse(BaseModel):
     output_dir: str
     compose_path: str
     compose_yml: str
+    api_service: Optional[str] = None
     dockerfile_paths: list[str] = []
     env_example_path: Optional[str] = None
     env_example: Optional[str] = None
@@ -142,6 +173,12 @@ class ContinueRequest(BaseModel):
     health_path: Optional[str] = None
     use_ollama: bool = False
     ollama_model: str = "llama3.1"
+
+    api_service: Optional[str] = None
+    strict: bool = True
+    service_start_cmd_overrides: dict[str, list[str]] = Field(default_factory=dict)
+    service_extra_env_overrides: dict[str, dict[str, str]] = Field(default_factory=dict)
+
     env_values: dict[str, str] = Field(default_factory=dict)
     auto_assign_host_ports: bool = True
     host_port_base: int = Field(8100, ge=1, le=65535)
@@ -150,6 +187,22 @@ class ContinueRequest(BaseModel):
     interactive: bool = False
 
     generate_openapi: bool = True
+
+
+class RepairDockerfilesRequest(BaseModel):
+    repo_path: str = Field(..., min_length=1, description="Absolute path to the cloned repo folder")
+    compose_path: str = Field(
+        ..., min_length=1, description="Path to the docker-compose.yml used for the build (absolute or repo-relative)"
+    )
+    error_log: Optional[str] = Field(default=None, description="Optional build error logs (for diagnostics only)")
+    dry_run: bool = Field(default=False, description="If true, do not write files; only report potential changes")
+
+
+class RepairDockerfilesResponse(BaseModel):
+    ok: bool = True
+    patched: bool
+    patched_files: list[str] = []
+    notes: list[str] = []
 
 
 def _extract_required_env_vars(env_example_text: str) -> list[str]:
@@ -343,6 +396,183 @@ registry = SessionRegistry()
 app = FastAPI(title="Repo Discovery Orchestrator")
 
 
+def _assert_under_workdir(path: Path) -> None:
+    base = _base_workdir().resolve()
+    p = path.resolve()
+    if not p.is_relative_to(base):
+        raise ValueError(f"Path is outside workdir: {p}")
+
+
+def _assert_under_clone_dir(path: Path) -> None:
+    clones = _clone_base_dir().resolve()
+    p = path.resolve()
+    if not p.is_relative_to(clones):
+        raise ValueError(f"repo_path must be under clones dir: {clones}")
+
+
+def _repair_dockerfile_text(text: str) -> tuple[str, list[str]]:
+    """Apply deterministic, policy-based Dockerfile repairs.
+
+    Hard rules: no guessing. Only perform replacements when a safe, version-preserving mapping is possible.
+    """
+
+    notes: list[str] = []
+    changed = False
+    out_lines: list[str] = []
+
+    # Supports: FROM [--platform=...] openjdk:<tag> ...
+    from_re = re.compile(
+        r"^(?P<indent>\s*)FROM\s+(?P<flags>(?:--platform=[^\s]+\s+)*)?(?P<img>[^\s]+)(?P<rest>.*)$",
+        flags=re.IGNORECASE,
+    )
+
+    for line in text.splitlines():
+        m = from_re.match(line)
+        if not m:
+            out_lines.append(line)
+            continue
+
+        indent = m.group("indent") or ""
+        flags = m.group("flags") or ""
+        img = (m.group("img") or "").strip()
+        rest = m.group("rest") or ""
+
+        # Split image into name:tag (ignore digests for now)
+        img_no_digest = img.split("@", 1)[0]
+        if ":" not in img_no_digest:
+            out_lines.append(line)
+            continue
+
+        name, tag = img_no_digest.rsplit(":", 1)
+        name_l = name.lower()
+        tag_l = tag.lower()
+
+        is_openjdk = name_l == "openjdk" or name_l.endswith("/openjdk")
+        if is_openjdk and "alpine" in tag_l:
+            ver_m = re.match(r"^(\d{1,2})", tag)
+            if not ver_m:
+                out_lines.append(line)
+                notes.append(f"Skipped openjdk alpine replacement (cannot infer version) for image: {img}")
+                continue
+
+            ver = ver_m.group(1)
+            replacement = f"eclipse-temurin:{ver}-jdk"
+            new_line = f"{indent}FROM {flags}{replacement}{rest}".rstrip()
+            if new_line != line:
+                changed = True
+                notes.append(f"Replaced base image: {img} -> {replacement}")
+            out_lines.append(new_line)
+            continue
+
+        out_lines.append(line)
+
+    new_text = "\n".join(out_lines) + ("\n" if text.endswith("\n") else "")
+    if changed and not new_text.endswith("\n"):
+        new_text += "\n"
+    return new_text, notes
+
+
+def _dockerfiles_from_compose(*, repo_path: Path, compose_path: Path) -> list[Path]:
+    compose_text = compose_path.read_text(encoding="utf-8", errors="ignore")
+    data = yaml.safe_load(compose_text) or {}
+    if not isinstance(data, dict):
+        return []
+
+    services = data.get("services")
+    if not isinstance(services, dict):
+        return []
+
+    compose_dir = compose_path.parent
+    dockerfiles: list[Path] = []
+
+    for _, svc in services.items():
+        if not isinstance(svc, dict):
+            continue
+        build = svc.get("build")
+        if not build:
+            continue
+
+        context_rel = None
+        dockerfile_rel = None
+
+        if isinstance(build, str):
+            context_rel = build
+            dockerfile_rel = "Dockerfile"
+        elif isinstance(build, dict):
+            context_rel = build.get("context") or "."
+            dockerfile_rel = build.get("dockerfile") or "Dockerfile"
+
+        if not isinstance(context_rel, str) or not isinstance(dockerfile_rel, str):
+            continue
+
+        context_dir = (compose_dir / context_rel).resolve()
+        df_path = (context_dir / dockerfile_rel).resolve()
+        if not df_path.exists() or not df_path.is_file():
+            continue
+
+        # Safety: only patch Dockerfiles inside the cloned repo folder.
+        try:
+            if not df_path.is_relative_to(repo_path.resolve()):
+                continue
+        except Exception:
+            continue
+
+        dockerfiles.append(df_path)
+
+    # de-dup while preserving order
+    seen: set[Path] = set()
+    out: list[Path] = []
+    for p in dockerfiles:
+        if p in seen:
+            continue
+        seen.add(p)
+        out.append(p)
+    return out
+
+
+@app.post("/repair-dockerfiles", response_model=RepairDockerfilesResponse)
+def repair_dockerfiles(req: RepairDockerfilesRequest) -> RepairDockerfilesResponse:
+    repo_path = Path(req.repo_path).resolve()
+    compose_path = Path(req.compose_path)
+    if not compose_path.is_absolute():
+        compose_path = repo_path / compose_path
+    compose_path = compose_path.resolve()
+
+    if not repo_path.exists() or not repo_path.is_dir():
+        raise HTTPException(status_code=400, detail=f"repo_path not found or not a directory: {repo_path}")
+    if not compose_path.exists() or not compose_path.is_file():
+        raise HTTPException(status_code=400, detail=f"compose_path not found or not a file: {compose_path}")
+
+    # Ensure requests can only operate on temp clones managed by this service.
+    try:
+        _assert_under_clone_dir(repo_path)
+        _assert_under_workdir(compose_path)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    dockerfiles = _dockerfiles_from_compose(repo_path=repo_path, compose_path=compose_path)
+    if not dockerfiles:
+        return RepairDockerfilesResponse(patched=False, patched_files=[], notes=["No build Dockerfiles found in compose"])
+
+    patched_files: list[str] = []
+    notes: list[str] = []
+
+    for df in dockerfiles:
+        original = df.read_text(encoding="utf-8", errors="ignore")
+        repaired, repair_notes = _repair_dockerfile_text(original)
+        if repaired != original:
+            if not req.dry_run:
+                df.write_text(repaired, encoding="utf-8")
+            patched_files.append(str(df))
+            notes.extend(repair_notes)
+
+    if patched_files:
+        notes.insert(0, f"Patched {len(patched_files)} Dockerfile(s)")
+        return RepairDockerfilesResponse(patched=True, patched_files=patched_files, notes=notes)
+
+    return RepairDockerfilesResponse(patched=False, patched_files=[], notes=["No applicable repairs found"])
+
+
 @app.on_event("startup")
 def _startup() -> None:
     _require_git_available()
@@ -378,14 +608,14 @@ def prepare(req: PrepareRequest) -> PrepareResponse:
     # Lazy import so the service can still start even if the generator isn't installed.
     # Try normal import first, then a mono-repo fallback (Dockercompose_generator/src).
     try:
-        from dcgenerator.pipeline import generate_compose_for_target
+        from dcgenerator.pipeline import MissingInputsError, generate_compose_for_target
     except Exception:  # noqa: BLE001
         repo_root = Path(__file__).resolve().parents[1]
         dcgen_src = repo_root / "Dockercompose_generator" / "src"
         if dcgen_src.exists():
             sys.path.insert(0, str(dcgen_src))
         try:
-            from dcgenerator.pipeline import generate_compose_for_target
+            from dcgenerator.pipeline import MissingInputsError, generate_compose_for_target
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(
                 status_code=500,
@@ -467,19 +697,38 @@ def prepare(req: PrepareRequest) -> PrepareResponse:
                 missing_db,
             )
 
-        result = generate_compose_for_target(
-            target=str(repo_path),
-            branch=None,
-            out_dir=None if req.in_place else output_dir,
-            in_place=req.in_place,
-            use_ollama=req.use_ollama,
-            ollama_model=req.ollama_model,
-            forced_db=req.db,
-            forced_port=req.port,
-            forced_health_path=req.health_path,
-            service_port_overrides=None,
-            write_dockerfiles_in_repo=req.write_dockerfiles_in_repo,
-        )
+        try:
+            result = generate_compose_for_target(
+                target=str(repo_path),
+                branch=None,
+                out_dir=None if req.in_place else output_dir,
+                in_place=req.in_place,
+                use_ollama=req.use_ollama,
+                ollama_model=req.ollama_model,
+                forced_db=req.db,
+                forced_port=req.port,
+                forced_health_path=req.health_path,
+                api_service=req.api_service,
+                strict=req.strict,
+                service_start_cmd_overrides=req.service_start_cmd_overrides,
+                service_extra_env_overrides=req.service_extra_env_overrides,
+                service_port_overrides=None,
+                write_dockerfiles_in_repo=req.write_dockerfiles_in_repo,
+            )
+        except MissingInputsError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "session_id": session.session_id,
+                    "repo_path": str(session.path),
+                    "branch": session.branch,
+                    "output_dir": str(output_dir),
+                    "missing": getattr(exc, "missing", []),
+                    "notes": [
+                        "Strict mode: provide missing overrides and retry via /continue/{session_id}.",
+                    ],
+                },
+            ) from exc
         notes = list(result.notes or [])
 
         (
@@ -502,19 +751,38 @@ def prepare(req: PrepareRequest) -> PrepareResponse:
                     chosen = _prompt_db_choice(options=["postgres", "mysql", "mongo", "redis"])
                     if chosen:
                         req.db = chosen
-                        result = generate_compose_for_target(
-                            target=str(repo_path),
-                            branch=None,
-                            out_dir=None if req.in_place else output_dir,
-                            in_place=req.in_place,
-                            use_ollama=req.use_ollama,
-                            ollama_model=req.ollama_model,
-                            forced_db=req.db,
-                            forced_port=req.port,
-                            forced_health_path=req.health_path,
-                            service_port_overrides=None,
-                            write_dockerfiles_in_repo=req.write_dockerfiles_in_repo,
-                        )
+                        try:
+                            result = generate_compose_for_target(
+                                target=str(repo_path),
+                                branch=None,
+                                out_dir=None if req.in_place else output_dir,
+                                in_place=req.in_place,
+                                use_ollama=req.use_ollama,
+                                ollama_model=req.ollama_model,
+                                forced_db=req.db,
+                                forced_port=req.port,
+                                forced_health_path=req.health_path,
+                                api_service=req.api_service,
+                                strict=req.strict,
+                                service_start_cmd_overrides=req.service_start_cmd_overrides,
+                                service_extra_env_overrides=req.service_extra_env_overrides,
+                                service_port_overrides=None,
+                                write_dockerfiles_in_repo=req.write_dockerfiles_in_repo,
+                            )
+                        except MissingInputsError as exc:
+                            raise HTTPException(
+                                status_code=409,
+                                detail={
+                                    "session_id": session.session_id,
+                                    "repo_path": str(session.path),
+                                    "branch": session.branch,
+                                    "output_dir": str(output_dir),
+                                    "missing": getattr(exc, "missing", []),
+                                    "notes": [
+                                        "Strict mode: provide missing overrides and retry via /continue/{session_id}.",
+                                    ],
+                                },
+                            ) from exc
                         notes = list(result.notes or []) + notes
                         (
                             compose_text,
@@ -587,6 +855,7 @@ def prepare(req: PrepareRequest) -> PrepareResponse:
             output_dir=str(output_dir),
             compose_path=str(result.compose_path),
             compose_yml=compose_text,
+            api_service=result.api_service,
             dockerfile_paths=[str(p) for p in (result.dockerfile_paths or [])],
             env_example_path=env_example_path,
             env_example=env_example_text,
@@ -630,14 +899,14 @@ def continue_prepare(session_id: str, req: ContinueRequest) -> PrepareResponse:
 
     # Lazy import (same as /prepare)
     try:
-        from dcgenerator.pipeline import generate_compose_for_target
+        from dcgenerator.pipeline import MissingInputsError, generate_compose_for_target
     except Exception:  # noqa: BLE001
         repo_root = Path(__file__).resolve().parents[1]
         dcgen_src = repo_root / "Dockercompose_generator" / "src"
         if dcgen_src.exists():
             sys.path.insert(0, str(dcgen_src))
         try:
-            from dcgenerator.pipeline import generate_compose_for_target
+            from dcgenerator.pipeline import MissingInputsError, generate_compose_for_target
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(
                 status_code=500,
@@ -664,9 +933,27 @@ def continue_prepare(session_id: str, req: ContinueRequest) -> PrepareResponse:
             forced_db=req.db,
             forced_port=req.port,
             forced_health_path=req.health_path,
+            api_service=req.api_service,
+            strict=req.strict,
+            service_start_cmd_overrides=req.service_start_cmd_overrides,
+            service_extra_env_overrides=req.service_extra_env_overrides,
             service_port_overrides=None,
             write_dockerfiles_in_repo=req.write_dockerfiles_in_repo,
         )
+    except MissingInputsError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "session_id": session.session_id,
+                "repo_path": str(session.path),
+                "branch": session.branch,
+                "output_dir": str(output_dir),
+                "missing": getattr(exc, "missing", []),
+                "notes": [
+                    "Strict mode: provide missing overrides and retry via /continue/{session_id}.",
+                ],
+            },
+        ) from exc
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -734,9 +1021,27 @@ def continue_prepare(session_id: str, req: ContinueRequest) -> PrepareResponse:
                             forced_db=req.db,
                             forced_port=req.port,
                             forced_health_path=req.health_path,
+                            api_service=req.api_service,
+                            strict=req.strict,
+                            service_start_cmd_overrides=req.service_start_cmd_overrides,
+                            service_extra_env_overrides=req.service_extra_env_overrides,
                             service_port_overrides=None,
                             write_dockerfiles_in_repo=req.write_dockerfiles_in_repo,
                         )
+                    except MissingInputsError as exc:
+                        raise HTTPException(
+                            status_code=409,
+                            detail={
+                                "session_id": session.session_id,
+                                "repo_path": str(session.path),
+                                "branch": session.branch,
+                                "output_dir": str(output_dir),
+                                "missing": getattr(exc, "missing", []),
+                                "notes": [
+                                    "Strict mode: provide missing overrides and retry via /continue/{session_id}.",
+                                ],
+                            },
+                        ) from exc
                     except Exception as exc:  # noqa: BLE001
                         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -838,6 +1143,7 @@ def continue_prepare(session_id: str, req: ContinueRequest) -> PrepareResponse:
         output_dir=str(output_dir),
         compose_path=str(result.compose_path),
         compose_yml=compose_text,
+        api_service=result.api_service,
         dockerfile_paths=[str(p) for p in (result.dockerfile_paths or [])],
         env_example_path=env_example_path,
         env_example=env_example_text,
