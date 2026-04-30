@@ -1,5 +1,8 @@
 package com.pfe.platform.authenticationmicroservice.Service.JWT;
 
+import com.pfe.platform.authenticationmicroservice.Entity.User;
+import com.pfe.platform.authenticationmicroservice.Repository.UserRepository;
+import com.pfe.platform.authenticationmicroservice.Service.User.UserService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
@@ -17,14 +20,19 @@ import java.util.function.Function;
 @Service
 @RequiredArgsConstructor
 public class JWTserviceImpl implements JWTservice {
+    private final UserRepository userRepository;
 
     @Value("${jwt.secret}")
     private String jwtSecret;
 
     @Override
     public String generateToken(UserDetails userDetails) {
+        User user = userRepository.findByEmail(userDetails.getUsername())
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+
         return Jwts.builder()
                 .subject(userDetails.getUsername())
+                .claim("userId", user.getId())
                 .issuedAt(new Date(System.currentTimeMillis()))
                 .expiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60 * 10))
                 .signWith(getSigningKey())
@@ -33,9 +41,12 @@ public class JWTserviceImpl implements JWTservice {
 
     @Override
     public String generateRefreshToken(Map<String, Object> claims, UserDetails userDetails) {
+        User user = userRepository.findByEmail(userDetails.getUsername())
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
         return Jwts.builder()
                 .claims(claims)
                 .subject(userDetails.getUsername())
+                .claim("userId", user.getId())
                 .issuedAt(new Date(System.currentTimeMillis()))
                 .expiration(new Date(System.currentTimeMillis() + 604800000L))
                 .signWith(getSigningKey())
