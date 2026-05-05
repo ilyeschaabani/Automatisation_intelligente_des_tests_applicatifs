@@ -2,24 +2,19 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
+import { Folder, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 
+import { AuthGuard } from '@/components/auth-guard'
 import { Header } from '@/components/header'
 import { Sidebar } from '@/components/sidebar'
+import { ConfirmDialog } from '@/components/crud/ConfirmDialog'
+import { FormDialog } from '@/components/crud/FormDialog'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -27,15 +22,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Plus, Search } from 'lucide-react'
-
 import {
-  createProject,
-  getProjects,
-  type Project,
-  type ProjectType,
-  type SourceType,
-} from '@/lib/api-client'
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { projectService } from '@/services/projects'
+import type {
+  CreateProjectRequest,
+  Project,
+  ProjectStatus,
+  UpdateProjectRequest,
+} from '@/types/ms-gestion'
+
+type ProjectFormState = {
+  name: string
+  description: string
+  gitRepoUrl: string
+  gitDefaultBranch: string
+}
 
 type GitHubMeResponse = {
   githubConnected: boolean
@@ -59,9 +67,8 @@ type RepoRow = {
 type GitHubConnectionState =
   | { kind: 'idle' }
   | { kind: 'loading' }
-  | { kind: 'notConfigured' }
-  | { kind: 'unauthorized' }
   | { kind: 'notConnected' }
+  | { kind: 'unauthorized' }
   | { kind: 'connected'; me: GitHubMeResponse }
   | { kind: 'error'; message: string }
 
@@ -69,107 +76,38 @@ type RepoListState =
   | { kind: 'idle' }
   | { kind: 'loading' }
   | { kind: 'available'; repos: RepoRow[] }
-  | { kind: 'unavailable' }
   | { kind: 'error'; message: string }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
+type BranchListState =
+  | { kind: 'idle'; branches: string[] }
+  | { kind: 'loading'; branches: string[] }
+  | { kind: 'available'; branches: string[] }
+  | { kind: 'error'; branches: string[]; message: string }
+
+const emptyForm: ProjectFormState = {
+  name: '',
+  description: '',
+  gitRepoUrl: '',
+  gitDefaultBranch: 'main',
 }
 
-function extractBranchNames(raw: unknown): string[] {
-  // Supports these shapes:
-  // - [{ name: 'main' }, ...]  (GitHub branches API)
-  // - ['main', ...]
-  // - { data: [...] } (axios/octokit style)
-  // - { branches: [...] } / { items: [...] }
-  const candidate =
-    Array.isArray(raw) ? raw
-      : isRecord(raw) && Array.isArray(raw.data) ? raw.data
-        : isRecord(raw) && Array.isArray(raw.branches) ? raw.branches
-          : isRecord(raw) && Array.isArray(raw.items) ? raw.items
-            : []
-
-  const names = candidate
-    .map((b) => {
-      if (typeof b === 'string') return b
-      if (isRecord(b)) {
-        if (typeof b.name === 'string') return b.name
-        if (typeof b.ref === 'string') return b.ref
-        if (typeof b.branch === 'string') return b.branch
-      }
-      return null
-    })
-    .filter(Boolean) as string[]
-
-  // De-dupe while preserving order.
-  return Array.from(new Set(names))
+const statusVariant: Record<
+  ProjectStatus,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  ACTIVE: 'default',
+  PAUSED: 'secondary',
+  ARCHIVED: 'outline',
 }
 
-function normalizeRepos(payload: unknown): RepoRow[] {
-  const list: unknown[] = Array.isArray(payload)
-    ? payload
-    : payload && typeof payload === 'object' && Array.isArray((payload as any).repos)
-      ? ((payload as any).repos as unknown[])
-      : []
-
-  return list
-    .map((repo, idx) => {
-      if (!repo || typeof repo !== 'object') return null
-      const r = repo as any
-
-      const name: string =
-        typeof r.name === 'string'
-          ? r.name
-          : typeof r.full_name === 'string'
-            ? String(r.full_name).split('/').slice(-1)[0]
-            : ''
-
-      const owner: string =
-        typeof r.owner === 'string'
-          ? r.owner
-          : r.owner && typeof r.owner === 'object' && typeof r.owner.login === 'string'
-            ? r.owner.login
-            : typeof r.full_name === 'string'
-              ? String(r.full_name).split('/')[0] ?? ''
-              : ''
-
-      const url: string =
-        typeof r.html_url === 'string'
-          ? r.html_url
-          : typeof r.url === 'string'
-            ? r.url
-            : ''
-
-      const isPrivate = Boolean(r.private)
-
-      const updatedAt: string | undefined =
-        typeof r.updated_at === 'string'
-          ? r.updated_at
-          : typeof r.updatedAt === 'string'
-            ? r.updatedAt
-            : undefined
-
-      const defaultBranch: string | undefined =
-        typeof r.default_branch === 'string'
-          ? r.default_branch
-          : typeof r.defaultBranch === 'string'
-            ? r.defaultBranch
-            : undefined
-
-      const branches = extractBranchNames(r.branches)
-
-      const key =
-        typeof r.id === 'number' || typeof r.id === 'string'
-          ? String(r.id)
-          : `${owner}/${name || 'repo'}:${idx}`
-
-      if (!name) return null
-      return { key, name, owner, isPrivate, url, updatedAt, defaultBranch, branches }
-    })
-    .filter(Boolean) as RepoRow[]
+const formatDate = (value?: string) => {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString()
 }
 
-async function githubApiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+const apiFetch = async (path: string, init: RequestInit = {}): Promise<Response> => {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL
   if (!baseUrl) throw new Error('NEXT_PUBLIC_API_URL is not configured')
 
@@ -187,93 +125,202 @@ async function githubApiFetch(path: string, init: RequestInit = {}): Promise<Res
   })
 }
 
-const statusStyle: Record<'Deployed' | 'Not deployed', string> = {
-  Deployed: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400',
-  'Not deployed': 'bg-gray-100 text-gray-800 dark:bg-gray-950 dark:text-gray-400',
+const extractBranchNames = (payload: unknown): string[] => {
+  const list: unknown[] = Array.isArray(payload)
+    ? payload
+    : payload && typeof payload === 'object' && Array.isArray((payload as any).data)
+      ? ((payload as any).data as unknown[])
+      : payload && typeof payload === 'object' && Array.isArray((payload as any).branches)
+        ? ((payload as any).branches as unknown[])
+        : payload && typeof payload === 'object' && Array.isArray((payload as any).items)
+          ? ((payload as any).items as unknown[])
+          : []
+
+  const names = list
+    .map((branch) => {
+      if (typeof branch === 'string') return branch
+      if (branch && typeof branch === 'object') {
+        const b = branch as Record<string, unknown>
+        if (typeof b.name === 'string') return b.name
+        if (typeof b.ref === 'string') return b.ref
+        if (typeof b.branch === 'string') return b.branch
+      }
+      return null
+    })
+    .filter(Boolean) as string[]
+
+  return Array.from(new Set(names))
 }
 
-function formatDate(value: string): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString()
+const normalizeRepos = (payload: unknown): RepoRow[] => {
+  const list: unknown[] = Array.isArray(payload)
+    ? payload
+    : payload && typeof payload === 'object' && Array.isArray((payload as any).repos)
+      ? ((payload as any).repos as unknown[])
+      : []
+
+  return list
+    .map((repo, idx) => {
+      if (!repo || typeof repo !== 'object') return null
+      const r = repo as Record<string, unknown>
+
+      const name: string =
+        typeof r.name === 'string'
+          ? r.name
+          : typeof r.full_name === 'string'
+            ? String(r.full_name).split('/').slice(-1)[0]
+            : ''
+
+      const owner: string =
+        typeof r.owner === 'string'
+          ? r.owner
+          : r.owner && typeof r.owner === 'object' && typeof (r.owner as any).login === 'string'
+            ? String((r.owner as any).login)
+            : typeof r.full_name === 'string'
+              ? String(r.full_name).split('/')[0] ?? ''
+              : ''
+
+      const url: string =
+        typeof r.html_url === 'string'
+          ? r.html_url
+          : typeof r.url === 'string'
+            ? r.url
+            : ''
+
+      const updatedAt: string | undefined =
+        typeof r.updated_at === 'string'
+          ? r.updated_at
+          : typeof r.updatedAt === 'string'
+            ? r.updatedAt
+            : undefined
+
+      const defaultBranch: string | undefined =
+        typeof r.default_branch === 'string'
+          ? r.default_branch
+          : typeof r.defaultBranch === 'string'
+            ? r.defaultBranch
+            : undefined
+
+      const branches = extractBranchNames((r as any).branches)
+
+      const key =
+        typeof r.id === 'number' || typeof r.id === 'string'
+          ? String(r.id)
+          : `${owner}/${name || 'repo'}:${idx}`
+
+      if (!name) return null
+      return {
+        key,
+        name,
+        owner,
+        isPrivate: Boolean(r.private),
+        url,
+        updatedAt,
+        defaultBranch,
+        branches,
+      }
+    })
+    .filter(Boolean) as RepoRow[]
 }
 
-function getProvider(project: Project): string {
-  return String(project.sourceType ?? '—')
-}
-
-function getRepositoryUrl(project: Project): string {
-  return String(project.repositoryUrl ?? '—')
-}
-
-function getType(project: Project): string {
-  const value = String(project.projectType ?? '—')
-  if (value === 'WEB') return 'WEB'
-  if (value === 'MOBILE') return 'MOBILE'
-  if (value === 'API') return 'API'
-  if (value === 'DESKTOP') return 'DESKTOP'
-  if (value === 'OTHER') return 'OTHER'
-  return value
-}
+const normalizeRepoUrl = (url: string): string =>
+  String(url || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\.git$/, '')
+    .replace(/\/+$/, '')
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([])
-  const [searchQuery, setSearchQuery] = useState('')
-  const [isLoading, setIsLoading] = useState(true)
-  const [isCreateOpen, setIsCreateOpen] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [error, setError] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+
+  const [formState, setFormState] = useState<ProjectFormState>(emptyForm)
   const [formError, setFormError] = useState<string | null>(null)
-  const [name, setName] = useState('')
-  const [repositoryUrl, setRepositoryUrl] = useState('')
-  const [projectType, setProjectType] = useState<ProjectType>('WEB')
-  const [sourceType, setSourceType] = useState<SourceType>('GIT')
-  const [deployed, setDeployed] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const [gitHubConnection, setGitHubConnection] = useState<GitHubConnectionState>({
     kind: 'idle',
   })
   const [gitHubRepos, setGitHubRepos] = useState<RepoListState>({ kind: 'idle' })
+  const [branchState, setBranchState] = useState<BranchListState>({
+    kind: 'idle',
+    branches: [],
+  })
   const [selectedRepoKey, setSelectedRepoKey] = useState('')
   const [selectedBranch, setSelectedBranch] = useState('')
+  const [repoInitialized, setRepoInitialized] = useState(false)
+
+  const [createOpen, setCreateOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editingProject, setEditingProject] = useState<Project | null>(null)
+
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deletingProject, setDeletingProject] = useState<Project | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const loadProjects = async () => {
-    setIsLoading(true)
+    setStatus('loading')
+    setError(null)
     try {
-      const data = await getProjects()
+      const data = await projectService.getAll()
       setProjects(Array.isArray(data) ? data : [])
-    } catch (error) {
-      console.error('Failed to load projects', error)
+      setStatus('ready')
+    } catch (err) {
       setProjects([])
-    } finally {
-      setIsLoading(false)
+      setStatus('error')
+      setError(err instanceof Error ? err.message : 'Failed to load projects')
     }
   }
 
   useEffect(() => {
     void loadProjects()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const filteredProjects = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase()
+    const query = search.trim().toLowerCase()
     if (!query) return projects
-
     return projects.filter((project) => {
-      const projectName = String(project.name ?? '').toLowerCase()
-      const repoUrl = String(project.repositoryUrl ?? '').toLowerCase()
-      return projectName.includes(query) || repoUrl.includes(query)
+      const name = String(project.name ?? '').toLowerCase()
+      const repo = String(project.gitRepoUrl ?? '').toLowerCase()
+      return name.includes(query) || repo.includes(query)
     })
-  }, [projects, searchQuery])
+  }, [projects, search])
 
   const resetForm = () => {
+    setFormState(emptyForm)
     setFormError(null)
-    setName('')
-    setRepositoryUrl('')
-    setProjectType('WEB')
-    setSourceType('GIT')
-    setDeployed(false)
     setSelectedRepoKey('')
     setSelectedBranch('')
+    setBranchState({ kind: 'idle', branches: [] })
+    setRepoInitialized(false)
+  }
+
+  const openCreate = () => {
+    resetForm()
+    setCreateOpen(true)
+  }
+
+  const openEdit = (project: Project) => {
+    setEditingProject(project)
+    setFormError(null)
+    setFormState({
+      name: project.name ?? '',
+      description: project.description ?? '',
+      gitRepoUrl: project.gitRepoUrl ?? '',
+      gitDefaultBranch: project.gitDefaultBranch ?? 'main',
+    })
+    setSelectedBranch(project.gitDefaultBranch ?? 'main')
+    setSelectedRepoKey('')
+    setBranchState({ kind: 'idle', branches: [] })
+    setRepoInitialized(false)
+    setEditOpen(true)
+  }
+
+  const openDelete = (project: Project) => {
+    setDeletingProject(project)
+    setDeleteOpen(true)
   }
 
   const connectUrl = useMemo(() => {
@@ -282,147 +329,258 @@ export default function ProjectsPage() {
     return `${apiUrl.replace(/\/+$/, '')}/api/github/connect`
   }, [])
 
-  const loadGitHubInfo = async () => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL
-    if (!apiUrl) {
-      setGitHubConnection({ kind: 'notConfigured' })
-      setGitHubRepos({ kind: 'idle' })
-      return
-    }
-
-    setGitHubConnection({ kind: 'loading' })
+  const fetchRepos = async () => {
     setGitHubRepos({ kind: 'loading' })
-
     try {
-      const meRes = await githubApiFetch('/api/github/me')
+      const res = await apiFetch('/api/github/repos')
 
-      if (meRes.status === 401) {
+      if (res.status === 401) {
         setGitHubConnection({ kind: 'unauthorized' })
         setGitHubRepos({ kind: 'idle' })
         return
       }
 
-      if (meRes.status === 404 || meRes.status === 400) {
+      if (res.status === 404) {
         setGitHubConnection({ kind: 'notConnected' })
         setGitHubRepos({ kind: 'idle' })
         return
       }
 
-      if (!meRes.ok) {
-        const text = await meRes.text().catch(() => '')
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        setGitHubRepos({
+          kind: 'error',
+          message: `Unable to load repos (${res.status})${text ? `: ${text}` : ''}`,
+        })
+        return
+      }
+
+      const data = (await res.json().catch(() => null)) as unknown
+      const normalized = normalizeRepos(data)
+      setGitHubRepos({ kind: 'available', repos: normalized })
+    } catch (err) {
+      setGitHubRepos({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Network error',
+      })
+    }
+  }
+
+  const fetchGitHubMe = async () => {
+    setGitHubConnection({ kind: 'loading' })
+    setGitHubRepos({ kind: 'idle' })
+
+    try {
+      const res = await apiFetch('/api/github/me')
+
+      if (res.status === 401) {
+        setGitHubConnection({ kind: 'unauthorized' })
+        return
+      }
+
+      if (res.status === 404 || res.status === 400) {
+        setGitHubConnection({ kind: 'notConnected' })
+        return
+      }
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
         setGitHubConnection({
           kind: 'error',
-          message: `Unable to load GitHub status (${meRes.status})${text ? `: ${text}` : ''}`,
+          message: `Unable to load GitHub status (${res.status})${text ? `: ${text}` : ''}`,
         })
-        setGitHubRepos({ kind: 'idle' })
         return
       }
 
-      const meData = (await meRes.json().catch(() => null)) as unknown
-      if (!meData || typeof meData !== 'object') {
-        setGitHubConnection({ kind: 'error', message: 'Unexpected response from GitHub status.' })
-        setGitHubRepos({ kind: 'idle' })
+      const data = (await res.json().catch(() => null)) as unknown
+      if (!data || typeof data !== 'object') {
+        setGitHubConnection({ kind: 'error', message: 'Unexpected response from server.' })
         return
       }
 
-      const me = meData as GitHubMeResponse
+      const me = data as GitHubMeResponse
       if (!me.githubConnected) {
         setGitHubConnection({ kind: 'notConnected' })
-        setGitHubRepos({ kind: 'idle' })
         return
       }
 
       setGitHubConnection({ kind: 'connected', me })
-
-      const reposRes = await githubApiFetch('/api/github/repos')
-
-      if (reposRes.status === 401) {
-        setGitHubConnection({ kind: 'unauthorized' })
-        setGitHubRepos({ kind: 'idle' })
-        return
-      }
-
-      if (reposRes.status === 404) {
-        // Backend semantics: 404 means GitHub is not connected.
-        setGitHubConnection({ kind: 'notConnected' })
-        setGitHubRepos({ kind: 'idle' })
-        return
-      }
-
-      if (!reposRes.ok) {
-        const text = await reposRes.text().catch(() => '')
-        setGitHubRepos({
-          kind: 'error',
-          message: `Unable to load repos (${reposRes.status})${text ? `: ${text}` : ''}`,
-        })
-        return
-      }
-
-      const reposData = (await reposRes.json().catch(() => null)) as unknown
-      const normalized = normalizeRepos(reposData)
-      setGitHubRepos({ kind: 'available', repos: normalized })
-    } catch (error) {
+      await fetchRepos()
+    } catch (err) {
       setGitHubConnection({
         kind: 'error',
-        message: error instanceof Error ? error.message : 'Network error',
+        message: err instanceof Error ? err.message : 'Network error',
       })
-      setGitHubRepos({ kind: 'idle' })
+    }
+  }
+
+  const fetchBranches = async (owner: string, repo: string) => {
+    setBranchState({ kind: 'loading', branches: [] })
+    try {
+      const res = await apiFetch(`/api/github/repos/${owner}/${repo}/branches`)
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        setBranchState({
+          kind: 'error',
+          branches: [],
+          message: `Unable to load branches (${res.status})${text ? `: ${text}` : ''}`,
+        })
+        return []
+      }
+      const data = (await res.json().catch(() => null)) as unknown
+      const branches = extractBranchNames(data)
+      setBranchState({ kind: 'available', branches })
+      return branches
+    } catch (err) {
+      setBranchState({
+        kind: 'error',
+        branches: [],
+        message: err instanceof Error ? err.message : 'Network error',
+      })
+      return []
     }
   }
 
   useEffect(() => {
-    if (!isCreateOpen) return
-    if (sourceType !== 'GIT') return
-    void loadGitHubInfo()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isCreateOpen, sourceType])
+    if (!createOpen && !editOpen) return
+    void fetchGitHubMe()
+  }, [createOpen, editOpen])
 
   useEffect(() => {
-    setSelectedRepoKey('')
-    setRepositoryUrl('')
-    setSelectedBranch('')
-    if (sourceType !== 'GIT') {
-      setGitHubConnection({ kind: 'idle' })
-      setGitHubRepos({ kind: 'idle' })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceType])
+    if (repoInitialized) return
+    if (!createOpen && !editOpen) return
+    if (gitHubRepos.kind !== 'available') return
 
-  const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
+    const repos = gitHubRepos.repos
+    const currentRepoUrl = formState.gitRepoUrl
+    if (currentRepoUrl) {
+      const normalizedUrl = normalizeRepoUrl(currentRepoUrl)
+      const match = repos.find((repo) => normalizeRepoUrl(repo.url) === normalizedUrl)
+      if (match) {
+        setSelectedRepoKey(match.key)
+        setSelectedBranch(formState.gitDefaultBranch || match.defaultBranch || '')
+      }
+    }
+
+    setRepoInitialized(true)
+  }, [repoInitialized, createOpen, editOpen, gitHubRepos, formState.gitRepoUrl, formState.gitDefaultBranch])
+
+  useEffect(() => {
+    if (gitHubRepos.kind !== 'available') return
+    if (!selectedRepoKey) return
+
+    const repo = gitHubRepos.repos.find((item) => item.key === selectedRepoKey)
+    if (!repo) return
+
+    setFormState((prev) => {
+      if (!repo.url || prev.gitRepoUrl === repo.url) return prev
+      return { ...prev, gitRepoUrl: repo.url }
+    })
+
+    const existingBranch = formState.gitDefaultBranch
+    const repoBranches = repo.branches
+    const defaultBranch = repo.defaultBranch || ''
+
+    const applyBranch = (branches: string[]) => {
+      if (branches.length === 0) return
+      const candidate =
+        (existingBranch && branches.includes(existingBranch) ? existingBranch : '') ||
+        (defaultBranch && branches.includes(defaultBranch) ? defaultBranch : '') ||
+        branches[0]
+
+      if (!candidate) return
+      setSelectedBranch(candidate)
+      setFormState((prev) => {
+        if (prev.gitDefaultBranch === candidate) return prev
+        return { ...prev, gitDefaultBranch: candidate }
+      })
+    }
+
+    if (repoBranches.length > 0) {
+      setBranchState({ kind: 'available', branches: repoBranches })
+      applyBranch(repoBranches)
+      return
+    }
+
+    if (repo.owner && repo.name) {
+      void (async () => {
+        const branches = await fetchBranches(repo.owner, repo.name)
+        applyBranch(branches)
+      })()
+    }
+  }, [gitHubRepos, selectedRepoKey, formState.gitDefaultBranch])
+
+  const onCreateSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
     setIsSubmitting(true)
     setFormError(null)
 
-    try {
-      if (sourceType === 'GIT') {
-        if (gitHubConnection.kind !== 'connected') {
-          setFormError('GitHub must be connected to create a GIT project.')
-          return
-        }
-        if (!repositoryUrl.trim()) {
-          setFormError('Please select a repository.')
-          return
-        }
-      }
+    if (selectedRepoKey && !formState.gitDefaultBranch.trim()) {
+      setFormError('Select a default branch for the repository.')
+      setIsSubmitting(false)
+      return
+    }
 
-      await createProject({
-        name,
-        projectType,
-        sourceType,
-        repositoryUrl: repositoryUrl.trim() ? repositoryUrl.trim() : null,
-        defaultBranch:
-          sourceType === 'GIT' ? (selectedBranch.trim() ? selectedBranch.trim() : null) : null,
-        deployed,
-      })
-      setIsCreateOpen(false)
+    try {
+      const payload: CreateProjectRequest = {
+        name: formState.name.trim(),
+        description: formState.description.trim() || undefined,
+        gitRepoUrl: formState.gitRepoUrl.trim() || undefined,
+        gitDefaultBranch: formState.gitDefaultBranch.trim() || 'main',
+      }
+      await projectService.create(payload)
+      setCreateOpen(false)
       resetForm()
       await loadProjects()
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to create project'
-      console.error('Create project failed', error)
-      setFormError(message)
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to create project')
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const onEditSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!editingProject) return
+    setIsSubmitting(true)
+    setFormError(null)
+
+    if (selectedRepoKey && !formState.gitDefaultBranch.trim()) {
+      setFormError('Select a default branch for the repository.')
+      setIsSubmitting(false)
+      return
+    }
+
+    try {
+      const payload: UpdateProjectRequest = {
+        name: formState.name.trim(),
+        description: formState.description.trim() || undefined,
+        gitRepoUrl: formState.gitRepoUrl.trim() || undefined,
+        gitDefaultBranch: formState.gitDefaultBranch.trim() || 'main',
+      }
+      await projectService.update(editingProject.id, payload)
+      setEditOpen(false)
+      setEditingProject(null)
+      await loadProjects()
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to update project')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const onDeleteConfirm = async () => {
+    if (!deletingProject) return
+    setIsDeleting(true)
+    try {
+      await projectService.archive(deletingProject.id)
+      setDeleteOpen(false)
+      setDeletingProject(null)
+      await loadProjects()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete project')
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -432,300 +590,419 @@ export default function ProjectsPage() {
 
       <main className="flex-1 lg:ml-0 pt-16 lg:pt-0">
         <Header />
-
-        <div className="p-6 max-w-7xl">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h1 className="text-3xl font-bold text-foreground">Projects</h1>
-              <p className="text-muted-foreground mt-1">
-                Organize campaigns, environments, and executions by application
-              </p>
+        <AuthGuard>
+          <div className="p-6 max-w-7xl">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-foreground">Projects</h1>
+                <p className="text-muted-foreground mt-1">
+                  Manage projects, environments, and test suites for ms_gestion.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={loadProjects} className="gap-2">
+                  <RefreshCw size={16} />
+                  Refresh
+                </Button>
+                <Button className="gap-2" onClick={openCreate}>
+                  <Plus size={18} />
+                  New project
+                </Button>
+              </div>
             </div>
 
-            <Sheet open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-              <SheetTrigger asChild>
-                <Button className="gap-2" onClick={() => setIsCreateOpen(true)}>
-                  <Plus size={20} />
-                  New Project
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="sm:max-w-md">
-                <SheetHeader>
-                  <SheetTitle>Add New Project</SheetTitle>
-                  <SheetDescription>
-                    Create a project to group campaigns and environments
-                  </SheetDescription>
-                </SheetHeader>
+            <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center">
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search by name or repo URL"
+                className="max-w-md"
+              />
+              {error ? (
+                <p className="text-sm text-destructive">{error}</p>
+              ) : null}
+            </div>
 
-                <form className="mt-6 space-y-6" onSubmit={onSubmit}>
-                  <div className="space-y-2">
-                    <Label htmlFor="projectName">Project name</Label>
-                    <Input
-                      id="projectName"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="Banking Web App"
-                      required
-                    />
-                  </div>
+            <Card className="mt-6">
+              {status === 'loading' ? (
+                <div className="p-6 text-sm text-muted-foreground">Loading projects...</div>
+              ) : null}
 
-                  {formError ? (
-                    <p className="text-sm text-destructive">{formError}</p>
-                  ) : null}
+              {status !== 'loading' && filteredProjects.length === 0 ? (
+                <div className="p-6 text-sm text-muted-foreground flex items-center gap-2">
+                  <Folder size={16} />
+                  No projects found.
+                </div>
+              ) : null}
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Project type</Label>
-                      <Select value={projectType} onValueChange={(v) => setProjectType(v as any)}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="WEB">WEB</SelectItem>
-                          <SelectItem value="MOBILE">MOBILE</SelectItem>
-                          <SelectItem value="API">API</SelectItem>
-                          <SelectItem value="DESKTOP">DESKTOP</SelectItem>
-                          <SelectItem value="OTHER">OTHER</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+              {status !== 'loading' && filteredProjects.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Repository</TableHead>
+                      <TableHead>Default branch</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredProjects.map((project) => (
+                      <TableRow key={project.id}>
+                        <TableCell className="font-medium">
+                          <Link
+                            href={`/projects/${project.id}`}
+                            className="text-primary hover:underline"
+                          >
+                            {project.name}
+                          </Link>
+                        </TableCell>
+                        <TableCell>{project.gitRepoUrl || '—'}</TableCell>
+                        <TableCell>{project.gitDefaultBranch || 'main'}</TableCell>
+                        <TableCell>
+                          <Badge variant={statusVariant[project.status]}>
+                            {project.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{formatDate(project.createdAt)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openEdit(project)}
+                            >
+                              <Pencil size={14} />
+                              Edit
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => openDelete(project)}
+                            >
+                              <Trash2 size={14} />
+                              Delete
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : null}
+            </Card>
+          </div>
+        </AuthGuard>
+      </main>
 
-                    <div className="space-y-2">
-                      <Label>Source type</Label>
-                      <Select value={sourceType} onValueChange={(v) => setSourceType(v as any)}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select source" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="GIT">GIT</SelectItem>
-                          <SelectItem value="LOCAL">LOCAL</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  {sourceType === 'GIT' ? (
-                    <div className="space-y-2">
-                      <Label>Repository</Label>
-                      {gitHubConnection.kind === 'notConfigured' ? (
-                        <p className="text-sm text-muted-foreground">
-                          Missing NEXT_PUBLIC_API_URL configuration.
-                        </p>
-                      ) : gitHubConnection.kind === 'unauthorized' ? (
-                        <p className="text-sm text-muted-foreground">Please sign in to connect GitHub.</p>
-                      ) : gitHubConnection.kind === 'notConnected' ? (
-                        <div className="space-y-2">
-                          <p className="text-sm text-muted-foreground">
-                            GitHub is not connected. Connect it to select a repository.
-                          </p>
-                          <Button asChild disabled={!connectUrl}>
-                            <a href={connectUrl}>Connect GitHub Account</a>
-                          </Button>
-                        </div>
-                      ) : gitHubConnection.kind === 'error' ? (
-                        <p className="text-sm text-destructive">{gitHubConnection.message}</p>
-                      ) : gitHubRepos.kind === 'idle' || gitHubRepos.kind === 'loading' ? (
-                        <p className="text-sm text-muted-foreground">Loading repositories…</p>
-                      ) : gitHubRepos.kind === 'unavailable' ? (
-                        <p className="text-sm text-muted-foreground">Repository listing is not available.</p>
-                      ) : gitHubRepos.kind === 'error' ? (
-                        <p className="text-sm text-destructive">{gitHubRepos.message}</p>
-                      ) : gitHubRepos.repos.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No repositories found.</p>
-                      ) : (
-                        <Select
-                          value={selectedRepoKey}
-                          onValueChange={(v) => {
-                            setSelectedRepoKey(v)
-                            const repo = gitHubRepos.repos.find((r) => r.key === v) ?? null
-                            if (repo?.url) setRepositoryUrl(repo.url)
-                            if (!name.trim() && repo?.name) setName(repo.name)
-
-                            const defaultCandidate = repo?.defaultBranch
-                            const nextBranch =
-                              defaultCandidate && repo?.branches?.includes(defaultCandidate)
-                                ? defaultCandidate
-                                : repo?.branches?.[0] ?? ''
-                            setSelectedBranch(nextBranch)
-                          }}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a repository" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {gitHubRepos.repos.map((repo) => (
-                              <SelectItem key={repo.key} value={repo.key}>
-                                {repo.owner}/{repo.name}{repo.isPrivate ? ' (private)' : ''}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-
-                      {gitHubRepos.kind === 'available' && selectedRepoKey ? (
-                        <div className="space-y-2 pt-2">
-                          <Label>Branch</Label>
-                          {(() => {
-                            const repo = gitHubRepos.repos.find((r) => r.key === selectedRepoKey) ?? null
-                            const branches = (() => {
-                              if (!repo) return [] as string[]
-                              if (repo.branches?.length) return repo.branches
-                              if (repo.defaultBranch) return [repo.defaultBranch]
-                              return [] as string[]
-                            })()
-
-                            if (!repo) {
-                              return (
-                                <p className="text-sm text-muted-foreground">Select a repository first.</p>
-                              )
-                            }
-
-                            if (branches.length === 0) {
-                              return (
-                                <Select value="" disabled>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="No branches available" />
-                                  </SelectTrigger>
-                                  <SelectContent />
-                                </Select>
-                              )
-                            }
-
-                            return (
-                              <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select a branch" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {branches.map((b) => (
-                                    <SelectItem key={b} value={b}>
-                                      {b}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            )
-                          })()}
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <Label htmlFor="projectRepoUrl">Local path (optional)</Label>
-                      <Input
-                        id="projectRepoUrl"
-                        value={repositoryUrl}
-                        onChange={(e) => setRepositoryUrl(e.target.value)}
-                        placeholder="C:\\path\\to\\project"
-                      />
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between rounded-lg border border-border p-3">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">Deployed</p>
-                      <p className="text-xs text-muted-foreground">Is the app currently deployed?</p>
-                    </div>
-                    <Switch checked={deployed} onCheckedChange={setDeployed} />
-                  </div>
-                  <SheetFooter className="pt-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setIsCreateOpen(false)
-                        resetForm()
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button type="submit" disabled={isSubmitting}>
-                      {isSubmitting ? 'Creating…' : 'Create project'}
-                    </Button>
-                  </SheetFooter>
-                </form>
-              </SheetContent>
-            </Sheet>
+      <FormDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        title="Create project"
+        description="Define the project details for ms_gestion."
+        submitLabel="Create project"
+        isSubmitting={isSubmitting}
+        onSubmit={onCreateSubmit}
+      >
+        <div className="space-y-2">
+          <Label htmlFor="project-name">Name</Label>
+          <Input
+            id="project-name"
+            value={formState.name}
+            onChange={(event) =>
+              setFormState((prev) => ({ ...prev, name: event.target.value }))
+            }
+            placeholder="Digital Banking Platform"
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="project-description">Description</Label>
+          <Textarea
+            id="project-description"
+            value={formState.description}
+            onChange={(event) =>
+              setFormState((prev) => ({ ...prev, description: event.target.value }))
+            }
+            placeholder="Optional description"
+          />
+        </div>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label>GitHub repository</Label>
+            {gitHubConnection.kind === 'notConnected' && connectUrl ? (
+              <Button variant="outline" size="sm" asChild>
+                <a href={connectUrl}>Connect GitHub</a>
+              </Button>
+            ) : null}
           </div>
 
-          <div className="flex flex-col md:flex-row gap-4 mb-8">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground size-5" />
+          {gitHubConnection.kind === 'loading' ? (
+            <p className="text-sm text-muted-foreground">Checking GitHub connection...</p>
+          ) : null}
+
+          {gitHubConnection.kind === 'unauthorized' ? (
+            <p className="text-sm text-muted-foreground">Sign in to load GitHub repositories.</p>
+          ) : null}
+
+          {gitHubConnection.kind === 'error' ? (
+            <p className="text-sm text-destructive">{gitHubConnection.message}</p>
+          ) : null}
+
+          {gitHubConnection.kind === 'notConnected' ? (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Connect GitHub to select a repository. You can still paste a URL manually.
+              </p>
               <Input
-                placeholder="Search projects..."
-                className="pl-10"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={formState.gitRepoUrl}
+                onChange={(event) =>
+                  setFormState((prev) => ({ ...prev, gitRepoUrl: event.target.value }))
+                }
+                placeholder="https://github.com/org/repo"
               />
             </div>
-          </div>
+          ) : null}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {!isLoading && filteredProjects.length === 0 ? (
-              <Card className="p-6">
-                <p className="text-sm text-muted-foreground">No projects found.</p>
-              </Card>
-            ) : null}
+          {gitHubConnection.kind === 'connected' ? (
+            <div className="space-y-2">
+              {gitHubRepos.kind === 'loading' ? (
+                <p className="text-sm text-muted-foreground">Loading repositories...</p>
+              ) : null}
 
-            {filteredProjects.map((project) => (
-              <Card key={project.id} className="p-6">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-lg font-semibold text-foreground truncate">
-                      {project.name}
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-1 truncate">
-                      {getRepositoryUrl(project)}
-                    </p>
-                  </div>
-                  <Badge
-                    variant="outline"
-                    className={statusStyle[project.deployed ? 'Deployed' : 'Not deployed']}
-                  >
-                    {project.deployed ? 'Deployed' : 'Not deployed'}
-                  </Badge>
-                </div>
+              {gitHubRepos.kind === 'error' ? (
+                <p className="text-sm text-destructive">{gitHubRepos.message}</p>
+              ) : null}
 
-                <div className="grid grid-cols-2 gap-4 mt-6">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Type</p>
-                    <p className="text-sm font-semibold text-foreground mt-1">
-                      {getType(project)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Source</p>
-                    <p className="text-sm font-semibold text-foreground mt-1">
-                      {getProvider(project)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Default branch</p>
-                    <p className="text-sm font-semibold text-foreground mt-1">
-                      {project.defaultBranch ? String(project.defaultBranch) : '—'}
-                    </p>
-                  </div>
-                </div>
+              {gitHubRepos.kind === 'available' ? (
+                <Select
+                  value={selectedRepoKey}
+                  onValueChange={(value) => {
+                    setSelectedRepoKey(value)
+                    setSelectedBranch('')
+                    setBranchState({ kind: 'idle', branches: [] })
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a repository" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {gitHubRepos.repos.map((repo) => (
+                      <SelectItem key={repo.key} value={repo.key}>
+                        {repo.owner}/{repo.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
 
-                <div className="mt-4">
-                  <p className="text-xs text-muted-foreground">
-                    Created {project.createdAt ? formatDate(project.createdAt) : '—'}
-                  </p>
-                </div>
-
-                <div className="mt-6 space-y-2">
-                  <Button asChild className="w-full" disabled={!project.repositoryUrl}>
-                    <Link href={`/projects/${project.id}?discover=1`}>Discover endpoints</Link>
-                  </Button>
-                  <Button asChild variant="outline" className="w-full">
-                    <Link href={`/projects/${project.id}`}>View details</Link>
-                  </Button>
-                </div>
-              </Card>
-            ))}
-          </div>
+              <Input value={formState.gitRepoUrl} readOnly placeholder="Repository URL" />
+            </div>
+          ) : null}
         </div>
-      </main>
+
+        <div className="space-y-2">
+          <Label>Default branch</Label>
+          {branchState.kind === 'loading' ? (
+            <p className="text-sm text-muted-foreground">Loading branches...</p>
+          ) : null}
+
+          {branchState.kind === 'error' ? (
+            <p className="text-sm text-destructive">{branchState.message}</p>
+          ) : null}
+
+          {branchState.kind === 'available' && branchState.branches.length > 0 ? (
+            <Select
+              value={selectedBranch}
+              onValueChange={(value) => {
+                setSelectedBranch(value)
+                setFormState((prev) => ({ ...prev, gitDefaultBranch: value }))
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a branch" />
+              </SelectTrigger>
+              <SelectContent>
+                {branchState.branches.map((branch) => (
+                  <SelectItem key={branch} value={branch}>
+                    {branch}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input
+              value={formState.gitDefaultBranch}
+              onChange={(event) =>
+                setFormState((prev) => ({ ...prev, gitDefaultBranch: event.target.value }))
+              }
+              placeholder="main"
+            />
+          )}
+        </div>
+        {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
+      </FormDialog>
+
+      <FormDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        title="Update project"
+        description="Keep project details in sync with ms_gestion."
+        submitLabel="Save changes"
+        isSubmitting={isSubmitting}
+        onSubmit={onEditSubmit}
+      >
+        <div className="space-y-2">
+          <Label htmlFor="edit-project-name">Name</Label>
+          <Input
+            id="edit-project-name"
+            value={formState.name}
+            onChange={(event) =>
+              setFormState((prev) => ({ ...prev, name: event.target.value }))
+            }
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="edit-project-description">Description</Label>
+          <Textarea
+            id="edit-project-description"
+            value={formState.description}
+            onChange={(event) =>
+              setFormState((prev) => ({ ...prev, description: event.target.value }))
+            }
+          />
+        </div>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label>GitHub repository</Label>
+            {gitHubConnection.kind === 'notConnected' && connectUrl ? (
+              <Button variant="outline" size="sm" asChild>
+                <a href={connectUrl}>Connect GitHub</a>
+              </Button>
+            ) : null}
+          </div>
+
+          {gitHubConnection.kind === 'loading' ? (
+            <p className="text-sm text-muted-foreground">Checking GitHub connection...</p>
+          ) : null}
+
+          {gitHubConnection.kind === 'unauthorized' ? (
+            <p className="text-sm text-muted-foreground">Sign in to load GitHub repositories.</p>
+          ) : null}
+
+          {gitHubConnection.kind === 'error' ? (
+            <p className="text-sm text-destructive">{gitHubConnection.message}</p>
+          ) : null}
+
+          {gitHubConnection.kind === 'notConnected' ? (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Connect GitHub to select a repository. You can still paste a URL manually.
+              </p>
+              <Input
+                value={formState.gitRepoUrl}
+                onChange={(event) =>
+                  setFormState((prev) => ({ ...prev, gitRepoUrl: event.target.value }))
+                }
+                placeholder="https://github.com/org/repo"
+              />
+            </div>
+          ) : null}
+
+          {gitHubConnection.kind === 'connected' ? (
+            <div className="space-y-2">
+              {gitHubRepos.kind === 'loading' ? (
+                <p className="text-sm text-muted-foreground">Loading repositories...</p>
+              ) : null}
+
+              {gitHubRepos.kind === 'error' ? (
+                <p className="text-sm text-destructive">{gitHubRepos.message}</p>
+              ) : null}
+
+              {gitHubRepos.kind === 'available' ? (
+                <Select
+                  value={selectedRepoKey}
+                  onValueChange={(value) => {
+                    setSelectedRepoKey(value)
+                    setSelectedBranch('')
+                    setBranchState({ kind: 'idle', branches: [] })
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a repository" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {gitHubRepos.repos.map((repo) => (
+                      <SelectItem key={repo.key} value={repo.key}>
+                        {repo.owner}/{repo.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
+
+              <Input value={formState.gitRepoUrl} readOnly placeholder="Repository URL" />
+            </div>
+          ) : null}
+        </div>
+
+        <div className="space-y-2">
+          <Label>Default branch</Label>
+          {branchState.kind === 'loading' ? (
+            <p className="text-sm text-muted-foreground">Loading branches...</p>
+          ) : null}
+
+          {branchState.kind === 'error' ? (
+            <p className="text-sm text-destructive">{branchState.message}</p>
+          ) : null}
+
+          {branchState.kind === 'available' && branchState.branches.length > 0 ? (
+            <Select
+              value={selectedBranch}
+              onValueChange={(value) => {
+                setSelectedBranch(value)
+                setFormState((prev) => ({ ...prev, gitDefaultBranch: value }))
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a branch" />
+              </SelectTrigger>
+              <SelectContent>
+                {branchState.branches.map((branch) => (
+                  <SelectItem key={branch} value={branch}>
+                    {branch}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input
+              value={formState.gitDefaultBranch}
+              onChange={(event) =>
+                setFormState((prev) => ({ ...prev, gitDefaultBranch: event.target.value }))
+              }
+              placeholder="main"
+            />
+          )}
+        </div>
+        {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
+      </FormDialog>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete project"
+        description={
+          deletingProject
+            ? `Delete ${deletingProject.name}? This cannot be undone.`
+            : 'Delete this project?'
+        }
+        confirmLabel="Delete"
+        isConfirming={isDeleting}
+        onConfirm={onDeleteConfirm}
+      />
     </div>
   )
 }

@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
@@ -40,7 +42,8 @@ public class TestCase {
     private String scriptPath;
 
     @Column(columnDefinition = "JSONB")
-    private String testData; // JSON
+    @JdbcTypeCode(SqlTypes.JSON)
+    private String testData;
 
     private String tags;
 

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { storeTokensFromPayload } from '@/lib/auth-storage'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -30,12 +31,29 @@ export default function LoginPage() {
         body: JSON.stringify({ email, username: email, password }),
       })
 
+      const text = await res.text().catch(() => '')
+      let payload: unknown = null
+      try {
+        payload = text ? JSON.parse(text) : null
+      } catch {
+        payload = text
+      }
+
       if (!res.ok) {
-        const payload = await res.json().catch(() => null)
-        setError(payload?.details?.message ?? payload?.message ?? 'Invalid credentials')
+        const record = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null
+        const message =
+          (record?.details && typeof record.details === 'object'
+            ? (record.details as Record<string, unknown>).message
+            : null) ??
+          record?.message ??
+          (typeof payload === 'string' ? payload : null) ??
+          'Invalid credentials'
+
+        setError(typeof message === 'string' ? message : 'Invalid credentials')
         return
       }
 
+      storeTokensFromPayload(payload)
       router.push('/dashboard')
       router.refresh()
     } finally {

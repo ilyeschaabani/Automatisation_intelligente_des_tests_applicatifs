@@ -12,4 +12,5 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Pr
     List<ProjectMember> findByProjectId(Long projectId);
     boolean existsByProjectIdAndUserId(Long projectId, Long userId);
     Optional<ProjectMember> findByProjectIdAndUserId(Long projectId, Long userId);
+    void deleteByProjectIdAndUserId(Long projectId, Long userId);
 }

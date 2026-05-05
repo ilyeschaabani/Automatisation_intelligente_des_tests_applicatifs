@@ -1,26 +1,20 @@
 'use client'
 
 import Link from 'next/link'
-import { useParams, useSearchParams } from 'next/navigation'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useParams } from 'next/navigation'
+import { useEffect, useMemo, useState } from 'react'
+import { Database, Plus, RefreshCw, Settings, Trash2, Users } from 'lucide-react'
 
-import { CampaignCard } from '@/components/campaign-card'
+import { AuthGuard } from '@/components/auth-guard'
 import { Header } from '@/components/header'
 import { Sidebar } from '@/components/sidebar'
+import { ConfirmDialog } from '@/components/crud/ConfirmDialog'
+import { FormDialog } from '@/components/crud/FormDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import {
   Select,
   SelectContent,
@@ -36,609 +30,503 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
+import { Textarea } from '@/components/ui/textarea'
+import { environmentService } from '@/services/environments'
+import { memberService } from '@/services/members'
+import { projectService } from '@/services/projects'
+import { testSuiteService } from '@/services/suites'
+import { userDirectoryService } from '@/services/users'
+import type { AuthUserSummary } from '@/types/auth'
+import type {
+  AddMemberRequest,
+  CreateEnvironmentRequest,
+  CreateTestSuiteRequest,
+  Environment,
+  Member,
+  MemberRole,
+  Project,
+  ProjectStatus,
+  TestSuite,
+  UpdateEnvironmentRequest,
+  UpdateTestSuiteRequest,
+} from '@/types/ms-gestion'
 
-import { Loader2, Copy } from 'lucide-react'
+type LoadState = 'loading' | 'ready' | 'error'
 
-import { toast } from '@/hooks/use-toast'
-
-import {
-  getProjects,
-  getProjectEndpoints,
-  type EndpointDto,
-  type Project,
-} from '@/lib/api-client'
-
-import { scanProject, ApiScannerError, type ScanProjectPayload } from '@/api/apiScannerClient'
-import type { ApiContract, Framework } from '@/types/apiContract'
-
-type GitHubMeResponse = {
-  githubConnected: boolean
-  githubId?: string
-  githubUsername?: string
-  githubAvatarUrl?: string
-  githubTokenCreatedAt?: string
-}
-
-type RepoRow = {
-  key: string
+type EnvironmentFormState = {
   name: string
-  owner: string
-  isPrivate: boolean
-  url: string
-  updatedAt?: string
+  baseUrlWeb: string
+  baseUrlApi: string
+  variables: string
 }
 
-type RepoMetaState =
-  | { kind: 'idle' }
-  | { kind: 'loading' }
-  | { kind: 'available'; owner?: string; privacy?: string; updatedAt?: string }
-  | { kind: 'notConnected' }
-  | { kind: 'unavailable' }
-  | { kind: 'unauthorized' }
-  | { kind: 'error'; message: string }
-
-function normalizeRepoUrl(url: string): string {
-  return String(url || '')
-    .trim()
-    .toLowerCase()
-    .replace(/\.git$/, '')
-    .replace(/\/+$/, '')
+type SuiteFormState = {
+  name: string
+  description: string
 }
 
-function parseOwnerFromRepoUrl(repositoryUrl: string): { owner?: string; repo?: string } {
-  try {
-    const url = new URL(repositoryUrl)
-    const parts = url.pathname.split('/').filter(Boolean)
-    const owner = parts[0]
-    const repo = parts[1]?.replace(/\.git$/, '')
-    return {
-      owner: owner || undefined,
-      repo: repo || undefined,
-    }
-  } catch {
-    return {}
-  }
+type MemberFormState = {
+  userId: string
+  role: MemberRole
 }
 
-function normalizeRepos(payload: unknown): RepoRow[] {
-  const list: unknown[] = Array.isArray(payload)
-    ? payload
-    : payload && typeof payload === 'object' && Array.isArray((payload as any).repos)
-      ? ((payload as any).repos as unknown[])
-      : []
-
-  return list
-    .map((repo, idx) => {
-      if (!repo || typeof repo !== 'object') return null
-      const r = repo as any
-
-      const name: string =
-        typeof r.name === 'string'
-          ? r.name
-          : typeof r.full_name === 'string'
-            ? String(r.full_name).split('/').slice(-1)[0]
-            : ''
-
-      const owner: string =
-        typeof r.owner === 'string'
-          ? r.owner
-          : r.owner && typeof r.owner === 'object' && typeof r.owner.login === 'string'
-            ? r.owner.login
-            : typeof r.full_name === 'string'
-              ? String(r.full_name).split('/')[0] ?? ''
-              : ''
-
-      const url: string =
-        typeof r.html_url === 'string'
-          ? r.html_url
-          : typeof r.url === 'string'
-            ? r.url
-            : ''
-
-      const isPrivate = Boolean(r.private)
-
-      const updatedAt: string | undefined =
-        typeof r.updated_at === 'string'
-          ? r.updated_at
-          : typeof r.updatedAt === 'string'
-            ? r.updatedAt
-            : undefined
-
-      const key =
-        typeof r.id === 'number' || typeof r.id === 'string'
-          ? String(r.id)
-          : `${owner}/${name || 'repo'}:${idx}`
-
-      if (!name) return null
-      return { key, name, owner, isPrivate, url, updatedAt }
-    })
-    .filter(Boolean) as RepoRow[]
+const emptyEnvForm: EnvironmentFormState = {
+  name: '',
+  baseUrlWeb: '',
+  baseUrlApi: '',
+  variables: '',
 }
 
-async function githubApiFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL
-  if (!baseUrl) throw new Error('NEXT_PUBLIC_API_URL is not configured')
-
-  const normalizedBase = baseUrl.replace(/\/+$/, '')
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`
-  const url = `${normalizedBase}${normalizedPath}`
-
-  return fetch(url, {
-    ...init,
-    credentials: 'include',
-    cache: init.cache ?? 'no-store',
-    headers: {
-      ...(init.headers ?? {}),
-    },
-  })
+const emptySuiteForm: SuiteFormState = {
+  name: '',
+  description: '',
 }
 
-const campaignsForProjectSeed = [
-  {
-    name: 'Banking Mobile App - v2.5',
-    type: 'Functional' as const,
-    status: 'Running' as const,
-    progress: 65,
-    tests: 145,
-    passed: 94,
-    failed: 0,
-    lastRun: '5 mins ago',
-  },
-  {
-    name: 'Payment Gateway API Tests',
-    type: 'API' as const,
-    status: 'Completed' as const,
-    progress: 100,
-    tests: 89,
-    passed: 87,
-    failed: 2,
-    lastRun: '2 hours ago',
-  },
-  {
-    name: 'Regression Suite - Production',
-    type: 'Regression' as const,
-    status: 'Scheduled' as const,
-    progress: 0,
-    tests: 234,
-    passed: 0,
-    failed: 0,
-    lastRun: 'Tomorrow 2:00 AM',
-  },
-  {
-    name: 'UI Components - v3.0',
-    type: 'Functional' as const,
-    status: 'Failed' as const,
-    progress: 85,
-    tests: 98,
-    passed: 84,
-    failed: 14,
-    lastRun: '30 mins ago',
-  },
-] as const
-
-const statusStyle: Record<'Deployed' | 'Not deployed', string> = {
-  Deployed: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400',
-  'Not deployed': 'bg-gray-100 text-gray-800 dark:bg-gray-950 dark:text-gray-400',
+const emptyMemberForm: MemberFormState = {
+  userId: '',
+  role: 'TESTER',
 }
 
-function formatDate(value: string): string {
+const statusVariant: Record<
+  ProjectStatus,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  ACTIVE: 'default',
+  PAUSED: 'secondary',
+  ARCHIVED: 'outline',
+}
+
+const formatDate = (value?: string) => {
+  if (!value) return '—'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleString()
 }
 
-function frameworkBadgeVariant(value: Framework): 'default' | 'secondary' | 'outline' {
-  if (value === 'UNKNOWN') return 'outline'
-  return 'secondary'
+const formatUserLabel = (user: AuthUserSummary) => {
+  const name = [user.prenom, user.nom].filter(Boolean).join(' ').trim()
+  if (name && user.email) return `${name} (${user.email})`
+  return name || user.email || `User ${user.id}`
 }
 
-function getScanPhaseLabel(elapsedSeconds: number, source: 'git' | 'local'): string {
-  if (elapsedSeconds < 5) return 'Starting scan…'
-  if (source === 'git') {
-    if (elapsedSeconds < 40) return 'Cloning repo…'
-    if (elapsedSeconds < 70) return 'Detecting framework…'
-    return 'Extracting endpoints…'
+const normalizeVariables = (raw: string) => {
+  const trimmed = raw.trim()
+  if (!trimmed) return { value: undefined as string | undefined }
+
+  try {
+    let parsed: unknown = JSON.parse(trimmed)
+    if (typeof parsed === 'string') {
+      const inner = parsed.trim()
+      if (inner.startsWith('{') || inner.startsWith('[')) {
+        parsed = JSON.parse(inner)
+      }
+    }
+    return { value: JSON.stringify(parsed) }
+  } catch {
+    return { error: 'Variables must be valid JSON.' }
   }
-  if (elapsedSeconds < 20) return 'Detecting framework…'
-  return 'Extracting endpoints…'
 }
 
-export default function ProjectDetailsPage({
-}: {}) {
+export default function ProjectDetailsPage() {
   const params = useParams<{ id?: string | string[] }>()
   const id = Array.isArray(params?.id) ? params?.id[0] : params?.id
-  const searchParams = useSearchParams()
-  const autoDiscoverRan = useRef(false)
+  const projectId = Number(id)
+  const hasProjectId = Number.isFinite(projectId)
 
   const [project, setProject] = useState<Project | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [repoMeta, setRepoMeta] = useState<RepoMetaState>({ kind: 'idle' })
+  const [projectState, setProjectState] = useState<LoadState>('loading')
+  const [projectError, setProjectError] = useState<string | null>(null)
 
-  const [isScanOpen, setIsScanOpen] = useState(false)
-  const [scanSource, setScanSource] = useState<'git' | 'local'>('git')
-  const [scanRepoUrl, setScanRepoUrl] = useState('')
-  const [scanProjectPath, setScanProjectPath] = useState('')
+  const [environments, setEnvironments] = useState<Environment[]>([])
+  const [envState, setEnvState] = useState<LoadState>('loading')
+  const [envError, setEnvError] = useState<string | null>(null)
 
-  const [isScanning, setIsScanning] = useState(false)
-  const [elapsedSeconds, setElapsedSeconds] = useState(0)
-  const [scanResult, setScanResult] = useState<ApiContract | null>(null)
-  const [scanError, setScanError] = useState<string | null>(null)
-  const [scanErrorDetails, setScanErrorDetails] = useState<unknown>(null)
-  const [rawOpen, setRawOpen] = useState(false)
+  const [suites, setSuites] = useState<TestSuite[]>([])
+  const [suiteState, setSuiteState] = useState<LoadState>('loading')
+  const [suiteError, setSuiteError] = useState<string | null>(null)
 
-  const [endpointBranch, setEndpointBranch] = useState('')
-  const [endpointSearch, setEndpointSearch] = useState('')
-  const [endpointMethod, setEndpointMethod] = useState<string>('ALL')
-  const [endpointsState, setEndpointsState] = useState<
-    | { kind: 'idle' }
-    | { kind: 'loading' }
-    | { kind: 'running'; attempt: number; maxAttempts: number }
-    | { kind: 'done'; endpoints: EndpointDto[] }
-    | { kind: 'error'; message: string }
-  >({ kind: 'idle' })
-  const pollTimeoutRef = useRef<number | null>(null)
-  const pollAttemptRef = useRef(0)
-  const pollInFlightRef = useRef(false)
-  const [schemaDialog, setSchemaDialog] = useState<{
-    open: boolean
-    title: string
-    schema: string | null
-  }>({ open: false, title: '', schema: null })
+  const [members, setMembers] = useState<Member[]>([])
+  const [memberState, setMemberState] = useState<LoadState>('loading')
+  const [memberError, setMemberError] = useState<string | null>(null)
 
-  const abortRef = useRef<AbortController | null>(null)
+  const [users, setUsers] = useState<AuthUserSummary[]>([])
+  const [usersState, setUsersState] = useState<LoadState>('loading')
+  const [usersError, setUsersError] = useState<string | null>(null)
 
-  useEffect(() => {
-    return () => {
-      if (pollTimeoutRef.current) window.clearTimeout(pollTimeoutRef.current)
-      pollTimeoutRef.current = null
-      pollAttemptRef.current = 0
-      pollInFlightRef.current = false
-    }
-  }, [])
+  const [envForm, setEnvForm] = useState<EnvironmentFormState>(emptyEnvForm)
+  const [suiteForm, setSuiteForm] = useState<SuiteFormState>(emptySuiteForm)
+  const [memberForm, setMemberForm] = useState<MemberFormState>(emptyMemberForm)
 
-  useEffect(() => {
-    if (!id) {
+  const [formError, setFormError] = useState<string | null>(null)
+
+  const [envCreateOpen, setEnvCreateOpen] = useState(false)
+  const [envEditOpen, setEnvEditOpen] = useState(false)
+  const [envEditing, setEnvEditing] = useState<Environment | null>(null)
+  const [envDeleteOpen, setEnvDeleteOpen] = useState(false)
+  const [envDeleting, setEnvDeleting] = useState<Environment | null>(null)
+  const [isEnvSubmitting, setIsEnvSubmitting] = useState(false)
+  const [isEnvDeleting, setIsEnvDeleting] = useState(false)
+
+  const [suiteCreateOpen, setSuiteCreateOpen] = useState(false)
+  const [suiteEditOpen, setSuiteEditOpen] = useState(false)
+  const [suiteEditing, setSuiteEditing] = useState<TestSuite | null>(null)
+  const [suiteDeleteOpen, setSuiteDeleteOpen] = useState(false)
+  const [suiteDeleting, setSuiteDeleting] = useState<TestSuite | null>(null)
+  const [isSuiteSubmitting, setIsSuiteSubmitting] = useState(false)
+  const [isSuiteDeleting, setIsSuiteDeleting] = useState(false)
+
+  const [memberAddOpen, setMemberAddOpen] = useState(false)
+  const [memberDeleteOpen, setMemberDeleteOpen] = useState(false)
+  const [memberDeleting, setMemberDeleting] = useState<Member | null>(null)
+  const [isMemberSubmitting, setIsMemberSubmitting] = useState(false)
+  const [isMemberDeleting, setIsMemberDeleting] = useState(false)
+
+  const loadProject = async () => {
+    if (!hasProjectId) return
+    setProjectState('loading')
+    setProjectError(null)
+    try {
+      const data = await projectService.getById(projectId)
+      setProject(data)
+      setProjectState('ready')
+    } catch (err) {
       setProject(null)
-      setIsLoading(false)
-      return
+      setProjectState('error')
+      setProjectError(err instanceof Error ? err.message : 'Failed to load project')
     }
+  }
 
-    let cancelled = false
-
-    const run = async () => {
-      setIsLoading(true)
-      try {
-        const projects = await getProjects()
-        const found = projects.find((p) => String(p.id) === String(id))
-        if (!cancelled) setProject(found ?? null)
-      } catch (error) {
-        console.error('Failed to load project details', error)
-        if (!cancelled) setProject(null)
-      } finally {
-        if (!cancelled) setIsLoading(false)
-      }
+  const loadEnvironments = async () => {
+    if (!hasProjectId) return
+    setEnvState('loading')
+    setEnvError(null)
+    try {
+      const data = await environmentService.getAll(projectId)
+      setEnvironments(Array.isArray(data) ? data : [])
+      setEnvState('ready')
+    } catch (err) {
+      setEnvironments([])
+      setEnvState('error')
+      setEnvError(err instanceof Error ? err.message : 'Failed to load environments')
     }
+  }
 
-    void run()
-    return () => {
-      cancelled = true
+  const loadSuites = async () => {
+    if (!hasProjectId) return
+    setSuiteState('loading')
+    setSuiteError(null)
+    try {
+      const data = await testSuiteService.getAll(projectId)
+      setSuites(Array.isArray(data) ? data : [])
+      setSuiteState('ready')
+    } catch (err) {
+      setSuites([])
+      setSuiteState('error')
+      setSuiteError(err instanceof Error ? err.message : 'Failed to load suites')
     }
-  }, [id])
+  }
 
-  const projectType = useMemo(() => {
-    if (!project) return '—'
-    return String(project.projectType ?? '—')
+  const loadMembers = async () => {
+    if (!hasProjectId) return
+    setMemberState('loading')
+    setMemberError(null)
+    try {
+      const data = await memberService.getAll(projectId)
+      setMembers(Array.isArray(data) ? data : [])
+      setMemberState('ready')
+    } catch (err) {
+      setMembers([])
+      setMemberState('error')
+      setMemberError(err instanceof Error ? err.message : 'Failed to load members')
+    }
+  }
+
+  const loadUsers = async () => {
+    setUsersState('loading')
+    setUsersError(null)
+    try {
+      const data = await userDirectoryService.getAll()
+      setUsers(Array.isArray(data) ? data : [])
+      setUsersState('ready')
+    } catch (err) {
+      setUsers([])
+      setUsersState('error')
+      setUsersError(err instanceof Error ? err.message : 'Failed to load users')
+    }
+  }
+
+  const loadAll = async () => {
+    await Promise.all([loadProject(), loadEnvironments(), loadSuites(), loadMembers()])
+  }
+
+  useEffect(() => {
+    if (!hasProjectId) return
+    void loadAll()
+  }, [hasProjectId])
+
+  const headerSubtitle = useMemo(() => {
+    if (!project) return 'Manage environments, suites, and members.'
+    return project.description || 'Manage environments, suites, and members.'
   }, [project])
 
-  const sourceType = useMemo(() => {
-    if (!project) return '—'
-    return String(project.sourceType ?? '—')
-  }, [project])
+  const resetEnvForm = () => {
+    setEnvForm(emptyEnvForm)
+    setFormError(null)
+  }
 
-  const repositoryUrl = useMemo(() => {
-    if (!project) return ''
-    return String(project.repositoryUrl ?? '')
-  }, [project])
+  const resetSuiteForm = () => {
+    setSuiteForm(emptySuiteForm)
+    setFormError(null)
+  }
 
-  const defaultBranchLabel = useMemo(() => {
-    if (!project) return ''
-    const v = String(project.defaultBranch ?? '').trim()
-    return v
-  }, [project])
+  const resetMemberForm = () => {
+    setMemberForm(emptyMemberForm)
+    setFormError(null)
+  }
 
-  const filteredEndpoints = useMemo(() => {
-    const list = endpointsState.kind === 'done' ? endpointsState.endpoints : []
-    const search = endpointSearch.trim().toLowerCase()
-    return list.filter((e) => {
-      if (endpointMethod !== 'ALL' && String(e.method).toUpperCase() !== endpointMethod) {
-        return false
-      }
-      if (search) {
-        const path = String(e.path ?? '').toLowerCase()
-        if (!path.includes(search)) return false
-      }
-      return true
+  const openEnvCreate = () => {
+    resetEnvForm()
+    setEnvCreateOpen(true)
+  }
+
+  const openEnvEdit = (env: Environment) => {
+    setEnvEditing(env)
+    setEnvForm({
+      name: env.name ?? '',
+      baseUrlWeb: env.baseUrlWeb ?? '',
+      baseUrlApi: env.baseUrlApi ?? '',
+      variables: env.variables ?? '',
     })
-  }, [endpointsState, endpointMethod, endpointSearch])
-
-  const methodOptions = useMemo(() => {
-    const list = endpointsState.kind === 'done' ? endpointsState.endpoints : []
-    const methods = Array.from(
-      new Set(list.map((e) => String(e.method ?? '').toUpperCase()).filter(Boolean)),
-    ).sort()
-    return ['ALL', ...methods]
-  }, [endpointsState])
-
-  const runDiscovery = async (projectId: number, branch?: string) => {
-    const data = await getProjectEndpoints(projectId, branch)
-    return Array.isArray(data) ? data : []
+    setEnvEditOpen(true)
   }
 
-  const resolveEffectiveBranch = (explicit: string | undefined, projectDefault: string | null | undefined) => {
-    const typed = String(explicit ?? '').trim()
-    if (typed) return typed
-
-    const fallback = String(projectDefault ?? '').trim()
-    if (fallback) return fallback
-
-    return 'main'
+  const openEnvDelete = (env: Environment) => {
+    setEnvDeleting(env)
+    setEnvDeleteOpen(true)
   }
 
-  const schedulePoll = (fn: () => void, delayMs: number) => {
-    if (pollTimeoutRef.current) window.clearTimeout(pollTimeoutRef.current)
-    pollTimeoutRef.current = window.setTimeout(fn, delayMs)
+  const openSuiteCreate = () => {
+    resetSuiteForm()
+    setSuiteCreateOpen(true)
   }
 
-  const clearPolling = () => {
-    if (pollTimeoutRef.current) window.clearTimeout(pollTimeoutRef.current)
-    pollTimeoutRef.current = null
-    pollAttemptRef.current = 0
-    pollInFlightRef.current = false
+  const openSuiteEdit = (suite: TestSuite) => {
+    setSuiteEditing(suite)
+    setSuiteForm({
+      name: suite.name ?? '',
+      description: suite.description ?? '',
+    })
+    setSuiteEditOpen(true)
   }
 
-  const nextDelayMs = (attempt: number) => {
-    if (attempt <= 1) return 2000
-    if (attempt === 2) return 3000
-    return 5000
+  const openSuiteDelete = (suite: TestSuite) => {
+    setSuiteDeleting(suite)
+    setSuiteDeleteOpen(true)
   }
 
-  const discoverEndpoints = async (options?: { branch?: string }) => {
-    if (!project) return
-    if (!project.repositoryUrl) return
+  const openMemberAdd = () => {
+    resetMemberForm()
+    setMemberAddOpen(true)
+    void loadUsers()
+  }
 
-    clearPolling()
+  const openMemberDelete = (member: Member) => {
+    setMemberDeleting(member)
+    setMemberDeleteOpen(true)
+  }
 
-    const explicitBranch = String(options?.branch ?? endpointBranch).trim() || undefined
-    const effectiveBranch = resolveEffectiveBranch(explicitBranch, project.defaultBranch)
-    const maxAttempts = 60
+  const submitEnvCreate = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!hasProjectId) return
+    setIsEnvSubmitting(true)
+    setFormError(null)
 
-    const step = async () => {
-      if (pollInFlightRef.current) {
-        schedulePoll(() => void step(), nextDelayMs(pollAttemptRef.current || 1))
+    try {
+      const { value: variables, error } = normalizeVariables(envForm.variables)
+      if (error) {
+        setFormError(error)
+        setIsEnvSubmitting(false)
         return
       }
 
-      pollInFlightRef.current = true
-      pollAttemptRef.current += 1
-      const attempt = pollAttemptRef.current
-
-      try {
-        const endpoints = await runDiscovery(project.id, effectiveBranch)
-
-        if (endpoints.length > 0) {
-          clearPolling()
-          setEndpointsState({ kind: 'done', endpoints })
-          return
-        }
-
-        if (attempt >= maxAttempts) {
-          clearPolling()
-          setEndpointsState({
-            kind: 'error',
-            message: 'Timed out waiting for discovery to finish. Please try again.',
-          })
-          return
-        }
-
-        setEndpointsState({ kind: 'running', attempt, maxAttempts })
-        schedulePoll(() => void step(), nextDelayMs(attempt))
-      } catch (err) {
-        clearPolling()
-        setEndpointsState({
-          kind: 'error',
-          message: err instanceof Error ? err.message : 'Failed to load endpoints',
-        })
-      } finally {
-        pollInFlightRef.current = false
+      const payload: CreateEnvironmentRequest = {
+        name: envForm.name.trim(),
+        baseUrlWeb: envForm.baseUrlWeb.trim() || undefined,
+        baseUrlApi: envForm.baseUrlApi.trim() || undefined,
+        variables,
       }
+      await environmentService.create(projectId, payload)
+      setEnvCreateOpen(false)
+      resetEnvForm()
+      await loadEnvironments()
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to create environment')
+    } finally {
+      setIsEnvSubmitting(false)
     }
-
-    setEndpointsState({ kind: 'loading' })
-    pollAttemptRef.current = 0
-    void step()
   }
 
-  useEffect(() => {
-    const shouldDiscover = searchParams?.get('discover') === '1'
-    if (!shouldDiscover) return
-    if (!project?.id) return
-    if (!project.repositoryUrl) return
-    if (autoDiscoverRan.current) return
+  const submitEnvEdit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!hasProjectId || !envEditing) return
+    setIsEnvSubmitting(true)
+    setFormError(null)
 
-    autoDiscoverRan.current = true
-
-    const branch = searchParams?.get('branch')
-    if (branch && branch.trim()) setEndpointBranch(branch.trim())
-
-    void discoverEndpoints({ branch: branch && branch.trim() ? branch.trim() : undefined })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project?.id, project?.repositoryUrl])
-
-  useEffect(() => {
-    if (!isScanOpen) return
-
-    setScanError(null)
-    setScanErrorDetails(null)
-    setScanResult(null)
-    setRawOpen(false)
-
-    // Prefill sensible defaults.
-    const inferredRepoUrl = repositoryUrl
-    if (inferredRepoUrl) setScanRepoUrl((prev) => prev || inferredRepoUrl)
-
-    const projectSourceType = String(project?.sourceType ?? '')
-    if (projectSourceType === 'LOCAL') setScanSource('local')
-    else setScanSource('git')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isScanOpen])
-
-  useEffect(() => {
-    if (!isScanning) {
-      setElapsedSeconds(0)
-      return
-    }
-
-    const startedAt = Date.now()
-    const id = window.setInterval(() => {
-      const seconds = Math.floor((Date.now() - startedAt) / 1000)
-      setElapsedSeconds(seconds)
-    }, 1000)
-
-    return () => window.clearInterval(id)
-  }, [isScanning])
-
-  const connectUrl = useMemo(() => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL
-    if (!apiUrl) return ''
-    return `${apiUrl.replace(/\/+$/, '')}/api/github/connect`
-  }, [])
-
-  useEffect(() => {
-    const currentProject = project
-    const repoUrl = repositoryUrl
-    if (!currentProject) {
-      setRepoMeta({ kind: 'idle' })
-      return
-    }
-
-    if (String(currentProject.sourceType ?? '') !== 'GIT') {
-      setRepoMeta({ kind: 'idle' })
-      return
-    }
-
-    if (!repoUrl) {
-      setRepoMeta({ kind: 'idle' })
-      return
-    }
-
-    let cancelled = false
-
-    const run = async () => {
-      setRepoMeta({ kind: 'loading' })
-
-      const parsed = parseOwnerFromRepoUrl(repoUrl)
-
-      try {
-        const meRes = await githubApiFetch('/api/github/me')
-
-        if (meRes.status === 401) {
-          if (!cancelled) setRepoMeta({ kind: 'unauthorized' })
-          return
-        }
-
-        if (meRes.status === 404 || meRes.status === 400) {
-          if (!cancelled) setRepoMeta({ kind: 'notConnected' })
-          return
-        }
-
-        if (!meRes.ok) {
-          const text = await meRes.text().catch(() => '')
-          if (!cancelled) {
-            setRepoMeta({
-              kind: 'error',
-              message: `Unable to load GitHub status (${meRes.status})${text ? `: ${text}` : ''}`,
-            })
-          }
-          return
-        }
-
-        const meData = (await meRes.json().catch(() => null)) as unknown
-        if (!meData || typeof meData !== 'object') {
-          if (!cancelled) setRepoMeta({ kind: 'error', message: 'Unexpected GitHub status response.' })
-          return
-        }
-
-        const me = meData as GitHubMeResponse
-        if (!me.githubConnected) {
-          if (!cancelled) setRepoMeta({ kind: 'notConnected' })
-          return
-        }
-
-        const reposRes = await githubApiFetch('/api/github/repos')
-
-        if (reposRes.status === 401) {
-          if (!cancelled) setRepoMeta({ kind: 'unauthorized' })
-          return
-        }
-
-        if (reposRes.status === 404) {
-          // Backend semantics: 404 means GitHub is not connected.
-          if (!cancelled) setRepoMeta({ kind: 'notConnected' })
-          return
-        }
-
-        if (!reposRes.ok) {
-          const text = await reposRes.text().catch(() => '')
-          if (!cancelled) {
-            setRepoMeta({
-              kind: 'error',
-              message: `Unable to load repos (${reposRes.status})${text ? `: ${text}` : ''}`,
-            })
-          }
-          return
-        }
-
-        const reposData = (await reposRes.json().catch(() => null)) as unknown
-        const normalized = normalizeRepos(reposData)
-
-        const target = normalizeRepoUrl(repoUrl)
-        const match = normalized.find((r) => normalizeRepoUrl(r.url) === target) ?? null
-
-        const owner = match?.owner || parsed.owner
-        const privacy = match ? (match.isPrivate ? 'Private' : 'Public') : undefined
-        const updatedAt = match?.updatedAt
-
-        if (!cancelled) {
-          setRepoMeta({
-            kind: 'available',
-            owner,
-            privacy,
-            updatedAt,
-          })
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setRepoMeta({
-            kind: 'available',
-            owner: parsed.owner,
-          })
-        }
+    try {
+      const { value: variables, error } = normalizeVariables(envForm.variables)
+      if (error) {
+        setFormError(error)
+        setIsEnvSubmitting(false)
+        return
       }
+
+      const payload: UpdateEnvironmentRequest = {
+        name: envForm.name.trim(),
+        baseUrlWeb: envForm.baseUrlWeb.trim() || undefined,
+        baseUrlApi: envForm.baseUrlApi.trim() || undefined,
+        variables,
+      }
+      await environmentService.update(projectId, envEditing.id, payload)
+      setEnvEditOpen(false)
+      setEnvEditing(null)
+      await loadEnvironments()
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to update environment')
+    } finally {
+      setIsEnvSubmitting(false)
+    }
+  }
+
+  const confirmEnvDelete = async () => {
+    if (!hasProjectId || !envDeleting) return
+    setIsEnvDeleting(true)
+    try {
+      await environmentService.delete(projectId, envDeleting.id)
+      setEnvDeleteOpen(false)
+      setEnvDeleting(null)
+      await loadEnvironments()
+    } catch (err) {
+      setEnvError(err instanceof Error ? err.message : 'Failed to delete environment')
+    } finally {
+      setIsEnvDeleting(false)
+    }
+  }
+
+  const submitSuiteCreate = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!hasProjectId) return
+    setIsSuiteSubmitting(true)
+    setFormError(null)
+
+    try {
+      const payload: CreateTestSuiteRequest = {
+        name: suiteForm.name.trim(),
+        description: suiteForm.description.trim() || undefined,
+      }
+      await testSuiteService.create(projectId, payload)
+      setSuiteCreateOpen(false)
+      resetSuiteForm()
+      await loadSuites()
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to create test suite')
+    } finally {
+      setIsSuiteSubmitting(false)
+    }
+  }
+
+  const submitSuiteEdit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!hasProjectId || !suiteEditing) return
+    setIsSuiteSubmitting(true)
+    setFormError(null)
+
+    try {
+      const payload: UpdateTestSuiteRequest = {
+        name: suiteForm.name.trim(),
+        description: suiteForm.description.trim() || undefined,
+      }
+      await testSuiteService.update(projectId, suiteEditing.id, payload)
+      setSuiteEditOpen(false)
+      setSuiteEditing(null)
+      await loadSuites()
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to update test suite')
+    } finally {
+      setIsSuiteSubmitting(false)
+    }
+  }
+
+  const confirmSuiteDelete = async () => {
+    if (!hasProjectId || !suiteDeleting) return
+    setIsSuiteDeleting(true)
+    try {
+      await testSuiteService.delete(projectId, suiteDeleting.id)
+      setSuiteDeleteOpen(false)
+      setSuiteDeleting(null)
+      await loadSuites()
+    } catch (err) {
+      setSuiteError(err instanceof Error ? err.message : 'Failed to delete test suite')
+    } finally {
+      setIsSuiteDeleting(false)
+    }
+  }
+
+  const submitMemberAdd = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!hasProjectId) return
+    setIsMemberSubmitting(true)
+    setFormError(null)
+
+    const userId = Number(memberForm.userId)
+    if (!Number.isFinite(userId)) {
+      setFormError('Select a user.')
+      setIsMemberSubmitting(false)
+      return
     }
 
-    void run()
-    return () => {
-      cancelled = true
+    try {
+      const payload: AddMemberRequest = {
+        userId,
+        role: memberForm.role,
+      }
+      await memberService.add(projectId, payload)
+      setMemberAddOpen(false)
+      resetMemberForm()
+      await loadMembers()
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to add member')
+    } finally {
+      setIsMemberSubmitting(false)
     }
-  }, [project, repositoryUrl])
+  }
+
+  const confirmMemberDelete = async () => {
+    if (!hasProjectId || !memberDeleting) return
+    setIsMemberDeleting(true)
+    try {
+      await memberService.remove(projectId, memberDeleting.userId)
+      setMemberDeleteOpen(false)
+      setMemberDeleting(null)
+      await loadMembers()
+    } catch (err) {
+      setMemberError(err instanceof Error ? err.message : 'Failed to remove member')
+    } finally {
+      setIsMemberDeleting(false)
+    }
+  }
+
+  const availableUsers = useMemo(() => {
+    const memberIds = new Set(members.map((member) => member.userId))
+    return users.filter((user) => !memberIds.has(user.id))
+  }, [members, users])
+
+  if (!hasProjectId) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+        Invalid project id.
+      </div>
+    )
+  }
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -646,630 +534,471 @@ export default function ProjectDetailsPage({
 
       <main className="flex-1 lg:ml-0 pt-16 lg:pt-0">
         <Header />
-
-        <div className="p-6 max-w-4xl">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h1 className="text-3xl font-bold text-foreground">
-                {project?.name ?? 'Project'}
-              </h1>
-              <p className="text-muted-foreground mt-1">ID: {id ?? '—'}</p>
+        <AuthGuard>
+          <div className="p-6 max-w-7xl space-y-8">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-foreground">
+                  {project?.name || 'Project'}
+                </h1>
+                <p className="text-muted-foreground mt-1">{headerSubtitle}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {project?.status ? (
+                  <Badge variant={statusVariant[project.status]}>{project.status}</Badge>
+                ) : null}
+                <Button variant="outline" onClick={loadAll} className="gap-2">
+                  <RefreshCw size={16} />
+                  Refresh
+                </Button>
+              </div>
             </div>
 
-            <Button asChild variant="outline">
-              <Link href="/projects">Back to projects</Link>
-            </Button>
-          </div>
+            {projectState === 'loading' ? (
+              <Card className="p-6 text-sm text-muted-foreground">Loading project...</Card>
+            ) : null}
+            {projectState === 'error' ? (
+              <Card className="p-6 text-sm text-destructive">{projectError}</Card>
+            ) : null}
 
-          <Card>
-            {isLoading ? (
-              <CardContent className="pt-6">
-                <p className="text-sm text-muted-foreground">Loading…</p>
-              </CardContent>
-            ) : !project ? (
-              <CardContent className="pt-6">
-                <p className="text-sm text-muted-foreground">Not found</p>
-              </CardContent>
-            ) : (
-              <>
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0 space-y-1">
-                      <CardTitle className="truncate">{project.name}</CardTitle>
-                      <CardDescription>
-                        {project.repositoryUrl ? 'Repository linked' : 'No repository'}
-                      </CardDescription>
-                    </div>
-                    <Badge
-                      variant="outline"
-                      className={statusStyle[project.deployed ? 'Deployed' : 'Not deployed']}
-                    >
-                      {project.deployed ? 'Deployed' : 'Not deployed'}
-                    </Badge>
-                  </div>
+            <Card className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Database size={18} />
+                  <h2 className="text-lg font-semibold">Environments</h2>
+                </div>
+                <Button size="sm" onClick={openEnvCreate} className="gap-2">
+                  <Plus size={14} />
+                  Add environment
+                </Button>
+              </div>
 
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    <Badge variant="outline">{projectType}</Badge>
-                    <Badge variant="outline">{sourceType}</Badge>
-                  </div>
-                </CardHeader>
+              {envError ? <p className="text-sm text-destructive mt-4">{envError}</p> : null}
+              {envState === 'loading' ? (
+                <p className="text-sm text-muted-foreground mt-4">Loading environments...</p>
+              ) : null}
 
-                <Separator />
+              {envState !== 'loading' && environments.length === 0 ? (
+                <p className="text-sm text-muted-foreground mt-4">No environments yet.</p>
+              ) : null}
 
-                <CardContent className="pt-6">
+              {envState !== 'loading' && environments.length > 0 ? (
+                <div className="mt-4">
                   <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Base URL (Web)</TableHead>
+                        <TableHead>Base URL (API)</TableHead>
+                        <TableHead>Created</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
                     <TableBody>
-                      <TableRow>
-                        <TableCell className="w-40 text-muted-foreground">Repository</TableCell>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center justify-between gap-4">
-                            <div className="min-w-0">
-                              {repositoryUrl ? (
-                                <Button
-                                  asChild
-                                  variant="link"
-                                  className="h-auto p-0 whitespace-normal break-all"
-                                >
-                                  <a href={repositoryUrl} target="_blank" rel="noreferrer">
-                                    {repositoryUrl}
-                                  </a>
-                                </Button>
-                              ) : (
-                                <span className="text-muted-foreground">—</span>
-                              )}
+                      {environments.map((env) => (
+                        <TableRow key={env.id}>
+                          <TableCell className="font-medium">{env.name}</TableCell>
+                          <TableCell>{env.baseUrlWeb || '—'}</TableCell>
+                          <TableCell>{env.baseUrlApi || '—'}</TableCell>
+                          <TableCell>{formatDate(env.createdAt)}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button size="sm" variant="outline" onClick={() => openEnvEdit(env)}>
+                                <Settings size={14} />
+                                Edit
+                              </Button>
+                              <Button size="sm" variant="destructive" onClick={() => openEnvDelete(env)}>
+                                <Trash2 size={14} />
+                                Delete
+                              </Button>
                             </div>
-
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => setIsScanOpen(true)}
-                              disabled={isScanning}
-                            >
-                              Scan API
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-
-                      {repositoryUrl && sourceType === 'GIT' ? (
-                        <>
-                          <TableRow>
-                            <TableCell className="text-muted-foreground">Owner</TableCell>
-                            <TableCell className="font-medium">
-                              {repoMeta.kind === 'available' && repoMeta.owner ? repoMeta.owner : '—'}
-                            </TableCell>
-                          </TableRow>
-                          <TableRow>
-                            <TableCell className="text-muted-foreground">Privacy</TableCell>
-                            <TableCell className="font-medium">
-                              {repoMeta.kind === 'available' && repoMeta.privacy ? repoMeta.privacy : '—'}
-                            </TableCell>
-                          </TableRow>
-                          <TableRow>
-                            <TableCell className="text-muted-foreground">Updated</TableCell>
-                            <TableCell className="font-medium">
-                              {repoMeta.kind === 'available' && repoMeta.updatedAt
-                                ? formatDate(repoMeta.updatedAt)
-                                : '—'}
-                            </TableCell>
-                          </TableRow>
-                          {repoMeta.kind === 'notConnected' ? (
-                            <TableRow>
-                              <TableCell className="text-muted-foreground">GitHub</TableCell>
-                              <TableCell className="font-medium">
-                                <span className="text-muted-foreground">Not connected.</span>{' '}
-                                {connectUrl ? (
-                                  <Button asChild variant="link" className="h-auto p-0 align-baseline">
-                                    <a href={connectUrl}>Connect to view repo metadata</a>
-                                  </Button>
-                                ) : null}
-                              </TableCell>
-                            </TableRow>
-                          ) : null}
-                        </>
-                      ) : null}
-                      <TableRow>
-                        <TableCell className="text-muted-foreground">Project type</TableCell>
-                        <TableCell className="font-medium">{projectType}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="text-muted-foreground">Source type</TableCell>
-                        <TableCell className="font-medium">{sourceType}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="text-muted-foreground">Created at</TableCell>
-                        <TableCell className="font-medium">
-                          {project.createdAt ? formatDate(project.createdAt) : '—'}
-                        </TableCell>
-                      </TableRow>
+                          </TableCell>
+                        </TableRow>
+                      ))}
                     </TableBody>
                   </Table>
-                </CardContent>
-              </>
-            )}
-          </Card>
-
-          <Card className="mt-6">
-            <CardHeader>
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 space-y-1">
-                  <CardTitle className="truncate">Endpoints</CardTitle>
-                  <CardDescription>
-                    Discover and display extracted API endpoints for this project.
-                  </CardDescription>
                 </div>
+              ) : null}
+            </Card>
 
-                <Button
-                  type="button"
-                  onClick={() => void discoverEndpoints()}
-                  disabled={!project?.repositoryUrl || endpointsState.kind === 'loading' || endpointsState.kind === 'running'}
-                >
-                  {endpointsState.kind === 'loading'
-                    ? 'Loading…'
-                    : endpointsState.kind === 'running'
-                      ? 'Discovery running…'
-                      : endpointsState.kind === 'done'
-                        ? 'Refresh endpoints'
-                        : 'Discover endpoints'}
+            <Card className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Settings size={18} />
+                  <h2 className="text-lg font-semibold">Test suites</h2>
+                </div>
+                <Button size="sm" onClick={openSuiteCreate} className="gap-2">
+                  <Plus size={14} />
+                  Add suite
                 </Button>
               </div>
-            </CardHeader>
 
-            <CardContent className="space-y-4">
-              {!project?.repositoryUrl ? (
-                <p className="text-sm text-muted-foreground">
-                  Repository URL is missing; discovery is disabled.
-                </p>
+              {suiteError ? <p className="text-sm text-destructive mt-4">{suiteError}</p> : null}
+              {suiteState === 'loading' ? (
+                <p className="text-sm text-muted-foreground mt-4">Loading suites...</p>
               ) : null}
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="space-y-2">
-                  <Label htmlFor="endpoint-branch">Branch (optional)</Label>
-                  <Input
-                    id="endpoint-branch"
-                    value={endpointBranch}
-                    onChange={(e) => setEndpointBranch(e.target.value)}
-                    placeholder={defaultBranchLabel ? `Fallback: ${defaultBranchLabel}` : 'Fallback: main'}
-                    disabled={endpointsState.kind === 'loading' || endpointsState.kind === 'running'}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="endpoint-search">Search by path</Label>
-                  <Input
-                    id="endpoint-search"
-                    value={endpointSearch}
-                    onChange={(e) => setEndpointSearch(e.target.value)}
-                    placeholder="/api/projects"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label>Method</Label>
-                    <Select value={endpointMethod} onValueChange={setEndpointMethod}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="All" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {methodOptions.map((m) => (
-                          <SelectItem key={m} value={m}>
-                            {m}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-
-              {endpointsState.kind === 'error' ? (
-                <p className="text-sm text-destructive">{endpointsState.message}</p>
-              ) : endpointsState.kind === 'loading' ? (
-                <p className="text-sm text-muted-foreground">Loading endpoints…</p>
-              ) : endpointsState.kind === 'running' ? (
-                <p className="text-sm text-muted-foreground">
-                  Discovery running… polling every few seconds ({endpointsState.attempt}/{endpointsState.maxAttempts}).
-                </p>
-              ) : endpointsState.kind === 'done' && endpointsState.endpoints.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No endpoints found.</p>
+              {suiteState !== 'loading' && suites.length === 0 ? (
+                <p className="text-sm text-muted-foreground mt-4">No suites yet.</p>
               ) : null}
 
-              {endpointsState.kind === 'done' && endpointsState.endpoints.length > 0 ? (
-                <div className="rounded-md border border-border">
-                  <div className="max-h-[420px] overflow-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-28">Method</TableHead>
-                          <TableHead>Path</TableHead>
-                          <TableHead>Summary</TableHead>
-                          <TableHead className="w-56 text-right">Schema</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredEndpoints.map((e) => (
-                          <TableRow key={e.id}>
-                            <TableCell>
-                              <Badge variant="secondary">{String(e.method).toUpperCase()}</Badge>
-                            </TableCell>
-                            <TableCell className="font-medium">{e.path}</TableCell>
-                            <TableCell className="text-muted-foreground">{e.summary ?? '—'}</TableCell>
-                            <TableCell className="text-right">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="whitespace-nowrap"
-                                onClick={() =>
-                                  setSchemaDialog({
-                                    open: true,
-                                    title: `${String(e.method).toUpperCase()} ${e.path}`,
-                                    schema: e.requestSchema,
-                                  })
-                                }
-                              >
-                                View schema
+              {suiteState !== 'loading' && suites.length > 0 ? (
+                <div className="mt-4">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead>Created</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {suites.map((suite) => (
+                        <TableRow key={suite.id}>
+                          <TableCell className="font-medium">{suite.name}</TableCell>
+                          <TableCell>{suite.description || '—'}</TableCell>
+                          <TableCell>{formatDate(suite.createdAt)}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button size="sm" variant="outline" asChild>
+                                <Link href={`/projects/${projectId}/suites/${suite.id}`}>
+                                  View cases
+                                </Link>
                               </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                              <Button size="sm" variant="outline" onClick={() => openSuiteEdit(suite)}>
+                                <Settings size={14} />
+                                Edit
+                              </Button>
+                              <Button size="sm" variant="destructive" onClick={() => openSuiteDelete(suite)}>
+                                <Trash2 size={14} />
+                                Delete
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               ) : null}
-            </CardContent>
-          </Card>
+            </Card>
 
-          <Dialog
-            open={schemaDialog.open}
-            onOpenChange={(open) => setSchemaDialog((prev) => ({ ...prev, open }))}
-          >
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Request schema</DialogTitle>
-                <DialogDescription>{schemaDialog.title}</DialogDescription>
-              </DialogHeader>
-
-              {schemaDialog.schema ? (
-                <pre className="max-h-[60vh] overflow-auto rounded-md border border-border bg-muted/20 p-3 text-xs whitespace-pre-wrap">
-                  {schemaDialog.schema}
-                </pre>
-              ) : (
-                <p className="text-sm text-muted-foreground">No request schema available.</p>
-              )}
-
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setSchemaDialog((p) => ({ ...p, open: false }))}>
-                  Close
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          <Dialog
-            open={isScanOpen}
-            onOpenChange={(open) => {
-              if (!open && isScanning) {
-                abortRef.current?.abort()
-                abortRef.current = null
-                setIsScanning(false)
-              }
-              setIsScanOpen(open)
-            }}
-          >
-            <DialogContent className="max-w-3xl">
-              <DialogHeader>
-                <DialogTitle>Scan API</DialogTitle>
-                <DialogDescription>
-                  Scan a Git repository or local path to extract REST endpoints.
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-6">
-                <div className="space-y-3">
-                  <Label>Scan source</Label>
-                  <RadioGroup
-                    value={scanSource}
-                    onValueChange={(v) => setScanSource(v as any)}
-                    className="grid gap-3"
-                    disabled={isScanning}
-                  >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="git" id="scan-source-git" />
-                      <Label htmlFor="scan-source-git">Git Repo URL</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="local" id="scan-source-local" />
-                      <Label htmlFor="scan-source-local">Local Path</Label>
-                    </div>
-                  </RadioGroup>
+            <Card className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Users size={18} />
+                  <h2 className="text-lg font-semibold">Project members</h2>
                 </div>
-
-                {scanSource === 'git' ? (
-                  <div className="space-y-2">
-                    <Label htmlFor="scanRepoUrl">Repo URL</Label>
-                    <Input
-                      id="scanRepoUrl"
-                      value={scanRepoUrl}
-                      onChange={(e) => setScanRepoUrl(e.target.value)}
-                      placeholder="https://github.com/user/repo.git"
-                      disabled={isScanning}
-                    />
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <Label htmlFor="scanProjectPath">Project path</Label>
-                    <Input
-                      id="scanProjectPath"
-                      value={scanProjectPath}
-                      onChange={(e) => setScanProjectPath(e.target.value)}
-                      placeholder="C:\\path\\to\\project"
-                      disabled={isScanning}
-                    />
-                  </div>
-                )}
-
-                {isScanning ? (
-                  <div className="rounded-lg border border-border p-4">
-                    <div className="flex items-center gap-3">
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground">
-                          {getScanPhaseLabel(elapsedSeconds, scanSource)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">Elapsed: {elapsedSeconds}s</p>
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-
-                {scanError ? (
-                  <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4">
-                    <p className="text-sm font-medium text-destructive">{scanError}</p>
-                    {scanErrorDetails &&
-                    typeof scanErrorDetails === 'object' &&
-                    scanErrorDetails !== null &&
-                    typeof (scanErrorDetails as any).connectUrl === 'string' ? (
-                      <div className="mt-2">
-                        <Button asChild variant="link" className="h-auto p-0">
-                          <a href={String((scanErrorDetails as any).connectUrl)}>
-                            Connect GitHub account
-                          </a>
-                        </Button>
-                      </div>
-                    ) : null}
-                    {scanErrorDetails ? (
-                      <pre className="mt-2 max-h-40 overflow-auto text-xs text-muted-foreground whitespace-pre-wrap">
-                        {typeof scanErrorDetails === 'string'
-                          ? scanErrorDetails
-                          : JSON.stringify(scanErrorDetails, null, 2)}
-                      </pre>
-                    ) : null}
-                  </div>
-                ) : null}
-
-                {scanResult ? (
-                  <div className="space-y-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant={frameworkBadgeVariant(scanResult.metadata.framework)}>
-                          {scanResult.metadata.framework}
-                        </Badge>
-                        <Badge variant="outline">{scanResult.endpoints.length} endpoints</Badge>
-                      </div>
-
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={async () => {
-                          try {
-                            await navigator.clipboard.writeText(JSON.stringify(scanResult, null, 2))
-                            toast({ title: 'Copied', description: 'Raw JSON copied to clipboard.' })
-                          } catch {
-                            toast({ title: 'Copy failed', description: 'Unable to copy JSON.', variant: 'destructive' })
-                          }
-                        }}
-                      >
-                        <Copy className="mr-2 h-4 w-4" />
-                        Copy JSON
-                      </Button>
-                    </div>
-
-                    {Array.isArray(scanResult.issues) && scanResult.issues.length > 0 ? (
-                      <div className="rounded-lg border border-border bg-muted/30 p-4">
-                        <p className="text-sm font-medium text-foreground">Issues</p>
-                        <ul className="mt-2 list-disc pl-5 text-sm text-muted-foreground space-y-1">
-                          {scanResult.issues.map((issue, idx) => (
-                            <li key={`${idx}-${issue}`}>{issue}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-
-                    <div className="rounded-lg border border-border">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-24">Method</TableHead>
-                            <TableHead>Path</TableHead>
-                            <TableHead>Controller/Handler</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {scanResult.endpoints.length === 0 ? (
-                            <TableRow>
-                              <TableCell colSpan={3} className="text-sm text-muted-foreground">
-                                No endpoints returned.
-                              </TableCell>
-                            </TableRow>
-                          ) : (
-                            scanResult.endpoints.map((ep, idx) => (
-                              <TableRow key={`${ep.method}-${ep.path}-${idx}`}>
-                                <TableCell className="font-medium">{ep.method}</TableCell>
-                                <TableCell className="font-mono text-xs break-all">{ep.path}</TableCell>
-                                <TableCell className="text-sm text-muted-foreground">
-                                  {ep.controller || ep.handler ? (
-                                    <span>{[ep.controller, ep.handler].filter(Boolean).join(' · ')}</span>
-                                  ) : (
-                                    '—'
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            ))
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
-
-                    <Collapsible open={rawOpen} onOpenChange={setRawOpen}>
-                      <div className="flex items-center justify-between">
-                        <CollapsibleTrigger asChild>
-                          <Button type="button" variant="outline">
-                            {rawOpen ? 'Hide Raw JSON' : 'Show Raw JSON'}
-                          </Button>
-                        </CollapsibleTrigger>
-                      </div>
-                      <CollapsibleContent>
-                        <pre className="mt-3 max-h-72 overflow-auto rounded-md border border-border bg-muted p-3 text-xs whitespace-pre-wrap">
-                          {JSON.stringify(scanResult, null, 2)}
-                        </pre>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  </div>
-                ) : null}
+                <Button size="sm" onClick={openMemberAdd} className="gap-2">
+                  <Plus size={14} />
+                  Add member
+                </Button>
               </div>
 
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    if (isScanning) {
-                      abortRef.current?.abort()
-                      abortRef.current = null
-                      setIsScanning(false)
-                      toast({ title: 'Scan cancelled' })
-                      return
-                    }
-                    setIsScanOpen(false)
-                  }}
-                >
-                  {isScanning ? 'Cancel scan' : 'Close'}
-                </Button>
+              {memberError ? <p className="text-sm text-destructive mt-4">{memberError}</p> : null}
+              {memberState === 'loading' ? (
+                <p className="text-sm text-muted-foreground mt-4">Loading members...</p>
+              ) : null}
 
-                <Button
-                  type="button"
-                  disabled={isScanning}
-                  onClick={async () => {
-                    setScanError(null)
-                    setScanErrorDetails(null)
-                    setScanResult(null)
-                    setRawOpen(false)
+              {memberState !== 'loading' && members.length === 0 ? (
+                <p className="text-sm text-muted-foreground mt-4">No members yet.</p>
+              ) : null}
 
-                    if (scanSource === 'git') {
-                      try {
-                        const meRes = await githubApiFetch('/api/github/me')
-                        if (meRes.status === 401) {
-                          setScanError('You are not authenticated.')
-                          return
-                        }
-
-                        if (meRes.status === 404 || meRes.status === 400) {
-                          setScanError('GitHub is not connected. Connect your account to scan private repos.')
-                          if (connectUrl) setScanErrorDetails({ connectUrl })
-                          return
-                        }
-
-                        if (meRes.ok) {
-                          const meData = (await meRes.json().catch(() => null)) as unknown
-                          const me = (meData && typeof meData === 'object' ? (meData as GitHubMeResponse) : null)
-                          if (!me?.githubConnected) {
-                            setScanError('GitHub is not connected. Connect your account to scan private repos.')
-                            if (connectUrl) setScanErrorDetails({ connectUrl })
-                            return
-                          }
-                        }
-                      } catch {
-                        // If we cannot check GitHub status, proceed; server will still scan public repos.
-                      }
-                    }
-
-                    const payload: ScanProjectPayload | null =
-                      scanSource === 'git'
-                        ? (scanRepoUrl.trim() ? { repoUrl: scanRepoUrl.trim() } : null)
-                        : (scanProjectPath.trim() ? { projectPath: scanProjectPath.trim() } : null)
-
-                    if (!payload) {
-                      setScanError(scanSource === 'git' ? 'Repo URL is required.' : 'Project path is required.')
-                      return
-                    }
-
-                    const controller = new AbortController()
-                    abortRef.current = controller
-                    setIsScanning(true)
-
-                    try {
-                      const result = await scanProject(payload, {
-                        signal: controller.signal,
-                      })
-                      setScanResult(result)
-                    } catch (error) {
-                      if (error instanceof ApiScannerError) {
-                        setScanError(error.message)
-                        setScanErrorDetails(error.body ?? (error.status ? { status: error.status } : null))
-                      } else {
-                        const message = error instanceof Error ? error.message : 'Scan failed'
-                        setScanError(message)
-                      }
-                    } finally {
-                      abortRef.current = null
-                      setIsScanning(false)
-                    }
-                  }}
-                >
-                  Start Scan
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          <div className="mt-6">
-            <Card>
-              <CardHeader>
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0 space-y-1">
-                    <CardTitle>Campaigns</CardTitle>
-                    <CardDescription>
-                      Create and track test campaigns for this project
-                    </CardDescription>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Button asChild variant="outline">
-                      <Link href="/campaigns">View all</Link>
-                    </Button>
-                    <Button asChild disabled={!project}>
-                      <Link href="/campaigns/new">New campaign</Link>
-                    </Button>
-                  </div>
+              {memberState !== 'loading' && members.length > 0 ? (
+                <div className="mt-4">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>User ID</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {members.map((member) => (
+                        <TableRow key={member.userId}>
+                          <TableCell className="font-medium">{member.userId}</TableCell>
+                          <TableCell>{member.role}</TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => openMemberDelete(member)}
+                            >
+                              <Trash2 size={14} />
+                              Remove
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
-              </CardHeader>
-
-              <Separator />
-
-              <CardContent className="pt-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {campaignsForProjectSeed.map((campaign) => (
-                    <CampaignCard key={campaign.name} {...campaign} />
-                  ))}
-                </div>
-              </CardContent>
+              ) : null}
             </Card>
           </div>
-        </div>
+        </AuthGuard>
       </main>
+
+      <FormDialog
+        open={envCreateOpen}
+        onOpenChange={setEnvCreateOpen}
+        title="Add environment"
+        description="Define URLs and variables for this environment."
+        submitLabel="Create environment"
+        isSubmitting={isEnvSubmitting}
+        onSubmit={submitEnvCreate}
+      >
+        <div className="space-y-2">
+          <Label htmlFor="env-name">Name</Label>
+          <Input
+            id="env-name"
+            value={envForm.name}
+            onChange={(event) => setEnvForm((prev) => ({ ...prev, name: event.target.value }))}
+            placeholder="Staging"
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="env-web">Base URL (Web)</Label>
+          <Input
+            id="env-web"
+            value={envForm.baseUrlWeb}
+            onChange={(event) =>
+              setEnvForm((prev) => ({ ...prev, baseUrlWeb: event.target.value }))
+            }
+            placeholder="https://staging.example.com"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="env-api">Base URL (API)</Label>
+          <Input
+            id="env-api"
+            value={envForm.baseUrlApi}
+            onChange={(event) =>
+              setEnvForm((prev) => ({ ...prev, baseUrlApi: event.target.value }))
+            }
+            placeholder="https://api.staging.example.com"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="env-variables">Variables (JSON)</Label>
+          <Textarea
+            id="env-variables"
+            value={envForm.variables}
+            onChange={(event) =>
+              setEnvForm((prev) => ({ ...prev, variables: event.target.value }))
+            }
+            placeholder='{"BASE_URL": "https://staging.example.com"}'
+          />
+        </div>
+        {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
+      </FormDialog>
+
+      <FormDialog
+        open={envEditOpen}
+        onOpenChange={setEnvEditOpen}
+        title="Edit environment"
+        description="Update environment configuration."
+        submitLabel="Save changes"
+        isSubmitting={isEnvSubmitting}
+        onSubmit={submitEnvEdit}
+      >
+        <div className="space-y-2">
+          <Label htmlFor="env-edit-name">Name</Label>
+          <Input
+            id="env-edit-name"
+            value={envForm.name}
+            onChange={(event) => setEnvForm((prev) => ({ ...prev, name: event.target.value }))}
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="env-edit-web">Base URL (Web)</Label>
+          <Input
+            id="env-edit-web"
+            value={envForm.baseUrlWeb}
+            onChange={(event) =>
+              setEnvForm((prev) => ({ ...prev, baseUrlWeb: event.target.value }))
+            }
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="env-edit-api">Base URL (API)</Label>
+          <Input
+            id="env-edit-api"
+            value={envForm.baseUrlApi}
+            onChange={(event) =>
+              setEnvForm((prev) => ({ ...prev, baseUrlApi: event.target.value }))
+            }
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="env-edit-variables">Variables (JSON)</Label>
+          <Textarea
+            id="env-edit-variables"
+            value={envForm.variables}
+            onChange={(event) =>
+              setEnvForm((prev) => ({ ...prev, variables: event.target.value }))
+            }
+          />
+        </div>
+        {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
+      </FormDialog>
+
+      <ConfirmDialog
+        open={envDeleteOpen}
+        onOpenChange={setEnvDeleteOpen}
+        title="Delete environment"
+        description={envDeleting ? `Delete ${envDeleting.name}?` : 'Delete environment?'}
+        confirmLabel="Delete"
+        isConfirming={isEnvDeleting}
+        onConfirm={confirmEnvDelete}
+      />
+
+      <FormDialog
+        open={suiteCreateOpen}
+        onOpenChange={setSuiteCreateOpen}
+        title="Add test suite"
+        description="Group test cases for this project."
+        submitLabel="Create suite"
+        isSubmitting={isSuiteSubmitting}
+        onSubmit={submitSuiteCreate}
+      >
+        <div className="space-y-2">
+          <Label htmlFor="suite-name">Name</Label>
+          <Input
+            id="suite-name"
+            value={suiteForm.name}
+            onChange={(event) => setSuiteForm((prev) => ({ ...prev, name: event.target.value }))}
+            placeholder="Regression Suite"
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="suite-description">Description</Label>
+          <Textarea
+            id="suite-description"
+            value={suiteForm.description}
+            onChange={(event) =>
+              setSuiteForm((prev) => ({ ...prev, description: event.target.value }))
+            }
+            placeholder="Optional description"
+          />
+        </div>
+        {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
+      </FormDialog>
+
+      <FormDialog
+        open={suiteEditOpen}
+        onOpenChange={setSuiteEditOpen}
+        title="Edit test suite"
+        description="Update suite metadata."
+        submitLabel="Save changes"
+        isSubmitting={isSuiteSubmitting}
+        onSubmit={submitSuiteEdit}
+      >
+        <div className="space-y-2">
+          <Label htmlFor="suite-edit-name">Name</Label>
+          <Input
+            id="suite-edit-name"
+            value={suiteForm.name}
+            onChange={(event) => setSuiteForm((prev) => ({ ...prev, name: event.target.value }))}
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="suite-edit-description">Description</Label>
+          <Textarea
+            id="suite-edit-description"
+            value={suiteForm.description}
+            onChange={(event) =>
+              setSuiteForm((prev) => ({ ...prev, description: event.target.value }))
+            }
+          />
+        </div>
+        {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
+      </FormDialog>
+
+      <ConfirmDialog
+        open={suiteDeleteOpen}
+        onOpenChange={setSuiteDeleteOpen}
+        title="Delete test suite"
+        description={suiteDeleting ? `Delete ${suiteDeleting.name}?` : 'Delete test suite?'}
+        confirmLabel="Delete"
+        isConfirming={isSuiteDeleting}
+        onConfirm={confirmSuiteDelete}
+      />
+
+      <FormDialog
+        open={memberAddOpen}
+        onOpenChange={setMemberAddOpen}
+        title="Add member"
+        description="Invite a teammate to the project."
+        submitLabel="Add member"
+        isSubmitting={isMemberSubmitting}
+        onSubmit={submitMemberAdd}
+      >
+        <div className="space-y-2">
+          <Label>User</Label>
+          <Select
+            value={memberForm.userId}
+            onValueChange={(value) => setMemberForm((prev) => ({ ...prev, userId: value }))}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select user" />
+            </SelectTrigger>
+            <SelectContent>
+              {availableUsers.map((user) => (
+                <SelectItem key={user.id} value={String(user.id)}>
+                  {formatUserLabel(user)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {usersState === 'loading' ? (
+            <p className="text-xs text-muted-foreground">Loading users...</p>
+          ) : null}
+          {usersState === 'error' ? (
+            <p className="text-xs text-destructive">{usersError}</p>
+          ) : null}
+          {usersState === 'ready' && availableUsers.length === 0 ? (
+            <p className="text-xs text-muted-foreground">All users are already members.</p>
+          ) : null}
+        </div>
+        <div className="space-y-2">
+          <Label>Role</Label>
+          <Select
+            value={memberForm.role}
+            onValueChange={(value) => setMemberForm((prev) => ({ ...prev, role: value as MemberRole }))}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select role" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ADMIN">ADMIN</SelectItem>
+              <SelectItem value="TESTER">TESTER</SelectItem>
+              <SelectItem value="DEVOPS">DEVOPS</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
+      </FormDialog>
+
+      <ConfirmDialog
+        open={memberDeleteOpen}
+        onOpenChange={setMemberDeleteOpen}
+        title="Remove member"
+        description={
+          memberDeleting
+            ? `Remove user ${memberDeleting.userId} from the project?`
+            : 'Remove member?'
+        }
+        confirmLabel="Remove"
+        isConfirming={isMemberDeleting}
+        onConfirm={confirmMemberDelete}
+      />
     </div>
   )
 }
