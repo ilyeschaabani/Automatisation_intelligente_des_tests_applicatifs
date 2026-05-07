@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import { buildMsGestionHeaders } from '../_ms-gestion-auth'
 
 const TEST_MANAGEMENT_SERVICE_URL =
   process.env.TEST_MANAGEMENT_SERVICE_URL ??
@@ -20,15 +21,20 @@ function forwardSetCookie(upstream: Response, response: NextResponse) {
 export async function GET(request: Request) {
   const cookieStore = await cookies()
   const url = new URL(request.url)
+  const projectId = url.searchParams.get('projectId')
 
-  const upstream = await fetch(`${TEST_MANAGEMENT_SERVICE_URL}/api/campaigns${url.search}`, {
+  if (!projectId) {
+    return NextResponse.json({ error: 'projectId is required' }, { status: 400 })
+  }
+
+  const upstream = await fetch(
+    `${TEST_MANAGEMENT_SERVICE_URL}/api/projects/${encodeURIComponent(projectId)}/campaigns`,
+    {
     method: 'GET',
-    headers: {
-      cookie: cookieStore.toString(),
-      accept: request.headers.get('accept') ?? 'application/json',
-    },
+    headers: buildMsGestionHeaders(cookieStore, request),
     cache: 'no-store',
-  })
+  },
+  )
 
   const response = new NextResponse(upstream.body, {
     status: upstream.status,
@@ -46,16 +52,23 @@ export async function POST(request: Request) {
   const cookieStore = await cookies()
   const url = new URL(request.url)
   const body = await request.text().catch(() => '')
+  const projectId = url.searchParams.get('projectId')
 
-  const upstream = await fetch(`${TEST_MANAGEMENT_SERVICE_URL}/api/campaigns${url.search}`, {
+  if (!projectId) {
+    return NextResponse.json({ error: 'projectId is required' }, { status: 400 })
+  }
+
+  const upstream = await fetch(
+    `${TEST_MANAGEMENT_SERVICE_URL}/api/projects/${encodeURIComponent(projectId)}/campaigns`,
+    {
     method: 'POST',
     headers: {
-      cookie: cookieStore.toString(),
+      ...buildMsGestionHeaders(cookieStore, request),
       'content-type': request.headers.get('content-type') ?? 'application/json',
-      accept: request.headers.get('accept') ?? 'application/json',
     },
     body,
-  })
+  },
+  )
 
   const response = new NextResponse(upstream.body, {
     status: upstream.status,

@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 
-const TEST_MANAGEMENT_SERVICE_URL =
-  process.env.TEST_MANAGEMENT_SERVICE_URL ??
-  process.env.PROJECTS_SERVICE_URL ??
-  'http://localhost:8082'
+const MS_EXECUTION_SERVICE_URL =
+  process.env.EXECUTION_SERVICE_URL ??
+  process.env.MS_EXECUTION_SERVICE_URL ??
+  'http://localhost:8083'
 
 function forwardSetCookie(upstream: Response, response: NextResponse) {
   const setCookies = (upstream.headers as any).getSetCookie?.() as string[] | undefined
@@ -20,15 +20,23 @@ function forwardSetCookie(upstream: Response, response: NextResponse) {
 export async function GET(request: Request) {
   const cookieStore = await cookies()
   const url = new URL(request.url)
+  const campaignId = url.searchParams.get('campaignId')
 
-  const upstream = await fetch(`${TEST_MANAGEMENT_SERVICE_URL}/api/executions${url.search}`, {
-    method: 'GET',
-    headers: {
-      cookie: cookieStore.toString(),
-      accept: request.headers.get('accept') ?? 'application/json',
+  if (!campaignId) {
+    return NextResponse.json([], { status: 200 })
+  }
+
+  const upstream = await fetch(
+    `${MS_EXECUTION_SERVICE_URL}/api/execution/results/${encodeURIComponent(campaignId)}${url.search}`,
+    {
+      method: 'GET',
+      headers: {
+        cookie: cookieStore.toString(),
+        accept: request.headers.get('accept') ?? 'application/json',
+      },
+      cache: 'no-store',
     },
-    cache: 'no-store',
-  })
+  )
 
   const response = new NextResponse(upstream.body, {
     status: upstream.status,
@@ -47,7 +55,7 @@ export async function POST(request: Request) {
   const url = new URL(request.url)
   const body = await request.text().catch(() => '')
 
-  const upstream = await fetch(`${TEST_MANAGEMENT_SERVICE_URL}/api/executions${url.search}`, {
+  const upstream = await fetch(`${MS_EXECUTION_SERVICE_URL}/api/executions${url.search}`, {
     method: 'POST',
     headers: {
       cookie: cookieStore.toString(),

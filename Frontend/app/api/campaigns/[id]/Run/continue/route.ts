@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import { buildMsGestionHeaders } from '../../../../../_ms-gestion-auth'
 
-const TEST_MANAGEMENT_SERVICE_URL =
-  process.env.TEST_MANAGEMENT_SERVICE_URL ??
-  process.env.PROJECTS_SERVICE_URL ??
-  'http://localhost:8082'
+const MS_EXECUTION_SERVICE_URL =
+  process.env.EXECUTION_SERVICE_URL ??
+  process.env.MS_EXECUTION_SERVICE_URL ??
+  'http://localhost:8083'
 
 function forwardSetCookie(upstream: Response, response: NextResponse) {
   const setCookies = (upstream.headers as any).getSetCookie?.() as string[] | undefined
@@ -27,32 +28,11 @@ export async function POST(
   const id = resolved.id
   const body = await request.text().catch(() => '')
 
-  const upstream = await fetch(
-    TEST_MANAGEMENT_SERVICE_URL +
-      '/api/campaigns/' +
-      encodeURIComponent(id) +
-      '/run/continue' +
-      url.search,
-    {
-      method: 'POST',
-      headers: {
-        cookie: cookieStore.toString(),
-        'content-type': request.headers.get('content-type') ?? 'application/json',
-        accept: request.headers.get('accept') ?? 'application/json',
-      },
-      body,
-      cache: 'no-store',
-    },
+  // For now, ms-execution doesn't support continuation flow
+  // This endpoint would be used for interactive campaign runs with user input
+  // For basic execution, use POST /api/campaigns/{id}/Run instead
+  return NextResponse.json(
+    { error: 'ms-execution does not support continuation flow. Campaigns run to completion automatically.' },
+    { status: 501 },
   )
-
-  const response = new NextResponse(upstream.body, {
-    status: upstream.status,
-    headers: {
-      'content-type': upstream.headers.get('content-type') ?? 'application/json',
-      'cache-control': 'no-store',
-    },
-  })
-
-  forwardSetCookie(upstream, response)
-  return response
 }

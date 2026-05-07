@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import { buildMsGestionHeaders } from '../../../_ms-gestion-auth'
 
 const TEST_MANAGEMENT_SERVICE_URL =
   process.env.TEST_MANAGEMENT_SERVICE_URL ??
@@ -32,9 +33,8 @@ export async function PUT(
     {
       method: 'PUT',
       headers: {
-        cookie: cookieStore.toString(),
+        ...buildMsGestionHeaders(cookieStore, request),
         'content-type': request.headers.get('content-type') ?? 'application/json',
-        accept: request.headers.get('accept') ?? 'application/json',
       },
       body,
     },

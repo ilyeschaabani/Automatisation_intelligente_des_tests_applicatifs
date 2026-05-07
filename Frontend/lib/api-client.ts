@@ -65,7 +65,66 @@ export type EndpointDto = {
   requestSchema: string | null
 }
 
-// ---------------------------------------------------------------------
+// Ms-execution backend types
+export type ExecutionResultBackendDto = {
+  id: number
+  campaignId: number
+  testCaseId: number | null
+  status: string // SUCCESS, FAILURE, ERROR
+  durationMs: number | null
+  errorMessage: string | null
+  logs: string | null
+  screenshotUrl: string | null
+  executedAt: string
+}
+
+export type CampaignStatusBackendDto = {
+  id: number
+  projectId: number | null
+  environmentId: number | null
+  status: string // PENDING, RUNNING, FINISHED, FINISHED_WITH_ERRORS
+  triggerMode: string | null // MANUAL, SCHEDULED, CI
+  gitBranch: string | null
+  startedAt: string | null
+  finishedAt: string | null
+  executionResults: ExecutionResultBackendDto[]
+}
+
+export type CampaignRunResponseDto = {
+  status: string // "started", "already_running", "error"
+  message?: string | null
+  campaignId?: number | null
+  campaign?: CampaignStatusBackendDto | null
+}
+
+// Map backend DTOs to frontend TestExecutionDto for consistency
+export function mapExecutionResultToTestExecutionDto(result: ExecutionResultBackendDto, campaignId: number): TestExecutionDto {
+  return {
+    id: result.id,
+    executionNumber: null,
+    executionDate: result.executedAt,
+    executionType: 'INITIAL',
+    status: result.status === 'SUCCESS' ? 'FINISHED' : result.status === 'ERROR' ? 'ERROR' : 'FINISHED',
+    campaignId: campaignId,
+  }
+}
+
+// Old types for backward compatibility with test-management
+export type CampaignRunResponse = {
+  status: string
+  message?: string | null
+  sessionId?: string | null
+  execution?: TestExecutionDto | null
+  campaign?: CampaignStatusBackendDto | null
+  endpoints?: EndpointDto[] | null
+  missingDb?: boolean | null
+  missingEnvVars?: string[] | null
+  dbOptions?: string[] | null
+  notes?: string[] | null
+  editableFiles?: EditableFileDto[] | null
+}
+
+// Campaign run request/continue request types
 export type CampaignRunRequest = {
   branch?: string | null
   db?: string | null
@@ -88,19 +147,6 @@ export type CampaignRunContinueRequest = {
 export type EditableFileDto = {
   path: string
   content: string
-}
-
-export type CampaignRunResponse = {
-  status: string
-  message?: string | null
-  sessionId?: string | null
-  execution?: TestExecutionDto | null
-  endpoints?: EndpointDto[] | null
-  missingDb?: boolean | null
-  missingEnvVars?: string[] | null
-  dbOptions?: string[] | null
-  notes?: string[] | null
-  editableFiles?: EditableFileDto[] | null
 }
 // ---------------------------------------------------------------------
 
@@ -172,56 +218,36 @@ export interface TestCaseCreateRequest {
   riskScore?: number | null
 }
 
-export interface TestCampaignSetTestCasesRequest {
-  testCaseIds: number[]
-}
-
 export interface TestCampaignDto {
   id: number
   projectId: number
+  environmentId: number
   name: string
-  version?: string | null
+  appVersion?: string | null
+  gitBranch?: string | null
+  triggerMode?: string | null
   status?: string | null
-  startDate?: string | null
-  endDate?: string | null
-  environment?: string | null
-  triggerType?: string | null
-  sessionStatus?: string | null
-  executionStartDate?: string | null
-  executionEndDate?: string | null
-  createdBy?: string | null
-  testCaseIds: number[]
+  startedAt?: string | null
+  finishedAt?: string | null
+  createdAt?: string | null
 }
 
 export interface TestCampaignCreateRequest {
   projectId: number
   name: string
-  version?: string | null
-  status?: string | null
-  startDate?: string | null
-  endDate?: string | null
-  environment?: string | null
-  triggerType?: string | null
-  sessionStatus?: string | null
-  executionStartDate?: string | null
-  executionEndDate?: string | null
-  createdBy?: string | null
+  environmentId: number
+  appVersion?: string | null
+  gitBranch?: string | null
+  triggerMode?: string | null
+  testCaseIds?: number[]
 }
 
 export interface TestCampaignUpdateRequest {
   name?: string | null
-  version?: string | null
-  status?: string | null
-  startDate?: string | null
-  endDate?: string | null
-  environment?: string | null
-  triggerType?: string | null
-  sessionStatus?: string | null
-  executionStartDate?: string | null
-  executionEndDate?: string | null
-  createdBy?: string | null
-  // Not part of the documented DTO yet, but supported as a fallback until a
-  // dedicated /testcases endpoint exists server-side.
+  environmentId?: number | null
+  appVersion?: string | null
+  gitBranch?: string | null
+  triggerMode?: string | null
   testCaseIds?: number[]
 }
 
@@ -531,7 +557,18 @@ export async function listExecutions(params?: {
   const query = new URLSearchParams()
   if (params?.campaignId !== undefined) query.set('campaignId', String(params.campaignId))
   const suffix = query.toString() ? '?' + query.toString() : ''
-  return requestJson<TestExecutionDto[]>('/api/executions' + suffix, { cache: 'no-store' })
+  
+  try {
+    const results = await requestJson<ExecutionResultBackendDto[]>('/api/executions' + suffix, { cache: 'no-store' })
+    // Map backend execution results to TestExecutionDto format
+    if (Array.isArray(results) && params?.campaignId) {
+      return results.map(r => mapExecutionResultToTestExecutionDto(r, params.campaignId!))
+    }
+    return []
+  } catch (error) {
+    console.warn('Failed to load executions, continuing without execution history', error)
+    return []
+  }
 }
 
 export async function getExecution(id: number): Promise<TestExecutionDto> {
@@ -595,61 +632,32 @@ export async function listCampaigns(params: { projectId: number }): Promise<Test
   return requestJson<TestCampaignDto[]>(`/api/campaigns?${query.toString()}`, { cache: 'no-store' })
 }
 
-export async function getCampaign(id: number): Promise<TestCampaignDto> {
-  return requestJson<TestCampaignDto>(`/api/campaigns/${encodeURIComponent(String(id))}`, {
+export async function getCampaign(projectId: number, id: number): Promise<TestCampaignDto> {
+  const query = new URLSearchParams({ projectId: String(projectId) })
+  return requestJson<TestCampaignDto>(
+    `/api/campaigns/${encodeURIComponent(String(id))}?${query.toString()}`,
+    {
     cache: 'no-store',
-  })
+    },
+  )
 }
 
 export async function createCampaign(input: TestCampaignCreateRequest): Promise<TestCampaignDto> {
-  return requestJson<TestCampaignDto>('/api/campaigns', {
+  const query = new URLSearchParams({ projectId: String(input.projectId) })
+  return requestJson<TestCampaignDto>(`/api/campaigns?${query.toString()}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      projectId: input.projectId,
       name: input.name,
-      version: input.version ?? null,
-      status: input.status ?? null,
-      startDate: input.startDate ?? null,
-      endDate: input.endDate ?? null,
-      environment: input.environment ?? null,
-      triggerType: input.triggerType ?? null,
-      sessionStatus: input.sessionStatus ?? null,
-      executionStartDate: input.executionStartDate ?? null,
-      executionEndDate: input.executionEndDate ?? null,
-      createdBy: input.createdBy ?? null,
+      environmentId: input.environmentId,
+      appVersion: input.appVersion ?? null,
+      gitBranch: input.gitBranch ?? null,
+      triggerMode: input.triggerMode
+        ? normalizeEnum(input.triggerMode, ['MANUAL', 'SCHEDULED', 'CI'] as const)
+        : 'MANUAL',
+      testCaseIds: Array.isArray(input.testCaseIds) ? input.testCaseIds : [],
     }),
   })
-}
-
-export async function updateCampaign(id: number, input: TestCampaignUpdateRequest): Promise<TestCampaignDto> {
-  return requestJson<TestCampaignDto>(`/api/campaigns/${encodeURIComponent(String(id))}`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(input),
-  })
-}
-
-export async function attachCampaignTestCases(
-  campaignId: number,
-  testCaseIds: number[],
-): Promise<void> {
-  const response = await fetch(
-    `/api/campaigns/${encodeURIComponent(String(campaignId))}/testcases`,
-    {
-      method: 'PUT',
-      credentials: 'include',
-      headers: {
-        'content-type': 'application/json',
-        accept: 'application/json',
-      },
-      body: JSON.stringify({ testCaseIds } satisfies TestCampaignSetTestCasesRequest),
-    },
-  )
-
-  if (response.ok) return
-  const message = await readReadableError(response)
-  throw new Error(message)
 }
 
 export async function listTestCases(): Promise<TestCaseDto[]> {
@@ -673,63 +681,71 @@ export async function createTestCase(input: TestCaseCreateRequest): Promise<Test
 
 // --------------------------------------------------
 export async function startCampaignRun(
-campaignId: number,
-payload: CampaignRunRequest = {},
+  campaignId: number,
+  payload: CampaignRunRequest = {},
 ): Promise<CampaignRunResponse> {
-const response = await fetch(
-'/api/campaigns/' + encodeURIComponent(String(campaignId)) + '/Run',
-{
-method: 'POST',
-credentials: 'include',
-headers: {
-accept: 'application/json',
-'content-type': 'application/json',
-},
-body: JSON.stringify(payload),
-},
-)
+  const response = await fetch(
+    '/api/campaigns/' + encodeURIComponent(String(campaignId)) + '/Run',
+    {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    },
+  )
 
-const data = (await response.json().catch(() => null)) as CampaignRunResponse | null
+  const data = (await response.json().catch(() => null)) as CampaignRunResponseDto | null
 
-if (response.status === 409 && data) return data
+  if (!response.ok) {
+    const message = await readReadableError(response)
+    throw new Error(message)
+  }
 
-if (!response.ok) {
-const message = await readReadableError(response)
-throw new Error(message)
-}
+  // Map ms-execution response to CampaignRunResponse format
+  if (data) {
+    const mapped: CampaignRunResponse = {
+      status: data.status,
+      message: data.message,
+      campaign: data.campaign,
+      execution: data.campaign?.executionResults?.[0]
+        ? mapExecutionResultToTestExecutionDto(data.campaign.executionResults[0], campaignId)
+        : undefined,
+    }
+    return mapped
+  }
 
-return (data ?? { status: 'started' }) as CampaignRunResponse
+  return { status: 'started' }
 }
 
 export async function continueCampaignRun(
-campaignId: number,
-payload: CampaignRunContinueRequest,
+  campaignId: number,
+  payload: CampaignRunContinueRequest,
 ): Promise<CampaignRunResponse> {
-const response = await fetch(
-'/api/campaigns/' + encodeURIComponent(String(campaignId)) + '/Run/continue',
-{
-method: 'POST',
-credentials: 'include',
-headers: {
-accept: 'application/json',
-'content-type': 'application/json',
-},
-body: JSON.stringify(payload),
-},
-)
+  const response = await fetch(
+    '/api/campaigns/' + encodeURIComponent(String(campaignId)) + '/Run/continue',
+    {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    },
+  )
 
-const data = (await response.json().catch(() => null)) as CampaignRunResponse | null
+  const data = (await response.json().catch(() => null)) as unknown
 
-if (response.status === 409 && data) return data
+  if (!response.ok) {
+    const message = await readReadableError(response)
+    throw new Error(message)
+  }
 
-if (!response.ok) {
-const message = await readReadableError(response)
-throw new Error(message)
+  // ms-execution doesn't support continuation flow
+  return { status: 'error', message: 'Continuation not supported in ms-execution' } as CampaignRunResponse
 }
-
-return (data ?? { status: 'started' }) as CampaignRunResponse
-}
-// --------------------------------------------------//// --------------------------------------------------//
-
-// --------------------------------------------------//// --------------------------------------------------//
+// --------------------------------------------------
 

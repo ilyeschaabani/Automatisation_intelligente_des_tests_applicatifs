@@ -32,9 +32,9 @@ public class TestCase {
     private String description;
 
     @Enumerated(EnumType.STRING)
-    private TestType type; // WEB, API
+    private TestType type;
 
-    private Integer priority; // 1..5
+    private Integer priority;
 
     @Enumerated(EnumType.STRING)
     private RiskLevel riskLevel; // CRITICAL, HIGH, MEDIUM, LOW
@@ -55,6 +55,6 @@ public class TestCase {
 
     private LocalDateTime createdAt = LocalDateTime.now();
 
-    public enum TestType { WEB, API }
+    public enum TestType { WEB, API, UNIT, INTEGRATION }
     public enum RiskLevel { CRITICAL, HIGH, MEDIUM, LOW }
 }

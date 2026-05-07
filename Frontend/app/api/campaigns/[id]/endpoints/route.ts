@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import { buildMsGestionHeaders } from '../../../_ms-gestion-auth'
 
 const TEST_MANAGEMENT_SERVICE_URL =
   process.env.TEST_MANAGEMENT_SERVICE_URL ??
@@ -30,10 +31,7 @@ export async function GET(
     `${TEST_MANAGEMENT_SERVICE_URL}/api/campaigns/${encodeURIComponent(id)}/endpoints${url.search}`,
     {
       method: 'GET',
-      headers: {
-        cookie: cookieStore.toString(),
-        accept: request.headers.get('accept') ?? 'application/json',
-      },
+      headers: buildMsGestionHeaders(cookieStore, request),
       cache: 'no-store',
     },
   )

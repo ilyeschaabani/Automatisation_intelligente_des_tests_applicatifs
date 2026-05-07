@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import { buildMsGestionHeaders } from '../../_ms-gestion-auth'
 
 const TEST_MANAGEMENT_SERVICE_URL =
   process.env.TEST_MANAGEMENT_SERVICE_URL ??
@@ -25,15 +26,17 @@ export async function GET(
   const url = new URL(request.url)
   const resolved = await context.params
   const id = resolved.id
+  const projectId = url.searchParams.get('projectId')
+
+  if (!projectId) {
+    return NextResponse.json({ error: 'projectId is required' }, { status: 400 })
+  }
 
   const upstream = await fetch(
-    `${TEST_MANAGEMENT_SERVICE_URL}/api/campaigns/${encodeURIComponent(id)}${url.search}`,
+    `${TEST_MANAGEMENT_SERVICE_URL}/api/projects/${encodeURIComponent(projectId)}/campaigns/${encodeURIComponent(id)}`,
     {
       method: 'GET',
-      headers: {
-        cookie: cookieStore.toString(),
-        accept: request.headers.get('accept') ?? 'application/json',
-      },
+      headers: buildMsGestionHeaders(cookieStore, request),
       cache: 'no-store',
     },
   )
@@ -54,63 +57,18 @@ export async function PUT(
   request: Request,
   context: { params: Promise<{ id: string }> | { id: string } },
 ) {
-  const cookieStore = await cookies()
-  const url = new URL(request.url)
-  const resolved = await context.params
-  const id = resolved.id
-  const body = await request.text().catch(() => '')
-
-  const upstream = await fetch(
-    `${TEST_MANAGEMENT_SERVICE_URL}/api/campaigns/${encodeURIComponent(id)}${url.search}`,
-    {
-      method: 'PUT',
-      headers: {
-        cookie: cookieStore.toString(),
-        'content-type': request.headers.get('content-type') ?? 'application/json',
-        accept: request.headers.get('accept') ?? 'application/json',
-      },
-      body,
-    },
+  return NextResponse.json(
+    { error: 'Campaign updates are not supported yet.' },
+    { status: 405 },
   )
-
-  const response = new NextResponse(upstream.body, {
-    status: upstream.status,
-    headers: {
-      'content-type': upstream.headers.get('content-type') ?? 'application/json',
-    },
-  })
-
-  forwardSetCookie(upstream, response)
-  return response
 }
 
 export async function DELETE(
   request: Request,
   context: { params: Promise<{ id: string }> | { id: string } },
 ) {
-  const cookieStore = await cookies()
-  const url = new URL(request.url)
-  const resolved = await context.params
-  const id = resolved.id
-
-  const upstream = await fetch(
-    `${TEST_MANAGEMENT_SERVICE_URL}/api/campaigns/${encodeURIComponent(id)}${url.search}`,
-    {
-      method: 'DELETE',
-      headers: {
-        cookie: cookieStore.toString(),
-        accept: request.headers.get('accept') ?? 'application/json',
-      },
-    },
+  return NextResponse.json(
+    { error: 'Campaign deletion is not supported yet.' },
+    { status: 405 },
   )
-
-  const response = new NextResponse(upstream.body, {
-    status: upstream.status,
-    headers: {
-      'content-type': upstream.headers.get('content-type') ?? 'application/json',
-    },
-  })
-
-  forwardSetCookie(upstream, response)
-  return response
 }

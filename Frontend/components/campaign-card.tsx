@@ -8,6 +8,7 @@ import { MoreVertical, CheckCircle2, AlertCircle } from 'lucide-react'
 
 interface CampaignCardProps {
   id?: number | string
+  projectId?: number
   name: string
   type: 'Functional' | 'API' | 'Regression'
   status: 'Running' | 'Completed' | 'Failed' | 'Scheduled'
@@ -41,6 +42,7 @@ function slugify(value: string): string {
 
 export function CampaignCard({
   id,
+  projectId,
   name,
   type,
   status,
@@ -53,9 +55,10 @@ export function CampaignCard({
   const router = useRouter()
   const config = statusConfig[status]
   const typeColor = typeColors[type]
-  const href = id !== undefined && id !== null && String(id).trim()
+  const baseHref = id !== undefined && id !== null && String(id).trim()
     ? `/campaigns/${encodeURIComponent(String(id))}`
     : `/campaigns/${slugify(name)}`
+  const href = projectId ? `${baseHref}?projectId=${encodeURIComponent(String(projectId))}` : baseHref
 
   const navigate = useCallback(() => {
     router.push(href)

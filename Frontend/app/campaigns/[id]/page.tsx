@@ -1,10 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { DiscoveryCompletionDialog } from '@/components/discovery-completion-dialog'
+// Discovery/discovery UI removed — synced to backend campaign model
 import { Header } from '@/components/header'
 import { Sidebar } from '@/components/sidebar'
 import { Badge } from '@/components/ui/badge'
@@ -64,34 +64,26 @@ import {
 
 import {
   createCampaignExecution,
-  listCampaignExecutions,
   type CampaignExecution,
-  type CampaignExecutionStatus,
 } from '@/lib/campaign-executions'
 
 import {
   getCampaign,
   getProjects,
-  getCampaignEndpoints,
-  getProjectEndpoints,
-  startProjectDiscovery,
-  getLatestProjectDiscovery,
-  completeProjectDiscovery,
+  listCampaigns,
+  listExecutions,
   startCampaignRun,
   continueCampaignRun,
   type CampaignRunContinueRequest,
   type CampaignRunResponse,
   type EditableFileDto,
-  type DiscoveryFlowDto,
-  type DiscoveryStatus,
-  type DiscoveryQuestion,
-  listTestCases,
-  type EndpointDto,
   type Project,
+  type ExecutionStatus,
   type TestCampaignDto,
-  type TestCaseDto,
   type TestExecutionDto,
 } from '@/lib/api-client'
+import { environmentService } from '@/services/environments'
+import type { Environment } from '@/types/ms-gestion'
 
 import { toast } from '@/hooks/use-toast'
 
@@ -103,16 +95,19 @@ type Campaign = {
   name: string
   type: CampaignType
   status: CampaignStatus
+  startedAt?: string | null
+  finishedAt?: string | null
   progress: number
   tests: number
   passed: number
   failed: number
   lastRun: string
   environment: string
+  environmentId?: number | null
+  appVersion: string
   owner: string
-  schedule: string
-  repository: string
   branch: string
+  triggerMode: string
   tags: string[]
   projectId?: number
 }
@@ -136,7 +131,7 @@ function mapExecutionDtoToCampaignExecution(
     id: 'exec-' + String(execution.id),
     campaignId,
     scope: 'CAMPAIGN',
-    status: execution.status as CampaignExecutionStatus,
+    status: execution.status as ExecutionStatus,
     createdAt: execution.executionDate,
     duration: '—',
   }
@@ -152,35 +147,37 @@ function mapBackendStatus(value: string | null | undefined): CampaignStatus {
   return 'Scheduled'
 }
 
-function inferKindFromTestType(value: string | null | undefined): CampaignTest['kind'] {
-  const v = String(value ?? '').toLowerCase()
-  if (v.includes('api')) return 'API'
-  if (v.includes('db') || v.includes('database') || v.includes('sql')) return 'DB'
-  return 'UI'
-}
-
 function mapBackendCampaign(dto: TestCampaignDto): Campaign {
-  const testsCount = Array.isArray(dto.testCaseIds) ? dto.testCaseIds.length : 0
-  const lastRun = dto.executionEndDate ?? dto.executionStartDate ?? dto.endDate ?? dto.startDate
+  const lastRun = dto.finishedAt ?? dto.startedAt ?? dto.createdAt
   return {
     id: String(dto.id),
     name: dto.name,
     type: 'Functional',
     status: mapBackendStatus(dto.status),
+    startedAt: dto.startedAt ?? null,
+    finishedAt: dto.finishedAt ?? null,
     progress: 0,
-    tests: testsCount,
+    tests: 0,
     passed: 0,
     failed: 0,
     lastRun: lastRun ? formatWhen(lastRun) : '—',
-    environment: dto.environment ? String(dto.environment) : '—',
-    owner: dto.createdBy ? String(dto.createdBy) : '—',
-    schedule: dto.triggerType ? String(dto.triggerType) : '—',
-    repository: '—',
-    branch: '—',
+    environment: dto.environmentId ? `Env #${dto.environmentId}` : '—',
+    environmentId: dto.environmentId ?? null,
+    appVersion: dto.appVersion ? String(dto.appVersion) : '—',
+    owner: '—',
+    branch: dto.gitBranch ? String(dto.gitBranch) : '—',
+    triggerMode: dto.triggerMode ? String(dto.triggerMode) : '—',
     tags: [],
     projectId: dto.projectId,
   }
 }
+
+const executionSteps = [
+  'Cloning repository',
+  'Preparing campaign context',
+  'Running Maven tests',
+  'Saving execution result',
+] as const
 
 function slugify(value: string): string {
   return value
@@ -216,10 +213,10 @@ const allCampaignsSeed: Omit<Campaign, 'id'>[] = [
     failed: 0,
     lastRun: '5 mins ago',
     environment: 'staging',
+    appVersion: 'v2.5',
     owner: 'QA Platform',
-    schedule: 'Manual / On demand',
-    repository: 'banking-mobile-app',
     branch: 'release/v2.5',
+    triggerMode: 'MANUAL',
     tags: ['mobile', 'release'],
   },
   {
@@ -232,10 +229,10 @@ const allCampaignsSeed: Omit<Campaign, 'id'>[] = [
     failed: 2,
     lastRun: '2 hours ago',
     environment: 'preprod',
+    appVersion: 'v1.8.3',
     owner: 'API QA',
-    schedule: 'Nightly 02:00',
-    repository: 'payments-gateway',
     branch: 'main',
+    triggerMode: 'SCHEDULED',
     tags: ['payments', 'api'],
   },
   {
@@ -248,10 +245,10 @@ const allCampaignsSeed: Omit<Campaign, 'id'>[] = [
     failed: 0,
     lastRun: 'Tomorrow 2:00 AM',
     environment: 'production',
+    appVersion: 'v3.0',
     owner: 'Release QA',
-    schedule: 'Daily 02:00',
-    repository: 'core-platform',
     branch: 'main',
+    triggerMode: 'SCHEDULED',
     tags: ['regression', 'prod'],
   },
   {
@@ -264,10 +261,10 @@ const allCampaignsSeed: Omit<Campaign, 'id'>[] = [
     failed: 2,
     lastRun: '1 day ago',
     environment: 'preprod',
+    appVersion: 'v2.1',
     owner: 'Core QA',
-    schedule: 'Nightly 01:30',
-    repository: 'core-banking',
     branch: 'main',
+    triggerMode: 'SCHEDULED',
     tags: ['core', 'functional'],
   },
   {
@@ -280,10 +277,10 @@ const allCampaignsSeed: Omit<Campaign, 'id'>[] = [
     failed: 1,
     lastRun: '3 mins ago',
     environment: 'staging',
+    appVersion: 'v1.4',
     owner: 'Platform QA',
-    schedule: 'On push',
-    repository: 'auth-service',
     branch: 'develop',
+    triggerMode: 'CI',
     tags: ['auth', 'api'],
   },
   {
@@ -296,10 +293,10 @@ const allCampaignsSeed: Omit<Campaign, 'id'>[] = [
     failed: 14,
     lastRun: '30 mins ago',
     environment: 'staging',
+    appVersion: 'v3.0',
     owner: 'Frontend QA',
-    schedule: 'On PR merge',
-    repository: 'design-system',
     branch: 'release/v3.0',
+    triggerMode: 'CI',
     tags: ['ui', 'components'],
   },
   {
@@ -312,10 +309,10 @@ const allCampaignsSeed: Omit<Campaign, 'id'>[] = [
     failed: 2,
     lastRun: '5 hours ago',
     environment: 'staging',
+    appVersion: 'v5.0',
     owner: 'Data QA',
-    schedule: 'Nightly 03:00',
-    repository: 'data-layer',
     branch: 'main',
+    triggerMode: 'SCHEDULED',
     tags: ['db', 'integration'],
   },
   {
@@ -328,10 +325,10 @@ const allCampaignsSeed: Omit<Campaign, 'id'>[] = [
     failed: 0,
     lastRun: '2 mins ago',
     environment: 'preprod',
+    appVersion: 'v2.0',
     owner: 'Security QA',
-    schedule: 'Hourly',
-    repository: 'security-scanners',
     branch: 'main',
+    triggerMode: 'SCHEDULED',
     tags: ['security', 'compliance'],
   },
 ]
@@ -396,11 +393,20 @@ function seedTestsFor(campaign: Campaign): CampaignTest[] {
 
 export default function CampaignDetailsPage() {
   const params = useParams<{ id?: string | string[] }>()
+  const searchParams = useSearchParams()
   const id = Array.isArray(params?.id) ? params?.id[0] : params?.id
   const campaignNumericId = useMemo(() => {
     if (!id || !/^\d+$/.test(id)) return null
     return Number(id)
   }, [id])
+
+  const projectIdFromQuery = useMemo(() => {
+    const raw = searchParams.get('projectId')
+    if (!raw || !/^\d+$/.test(raw)) return null
+    return Number(raw)
+  }, [searchParams])
+
+  const [resolvedProjectId, setResolvedProjectId] = useState<number | null>(projectIdFromQuery)
 
   const campaigns = useMemo(() => toCampaigns(), [])
   const seedCampaign = useMemo(() => {
@@ -418,20 +424,24 @@ export default function CampaignDetailsPage() {
   const [runEnvValues, setRunEnvValues] = useState<Record<string, string>>({})
   const [runEditableFiles, setRunEditableFiles] = useState<EditableFileDto[]>([])
   const [runFileEdits, setRunFileEdits] = useState<Record<string, string>>({})
+  const [runProgressValue, setRunProgressValue] = useState(0)
+  const [runStepIndex, setRunStepIndex] = useState(0)
 
   const [remoteCampaign, setRemoteCampaign] = useState<Campaign | null>(null)
   const [remoteLoading, setRemoteLoading] = useState(false)
   const [remoteError, setRemoteError] = useState<string | null>(null)
-  const [remoteTestCases, setRemoteTestCases] = useState<TestCaseDto[]>([])
-  const [remoteTestCaseIds, setRemoteTestCaseIds] = useState<number[]>([])
+  const [backendExecutions, setBackendExecutions] = useState<TestExecutionDto[]>([])
+  const [latestExecution, setLatestExecution] = useState<TestExecutionDto | null>(null)
 
   useEffect(() => {
-    if (!id || !/^\d+$/.test(id)) {
+    setResolvedProjectId(projectIdFromQuery)
+  }, [projectIdFromQuery])
+
+  useEffect(() => {
+    if (!campaignNumericId) {
       setRemoteCampaign(null)
       setRemoteError(null)
       setRemoteLoading(false)
-      setRemoteTestCases([])
-      setRemoteTestCaseIds([])
       return
     }
 
@@ -441,20 +451,46 @@ export default function CampaignDetailsPage() {
       setRemoteLoading(true)
       setRemoteError(null)
       try {
-        const dto = await getCampaign(Number(id))
-        if (cancelled) return
-        setRemoteCampaign(mapBackendCampaign(dto))
-        setRemoteTestCaseIds(Array.isArray(dto.testCaseIds) ? dto.testCaseIds : [])
+        let projectId = resolvedProjectId
+        let dto: TestCampaignDto | null = null
 
-        const cases = await listTestCases()
-        if (cancelled) return
-        setRemoteTestCases(Array.isArray(cases) ? cases : [])
+        if (!projectId) {
+          const projects = await getProjects()
+          for (const project of projects) {
+            const campaigns = await listCampaigns({ projectId: project.id }).catch(() => [])
+            const found = Array.isArray(campaigns)
+              ? campaigns.find((campaign) => campaign.id === campaignNumericId) ?? null
+              : null
+            if (found) {
+              projectId = project.id
+              dto = found
+              break
+            }
+          }
+
+          if (!projectId || !dto) {
+            throw new Error('Campaign not found in your projects.')
+          }
+
+          if (!cancelled) setResolvedProjectId(projectId)
+        } else {
+          dto = await getCampaign(projectId, campaignNumericId)
+        }
+
+        if (cancelled || !dto || !projectId) return
+
+        const envs = await environmentService.getAll(projectId)
+        const envName = Array.isArray(envs)
+          ? envs.find((env: Environment) => env.id === dto.environmentId)?.name
+          : null
+
+        const mapped = mapBackendCampaign(dto)
+        if (envName) mapped.environment = envName
+        setRemoteCampaign(mapped)
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to load campaign'
         if (!cancelled) {
           setRemoteCampaign(null)
-          setRemoteTestCases([])
-          setRemoteTestCaseIds([])
           setRemoteError(message)
         }
       } finally {
@@ -466,9 +502,84 @@ export default function CampaignDetailsPage() {
     return () => {
       cancelled = true
     }
-  }, [id])
+  }, [campaignNumericId, resolvedProjectId])
 
   const campaign = remoteCampaign ?? seedCampaign
+
+  const isExecutionRunning =
+    runSubmitting || latestExecution?.status === 'RUNNING' || latestExecution?.status === 'QUEUED'
+
+  useEffect(() => {
+    if (!isExecutionRunning || !campaignNumericId) {
+      return
+    }
+
+    let cancelled = false
+
+    const stepIndexFromValue = (value: string | null | undefined) => {
+      const normalized = String(value ?? '').trim().toLowerCase()
+      const index = executionSteps.findIndex((step) => step.toLowerCase() === normalized)
+      return index >= 0 ? index : 0
+    }
+
+    const pollStatus = async () => {
+      try {
+        const response = await fetch(`/api/campaigns/${campaignNumericId}/status`, {
+          method: 'GET',
+          headers: { accept: 'application/json' },
+          cache: 'no-store',
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          const status = String(data.status ?? '').toUpperCase()
+          if (cancelled) return
+
+          const backendProgress = Number(data.progress ?? 0)
+          const backendStep = stepIndexFromValue(data.currentStep)
+
+          if (status === 'PENDING') {
+            setRunStepIndex(0)
+            setRunProgressValue(Math.max(0, backendProgress))
+            return
+          }
+
+          if (status === 'RUNNING') {
+            setRunStepIndex(Math.min(backendStep, executionSteps.length - 1))
+            setRunProgressValue(Math.max(0, Math.min(99, backendProgress || 10)))
+            return
+          }
+
+          if (status === 'FINISHED' || status === 'FINISHED_WITH_ERRORS') {
+            setRunStepIndex(executionSteps.length - 1)
+            setRunProgressValue(100)
+          }
+        }
+      } catch (error) {
+        // Keep the last known state if polling fails.
+        console.warn('Failed to poll campaign execution status.', error)
+      }
+    }
+
+    // Initial poll immediately
+    void pollStatus()
+
+    // Poll every 2 seconds during execution
+    const pollInterval = window.setInterval(pollStatus, 2000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(pollInterval)
+    }
+  }, [isExecutionRunning, campaignNumericId])
+
+  // Reset progress only when starting a new execution
+  useEffect(() => {
+    if (runSubmitting) {
+      setRunProgressValue(0)
+      setRunStepIndex(0)
+    }
+  }, [runSubmitting])
 
   const passRate = useMemo(() => {
     if (!campaign) return 0
@@ -505,436 +616,95 @@ export default function CampaignDetailsPage() {
   const tests = useMemo(() => {
     if (!campaign) return []
 
-    if (remoteCampaign) {
-      const idSet = new Set(remoteTestCaseIds)
-      const attached = remoteTestCases.filter((tc) => idSet.has(tc.id))
-      return attached.map((tc) => ({
-        id: String(tc.id),
-        name: tc.name,
-        area: String(tc.priority ?? '—'),
-        kind: inferKindFromTestType(tc.testType),
-      }))
-    }
+    if (remoteCampaign) return []
 
     return seedTestsFor(campaign)
-  }, [campaign, remoteCampaign, remoteTestCaseIds, remoteTestCases])
+  }, [campaign, remoteCampaign])
 
   const [selectedTestIds, setSelectedTestIds] = useState<string[]>([])
   const [storedRuns, setStoredRuns] = useState<CampaignExecution[]>([])
-
-  const [endpointBranch, setEndpointBranch] = useState('')
-  const [endpointSearch, setEndpointSearch] = useState('')
-  const [endpointMethod, setEndpointMethod] = useState<string>('ALL')
-  const [endpointsState, setEndpointsState] = useState<
-    | { kind: 'idle' }
-    | { kind: 'loading' }
-    | { kind: 'running'; attempt: number; maxAttempts: number }
-    | { kind: 'needs_user_input' }
-    | { kind: 'done'; endpoints: EndpointDto[] }
-    | { kind: 'error'; message: string }
-  >({ kind: 'idle' })
-  const [schemaDialog, setSchemaDialog] = useState<{
-    open: boolean
-    title: string
-    schema: string | null
-  }>({ open: false, title: '', schema: null })
-
-  const [discoveryFlow, setDiscoveryFlow] = useState<DiscoveryFlowDto | null>(null)
-  const [discoveryDialogOpen, setDiscoveryDialogOpen] = useState(false)
-  const [discoveryAnswers, setDiscoveryAnswers] = useState<Record<string, string>>({})
-  const [discoverySubmitting, setDiscoverySubmitting] = useState(false)
-
-  const pollTimeoutRef = useRef<number | null>(null)
-  const pollAttemptRef = useRef(0)
-  const pollInFlightRef = useRef(false)
-  const activeDiscoveryRef = useRef<{ projectId: number; branch: string } | null>(null)
-  const [linkedProject, setLinkedProject] = useState<Project | null>(null)
+  
 
   useEffect(() => {
-    if (!campaign) {
+    if (!campaignNumericId) {
+      setBackendExecutions([])
+      setLatestExecution(null)
       setStoredRuns([])
       setSelectedTestIds([])
-      return
-    }
-    setStoredRuns(listCampaignExecutions(campaign.id))
-    setSelectedTestIds([])
-  }, [campaign])
-
-  useEffect(() => {
-    return () => {
-      if (pollTimeoutRef.current) window.clearTimeout(pollTimeoutRef.current)
-      pollTimeoutRef.current = null
-      pollAttemptRef.current = 0
-      pollInFlightRef.current = false
-    }
-  }, [])
-
-  useEffect(() => {
-    const projectId = campaign?.projectId
-    if (!projectId) {
-      setLinkedProject(null)
       return
     }
 
     let cancelled = false
 
-    const run = async () => {
+    const loadExecutions = async () => {
       try {
-        const projects = await getProjects()
+        const executions = await listExecutions({ campaignId: campaignNumericId })
         if (cancelled) return
-        const found = projects.find((p) => Number(p.id) === Number(projectId))
-        setLinkedProject(found ?? null)
-      } catch {
-        if (!cancelled) setLinkedProject(null)
+        
+        // Only update if we have results, or if we're not currently running
+        // This prevents clearing the placeholder execution during an active run
+        if (executions.length > 0 || !isExecutionRunning) {
+          setBackendExecutions(executions)
+          setLatestExecution(executions[0] ?? null)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          // Only clear if we're not running - keep the placeholder during execution
+          if (!isExecutionRunning) {
+            setBackendExecutions([])
+            setLatestExecution(null)
+          }
+          console.warn('Campaign execution history is unavailable, continuing without it.', error)
+        }
       }
     }
 
-    void run()
+    void loadExecutions()
+    setStoredRuns([])
+    setSelectedTestIds([])
     return () => {
       cancelled = true
     }
+  }, [campaignNumericId, isExecutionRunning])
+
+  useEffect(() => {
+    return () => {}
+  }, [])
+
+  useEffect(() => {
+    // linkedProject removed — discovery UI cleared
   }, [campaign?.projectId])
 
-  const linkedDefaultBranchLabel = useMemo(() => {
-    const v = String(linkedProject?.defaultBranch ?? '').trim()
-    return v
-  }, [linkedProject])
+  const linkedDefaultBranchLabel = useMemo(() => '', [])
 
   const recentRuns = useMemo(() => {
-    const dynamic = storedRuns.map((r) => {
+    const backendRuns = backendExecutions.map((r) => {
+      return {
+        id: 'exec-' + String(r.id),
+        status: r.status as ExecutionStatus,
+        duration: '—',
+        when: formatWhen(r.executionDate),
+      }
+    })
+
+    const localRuns = storedRuns.map((r) => {
       return {
         id: r.id,
-        status: r.status as CampaignExecutionStatus,
+        status: r.status as ExecutionStatus,
         duration: r.duration ?? '—',
         when: formatWhen(r.createdAt),
       }
     })
-    return [...dynamic, ...recentRunsSeed]
-  }, [recentRunsSeed, storedRuns])
-
-  const filteredEndpoints = useMemo(() => {
-    const list = endpointsState.kind === 'done' ? endpointsState.endpoints : []
-    const search = endpointSearch.trim().toLowerCase()
-    return list.filter((e) => {
-      if (endpointMethod !== 'ALL' && String(e.method).toUpperCase() !== endpointMethod) return false
-      if (search) {
-        const path = String(e.path ?? '').toLowerCase()
-        if (!path.includes(search)) return false
-      }
-      return true
-    })
-  }, [endpointsState, endpointMethod, endpointSearch])
-
-  const methodOptions = useMemo(() => {
-    const list = endpointsState.kind === 'done' ? endpointsState.endpoints : []
-    const methods = Array.from(new Set(list.map((e) => String(e.method ?? '').toUpperCase()).filter(Boolean))).sort()
-    return ['ALL', ...methods]
-  }, [endpointsState])
-
-  const resolveEffectiveBranch = (explicit: string | undefined, projectDefault: string | null | undefined) => {
-    const typed = String(explicit ?? '').trim()
-    if (typed) return typed
-
-    const fallback = String(projectDefault ?? '').trim()
-    if (fallback) return fallback
-
-    return 'main'
-  }
-
-  const loadExistingEndpoints = async () => {
-    if (!campaignNumericId) return
-    if (!campaign?.projectId) return
-
-    try {
-      setEndpointsState({ kind: 'loading' })
-      const endpoints = await getCampaignEndpoints(campaignNumericId)
-      const list = Array.isArray(endpoints) ? endpoints : []
-      if (list.length > 0) {
-        setEndpointsState({ kind: 'done', endpoints: list })
-      } else {
-        setEndpointsState({ kind: 'idle' })
-      }
-    } catch (err) {
-      setEndpointsState({
-        kind: 'error',
-        message: err instanceof Error ? err.message : 'Failed to load endpoints',
-      })
+    
+    // For backend campaigns, only show backend runs
+    // For seed campaigns, show seed data as fallback
+    if (campaignNumericId) {
+      return [...backendRuns, ...localRuns]
     }
-  }
-
-  const schedulePoll = (fn: () => void, delayMs: number) => {
-    if (pollTimeoutRef.current) window.clearTimeout(pollTimeoutRef.current)
-    pollTimeoutRef.current = window.setTimeout(fn, delayMs)
-  }
-
-  const clearPolling = () => {
-    if (pollTimeoutRef.current) window.clearTimeout(pollTimeoutRef.current)
-    pollTimeoutRef.current = null
-    pollAttemptRef.current = 0
-    pollInFlightRef.current = false
-  }
-
-  const normalizeDiscoveryStatus = (value: DiscoveryStatus | null | undefined): string => {
-    return String(value ?? '').trim().toLowerCase()
-  }
-
-  const extractDiscoveryQuestions = (flow: DiscoveryFlowDto | null): DiscoveryQuestion[] => {
-    if (!flow) return []
-    const candidateLists: unknown[] = [
-      (flow as any)?.questionnaire?.questionnaire?.questions,
-      (flow as any)?.questionnaire?.questions,
-      (flow as any)?.questionnaire?.questionnaire?.questionnaire?.questions,
-    ]
-
-    const raw = candidateLists.find((c) => Array.isArray(c))
-    if (!Array.isArray(raw)) return []
-
-    const normalizeOne = (q: any): DiscoveryQuestion | null => {
-      const json_path = String(q?.json_path ?? q?.jsonPath ?? '').trim()
-      if (!json_path) return null
-      return {
-        json_path,
-        reason: String(q?.reason ?? '').trim() || '—',
-        expected_format: String(q?.expected_format ?? q?.expectedFormat ?? '').trim() || '—',
-        example: q?.example ?? null,
-        how_to_find: q?.how_to_find ?? q?.howToFind ?? null,
-        options: Array.isArray(q?.options) ? q.options.map((o: any) => String(o)) : null,
-      }
-    }
-
-    return raw.map(normalizeOne).filter(Boolean) as DiscoveryQuestion[]
-  }
-
-  const startDiscoveryPolling = (params: { projectId: number; branch: string }) => {
-    const { projectId, branch } = params
-    const maxAttempts = 60
-    const pollDelayMs = 2500
-
-    const step = async () => {
-      if (pollInFlightRef.current) {
-        schedulePoll(() => void step(), pollDelayMs)
-        return
-      }
-
-      pollInFlightRef.current = true
-      pollAttemptRef.current += 1
-      const attempt = pollAttemptRef.current
-
-      try {
-        const flow = await getLatestProjectDiscovery(projectId, { branch })
-        setDiscoveryFlow(flow)
-
-        const status = normalizeDiscoveryStatus(flow.status)
-        if (status === 'needs_user_input') {
-          const questions = extractDiscoveryQuestions(flow)
-          if (questions.length > 0) {
-            clearPolling()
-            setEndpointsState({ kind: 'needs_user_input' })
-            setDiscoveryDialogOpen(true)
-            return
-          }
-
-          // Backend has not produced the questions yet; keep polling.
-          if (attempt >= maxAttempts) {
-            clearPolling()
-            const message = 'Timed out waiting for discovery questions. Please try again.'
-            setEndpointsState({ kind: 'error', message })
-            toast({ title: 'Discovery timed out', description: message, variant: 'destructive' })
-            return
-          }
-
-          setEndpointsState({ kind: 'running', attempt, maxAttempts })
-          schedulePoll(() => void step(), pollDelayMs)
-          return
-        }
-
-        if (status === 'done') {
-          clearPolling()
-          setDiscoveryDialogOpen(false)
-
-          const endpoints = Array.isArray(flow.endpoints)
-            ? flow.endpoints
-            : await getProjectEndpoints(projectId, branch)
-          setEndpointsState({ kind: 'done', endpoints })
-          return
-        }
-
-        if (status === 'error') {
-          clearPolling()
-          const message =
-            typeof flow.error === 'string'
-              ? flow.error
-              : flow.error
-                ? JSON.stringify(flow.error)
-                : 'Discovery failed'
-          setDiscoveryDialogOpen(false)
-          setEndpointsState({ kind: 'error', message })
-          toast({ title: 'Discovery failed', description: message, variant: 'destructive' })
-          return
-        }
-
-        if (attempt >= maxAttempts) {
-          clearPolling()
-          const message = 'Timed out waiting for discovery to finish. Please try again.'
-          setEndpointsState({ kind: 'error', message })
-          toast({ title: 'Discovery timed out', description: message, variant: 'destructive' })
-          return
-        }
-
-        setEndpointsState({ kind: 'running', attempt, maxAttempts })
-        schedulePoll(() => void step(), pollDelayMs)
-      } catch (err) {
-        clearPolling()
-        const message = err instanceof Error ? err.message : 'Failed to poll discovery'
-        setEndpointsState({ kind: 'error', message })
-        toast({ title: 'Discovery failed', description: message, variant: 'destructive' })
-      } finally {
-        pollInFlightRef.current = false
-      }
-    }
-
-    pollAttemptRef.current = 0
-    void step()
-  }
-
-  const discoverEndpoints = async (options?: { branch?: string }) => {
-    const projectId = campaign?.projectId
-    if (!projectId) return
-    if (!campaignNumericId) return
-
-    if (endpointsState.kind === 'needs_user_input') {
-      setDiscoveryDialogOpen(true)
-      return
-    }
-
-    clearPolling()
-
-    const explicitBranch = String(options?.branch ?? endpointBranch).trim() || undefined
-
-    const branch = resolveEffectiveBranch(explicitBranch, linkedProject?.defaultBranch)
-
-    setEndpointsState({ kind: 'loading' })
-    setDiscoveryFlow(null)
-    setDiscoveryDialogOpen(false)
-    setDiscoveryAnswers({})
-    activeDiscoveryRef.current = { projectId, branch }
-
-    try {
-      const flow = await startProjectDiscovery(projectId, { branch })
-      setDiscoveryFlow(flow)
-
-      const status = normalizeDiscoveryStatus(flow.status)
-      if (status === 'needs_user_input') {
-        const questions = extractDiscoveryQuestions(flow)
-        if (questions.length > 0) {
-          setEndpointsState({ kind: 'needs_user_input' })
-          setDiscoveryDialogOpen(true)
-          return
-        }
-
-        setEndpointsState({ kind: 'running', attempt: 0, maxAttempts: 60 })
-        startDiscoveryPolling({ projectId, branch })
-        return
-      }
-
-      if (status === 'done') {
-        const endpoints = Array.isArray(flow.endpoints) ? flow.endpoints : await getProjectEndpoints(projectId, branch)
-        setEndpointsState({ kind: 'done', endpoints })
-        return
-      }
-
-      if (status === 'error') {
-        const message =
-          typeof flow.error === 'string'
-            ? flow.error
-            : flow.error
-              ? JSON.stringify(flow.error)
-              : 'Discovery failed'
-        setEndpointsState({ kind: 'error', message })
-        toast({ title: 'Discovery failed', description: message, variant: 'destructive' })
-        return
-      }
-
-      setEndpointsState({ kind: 'running', attempt: 0, maxAttempts: 60 })
-      startDiscoveryPolling({ projectId, branch })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to start discovery'
-      setEndpointsState({ kind: 'error', message })
-      toast({ title: 'Discovery failed', description: message, variant: 'destructive' })
-    }
-  }
-
-  const submitDiscoveryAnswers = async () => {
-    const projectId = campaign?.projectId
-    const discoveryId = discoveryFlow?.discoveryId
-    const branch = activeDiscoveryRef.current?.branch
-    if (!projectId || !discoveryId || !branch) return
-
-    setDiscoverySubmitting(true)
-    try {
-      const answers = Object.entries(discoveryAnswers)
-        .map(([json_path, raw]) => ({ json_path, raw: String(raw ?? '') }))
-        .map(({ json_path, raw }) => ({ json_path, value: raw.trim() }))
-        .filter((a) => a.value !== '')
-
-      const flow = await completeProjectDiscovery(projectId, discoveryId, { answers })
-      setDiscoveryFlow(flow)
-
-      const status = normalizeDiscoveryStatus(flow.status)
-      if (status === 'needs_user_input') {
-        const questions = extractDiscoveryQuestions(flow)
-        if (questions.length > 0) {
-          setEndpointsState({ kind: 'needs_user_input' })
-          setDiscoveryDialogOpen(true)
-          return
-        }
-
-        setDiscoveryDialogOpen(false)
-        setEndpointsState({ kind: 'running', attempt: 0, maxAttempts: 60 })
-        startDiscoveryPolling({ projectId, branch })
-        return
-      }
-
-      if (status === 'done') {
-        setDiscoveryDialogOpen(false)
-        clearPolling()
-        const endpoints = Array.isArray(flow.endpoints) ? flow.endpoints : await getProjectEndpoints(projectId, branch)
-        setEndpointsState({ kind: 'done', endpoints })
-        return
-      }
-
-      if (status === 'error') {
-        const message =
-          typeof flow.error === 'string'
-            ? flow.error
-            : flow.error
-              ? JSON.stringify(flow.error)
-              : 'Discovery failed'
-        setDiscoveryDialogOpen(false)
-        setEndpointsState({ kind: 'error', message })
-        toast({ title: 'Discovery failed', description: message, variant: 'destructive' })
-        return
-      }
-
-      setDiscoveryDialogOpen(false)
-      setEndpointsState({ kind: 'running', attempt: 0, maxAttempts: 60 })
-      startDiscoveryPolling({ projectId, branch })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to submit answers'
-      toast({ title: 'Discovery failed', description: message, variant: 'destructive' })
-    } finally {
-      setDiscoverySubmitting(false)
-    }
-  }
-
-  useEffect(() => {
-    if (!campaignNumericId) return
-    if (!campaign?.projectId) return
-    if (endpointsState.kind !== 'idle') return
-
-    void loadExistingEndpoints()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [campaignNumericId, campaign?.projectId])
+    
+    return [...backendRuns, ...localRuns, ...recentRunsSeed]
+  }, [backendExecutions, recentRunsSeed, storedRuns, campaignNumericId])
+  
 
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -1005,19 +775,33 @@ export default function CampaignDetailsPage() {
       throw new Error(response.message ?? 'Unexpected run response')
     }
 
-    if (response.execution) {
-      const mapped = mapExecutionDtoToCampaignExecution(response.execution, campaign?.id ?? '')
-      setStoredRuns((prev) => [mapped, ...prev.filter((r) => r.id !== mapped.id)])
-    } else if (campaign) {
-      const created = createCampaignExecution({ campaignId: campaign.id, scope: 'CAMPAIGN' })
-      setStoredRuns((prev) => [created, ...prev])
+    // Create a placeholder execution with RUNNING status to show loading bar
+    // The polling will update progress from the backend status endpoint
+    const placeholderExecution: TestExecutionDto = {
+      id: Math.random() * 100000,
+      executionNumber: null,
+      executionDate: new Date().toISOString(),
+      executionType: 'INITIAL',
+      status: 'RUNNING',
+      campaignId: campaignNumericId || -1,
+    }
+    setLatestExecution(placeholderExecution)
+    setBackendExecutions((prev) => [placeholderExecution, ...prev])
+    
+    // Initialize progress from response campaign data if available
+    if (response.campaign) {
+      const backendProgress = Number(response.campaign.progress ?? 0)
+      const backendStep = response.campaign.currentStep ?? ''
+      setRunProgressValue(Math.max(0, backendProgress))
+      
+      const stepIndex = executionSteps.findIndex((step) => 
+        step.toLowerCase() === String(backendStep ?? '').trim().toLowerCase()
+      )
+      if (stepIndex >= 0) {
+        setRunStepIndex(stepIndex)
+      }
     }
 
-    if (Array.isArray(response.endpoints) && response.endpoints.length > 0) {
-      setEndpointsState({ kind: 'done', endpoints: response.endpoints })
-    } else {
-      await loadExistingEndpoints()
-    }
 
     setRunDialogOpen(false)
     setRunSessionId(null)
@@ -1026,7 +810,7 @@ export default function CampaignDetailsPage() {
 
     toast({
       title: 'Campaign started',
-      description: 'Repo prepared, docker files generated, and endpoints extracted.',
+      description: 'Repo prepared and docker files generated.',
     })
   }
 
@@ -1050,7 +834,7 @@ export default function CampaignDetailsPage() {
 
     setRunSubmitting(true)
     try {
-      const branchValue = String(endpointBranch ?? '').trim()
+      const branchValue = String(campaign?.branch ?? '').trim()
       const response = await startCampaignRun(campaignNumericId, {
         branch: branchValue || undefined,
       })
@@ -1186,58 +970,138 @@ export default function CampaignDetailsPage() {
           ) : (
             <>
               {/* Hero */}
-              <Card className="mb-6 overflow-hidden">
-                <div className="p-6 bg-gradient-to-r from-primary/10 via-transparent to-accent/10">
-                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="outline" className={typeStyle[campaign.type]}>
-                        {campaign.type}
-                      </Badge>
-                      <Badge variant="outline" className={statusStyle[campaign.status]}>
-                        {campaign.status === 'Running' && (
-                          <span className="inline-block size-1.5 bg-current rounded-full mr-1 animate-pulse" />
-                        )}
-                        {campaign.status}
-                      </Badge>
-                      {campaign.tags.map((t) => (
-                        <Badge key={t} variant="secondary" className="rounded-full">
-                          {t}
+              <Card className="mb-6 overflow-hidden border-border/70 bg-gradient-to-br from-background via-background to-secondary/20 shadow-sm">
+                <div className="h-1 bg-gradient-to-r from-primary via-cyan-500 to-accent" />
+                <div className="p-6 lg:p-8">
+                  <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0 space-y-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className={typeStyle[campaign.type]}>
+                          {campaign.type}
                         </Badge>
-                      ))}
+                        <Badge variant="outline" className={statusStyle[campaign.status]}>
+                          {campaign.status === 'Running' && (
+                            <span className="inline-block size-1.5 bg-current rounded-full mr-1 animate-pulse" />
+                          )}
+                          {campaign.status}
+                        </Badge>
+                        {campaign.projectId ? (
+                          <Badge variant="secondary" className="rounded-full">
+                            Project #{campaign.projectId}
+                          </Badge>
+                        ) : null}
+                      </div>
+
+                      <div>
+                        <h1 className="text-3xl lg:text-4xl font-semibold tracking-tight text-foreground truncate">
+                          {campaign.name}
+                        </h1>
+                        <p className="text-sm lg:text-base text-muted-foreground mt-2 max-w-3xl">
+                          Campaign overview, environment setup, and run activity from the new backend model.
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        {campaign.tags.map((t) => (
+                          <Badge key={t} variant="secondary" className="rounded-full px-3 py-1">
+                            {t}
+                          </Badge>
+                        ))}
+                        {campaign.triggerMode !== '—' ? (
+                          <Badge variant="outline" className="rounded-full px-3 py-1">
+                            Trigger {campaign.triggerMode}
+                          </Badge>
+                        ) : null}
+                      </div>
                     </div>
 
-                    
-
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Clock className="h-4 w-4" />
-                        <span>Last run: {campaign.lastRun}</span>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:w-[360px]">
+                      <div className="rounded-2xl border border-border/70 bg-card/80 p-4 backdrop-blur">
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Last run</p>
+                        <p className="mt-2 text-sm font-medium text-foreground">{campaign.lastRun}</p>
                       </div>
-                      {remoteCampaign ? (
-                        <Button asChild variant="outline" size="sm">
-                          <Link href={`/campaigns/${campaign.id}/edit`}>Edit</Link>
-                        </Button>
-                      ) : null}
-                      <Button asChild variant="outline" size="sm">
-                        <Link href={`/executions?campaignId=${campaign.id}`}>View executions</Link>
-                      </Button>
-                      <Button
-  type="button"
-  size="sm"
-  onClick={() => void runCampaign()}
-  disabled={runSubmitting}
->
-  {runSubmitting ? "Running..." : "Run campaign"}
-</Button>
+                      <div className="rounded-2xl border border-border/70 bg-card/80 p-4 backdrop-blur">
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Branch</p>
+                        <p className="mt-2 text-sm font-medium text-foreground truncate">{campaign.branch}</p>
+                      </div>
+                      <div className="rounded-2xl border border-border/70 bg-card/80 p-4 backdrop-blur">
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Environment</p>
+                        <p className="mt-2 text-sm font-medium text-foreground truncate">{campaign.environment}</p>
+                      </div>
+                      <div className="rounded-2xl border border-border/70 bg-card/80 p-4 backdrop-blur">
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Version</p>
+                        <p className="mt-2 text-sm font-medium text-foreground truncate">{campaign.appVersion}</p>
+                      </div>
+                    </div>
+                  </div>
 
-   {/* --------------------------------------------------------------------------------------------------- */}
-        <Dialog open={runDialogOpen} onOpenChange={setRunDialogOpen}>
+                  <div className="mt-8 flex flex-col sm:flex-row sm:items-center gap-3">
+                    <Button asChild variant="outline" size="sm" className="gap-2">
+                      <Link href={`/executions?campaignId=${campaign.id}`}>
+                        <Clock className="h-4 w-4" />
+                        View executions
+                      </Link>
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="gap-2"
+                      onClick={() => void runCampaign()}
+                      disabled={runSubmitting}
+                    >
+                      <Play className="h-4 w-4" />
+                      {runSubmitting ? 'Running...' : 'Run campaign'}
+                    </Button>
+                  </div>
+
+                  {isExecutionRunning ? (
+                    <Card className="mt-6 border-primary/20 bg-primary/5">
+                      <CardContent className="space-y-4 p-4 sm:p-5">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-foreground">ms-execution is running the campaign</p>
+                            <p className="text-sm text-muted-foreground">
+                              {campaign.name} is being cloned, executed, and persisted in the backend.
+                            </p>
+                          </div>
+                          <Badge variant="secondary" className="w-fit rounded-full">
+                            {executionSteps[runStepIndex]}
+                          </Badge>
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>Loading progress</span>
+                            <span>{formatPercent(runProgressValue)}</span>
+                          </div>
+                          <Progress value={runProgressValue} className="h-2.5" />
+                        </div>
+
+                        <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
+                          {executionSteps.map((step, index) => (
+                            <div
+                              key={step}
+                              className={
+                                'rounded-lg border px-3 py-2 ' +
+                                (index <= runStepIndex
+                                  ? 'border-primary/20 bg-background text-foreground'
+                                  : 'border-border bg-background/60')
+                              }
+                            >
+                              {index + 1}. {step}
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : null}
+
+                  <Dialog open={runDialogOpen} onOpenChange={setRunDialogOpen}>
           <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Review docker artifacts</DialogTitle>
+              <DialogTitle>Review run artifacts</DialogTitle>
               <DialogDescription>
-                Review and edit the generated docker-compose.yml and Dockerfiles. Provide any missing DB/env values,
-                then start the run.
+                Review the generated files, provide missing values, and continue the run.
               </DialogDescription>
             </DialogHeader>
 
@@ -1316,17 +1180,19 @@ export default function CampaignDetailsPage() {
               </Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog>
-        {/* --------------------------------------------------------------------------------------------------- */}
-                    </div>
-                  </div>
+                  </Dialog>
 
-                  <div className="mt-6">
-                    <div className="flex items-center justify-between mb-2">
+                  <div className="mt-8 space-y-2">
+                    <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">Execution progress</span>
-                      <span className="text-sm font-semibold text-foreground">{formatPercent(campaign.progress)}</span>
+                      <span className="text-sm font-semibold text-foreground">
+                        {formatPercent(isExecutionRunning ? runProgressValue : campaign.progress)}
+                      </span>
                     </div>
-                    <Progress value={clampPercent(campaign.progress)} className="h-3" />
+                    <Progress
+                      value={clampPercent(isExecutionRunning ? runProgressValue : campaign.progress)}
+                      className="h-2.5"
+                    />
                   </div>
                 </div>
               </Card>
@@ -1391,7 +1257,7 @@ export default function CampaignDetailsPage() {
                   <Card>
                     <CardHeader>
                       <CardTitle>Recent runs</CardTitle>
-                      <CardDescription>Latest activity for this campaign.</CardDescription>
+                      <CardDescription>Latest backend executions and local run history for this campaign.</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="rounded-md border border-border overflow-hidden">
@@ -1504,179 +1370,62 @@ export default function CampaignDetailsPage() {
                     </CardContent>
                   </Card>
 
-                  <Card>
-                    <CardHeader>
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <CardTitle>Endpoints</CardTitle>
-                          <CardDescription>
-                            Discover and browse endpoints extracted from the campaign’s project repository.
-                          </CardDescription>
-                        </div>
-
-                        <Button
-                          size="sm"
-                          onClick={() => void discoverEndpoints()}
-                          disabled={!campaign?.projectId || endpointsState.kind === 'loading' || endpointsState.kind === 'running'}
-                        >
-                          {endpointsState.kind === 'loading'
-                            ? 'Loading…'
-                            : endpointsState.kind === 'running'
-                              ? 'Discovery running…'
-                              : endpointsState.kind === 'needs_user_input'
-                                ? 'Answer questions…'
-                              : endpointsState.kind === 'done'
-                                ? 'Refresh endpoints'
-                                : 'Discover endpoints'}
-                        </Button>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      {!campaign?.projectId ? (
-                        <p className="text-sm text-muted-foreground">
-                          This campaign is not linked to a project.
-                        </p>
-                      ) : null}
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div className="space-y-2">
-                          <Label htmlFor="campaign-endpoint-branch">Branch (optional)</Label>
-                          <Input
-                            id="campaign-endpoint-branch"
-                            value={endpointBranch}
-                            onChange={(e) => setEndpointBranch(e.target.value)}
-                            placeholder={linkedDefaultBranchLabel ? `Fallback: ${linkedDefaultBranchLabel}` : 'Fallback: main'}
-                            disabled={endpointsState.kind === 'loading' || endpointsState.kind === 'running' || endpointsState.kind === 'needs_user_input'}
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="campaign-endpoint-search">Search by path</Label>
-                          <Input
-                            id="campaign-endpoint-search"
-                            value={endpointSearch}
-                            onChange={(e) => setEndpointSearch(e.target.value)}
-                            placeholder="/api/projects"
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-2">
-                            <Label>Method</Label>
-                            <Select value={endpointMethod} onValueChange={setEndpointMethod}>
-                              <SelectTrigger>
-                                <SelectValue placeholder="All" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {methodOptions.map((m) => (
-                                  <SelectItem key={m} value={m}>
-                                    {m}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                      </div>
-
-                      {endpointsState.kind === 'error' ? (
-                        <p className="text-sm text-destructive">{endpointsState.message}</p>
-                      ) : endpointsState.kind === 'loading' ? (
-                        <p className="text-sm text-muted-foreground">Loading endpoints…</p>
-                      ) : endpointsState.kind === 'running' ? (
-                        <p className="text-sm text-muted-foreground">
-                          {normalizeDiscoveryStatus(discoveryFlow?.status) === 'needs_user_input' &&
-                          extractDiscoveryQuestions(discoveryFlow).length === 0
-                            ? `Waiting for discovery questions… polling every few seconds (${endpointsState.attempt}/${endpointsState.maxAttempts}).`
-                            : `Discovery running… polling every few seconds (${endpointsState.attempt}/${endpointsState.maxAttempts}).`}
-                        </p>
-                      ) : endpointsState.kind === 'needs_user_input' ? (
-                        <p className="text-sm text-muted-foreground">Discovery is waiting for your answers.</p>
-                      ) : endpointsState.kind === 'idle' && campaign?.projectId ? (
-                        <p className="text-sm text-muted-foreground">
-                          No endpoints loaded yet. Click “Discover endpoints” to start discovery.
-                        </p>
-                      ) : endpointsState.kind === 'done' && endpointsState.endpoints.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No endpoints found.</p>
-                      ) : null}
-
-                      {endpointsState.kind === 'done' && endpointsState.endpoints.length > 0 ? (
-                        <div className="rounded-md border border-border">
-                          <div className="max-h-[420px] overflow-auto">
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead className="w-28">Method</TableHead>
-                                  <TableHead>Path</TableHead>
-                                  <TableHead>Summary</TableHead>
-                                  <TableHead className="w-56 text-right">Schema</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {filteredEndpoints.map((e) => (
-                                  <TableRow key={e.id}>
-                                    <TableCell>
-                                      <Badge variant="secondary">{String(e.method).toUpperCase()}</Badge>
-                                    </TableCell>
-                                    <TableCell className="font-medium">{e.path}</TableCell>
-                                    <TableCell className="text-muted-foreground">{e.summary ?? '—'}</TableCell>
-                                    <TableCell className="text-right">
-                                      <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        className="whitespace-nowrap"
-                                        onClick={() =>
-                                          setSchemaDialog({
-                                            open: true,
-                                            title: `${String(e.method).toUpperCase()} ${e.path}`,
-                                            schema: e.requestSchema,
-                                          })
-                                        }
-                                      >
-                                        View schema
-                                      </Button>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        </div>
-                      ) : null}
-                    </CardContent>
-                  </Card>
+                  {/* Endpoints and discovery removed — feature deprecated */}
                 </div>
 
                 <div className="space-y-6">
                   <Card>
                     <CardHeader>
-                      <CardTitle>Configuration</CardTitle>
-                      <CardDescription>Current campaign setup.</CardDescription>
+                      <CardTitle>Details</CardTitle>
+                      <CardDescription>Backend campaign table data at a glance.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <div className="rounded-md border border-border overflow-hidden">
+                      <div className="rounded-2xl border border-border/70 overflow-hidden bg-card/60">
                         <Table>
                           <TableBody>
+                            <TableRow>
+                              <TableCell className="text-muted-foreground">Campaign ID</TableCell>
+                              <TableCell className="text-right font-medium">{campaign.id}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell className="text-muted-foreground">Status</TableCell>
+                              <TableCell className="text-right font-medium">{campaign.status}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell className="text-muted-foreground">Started at</TableCell>
+                              <TableCell className="text-right font-medium">{campaign.startedAt ? formatWhen(campaign.startedAt) : '—'}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell className="text-muted-foreground">Finished at</TableCell>
+                              <TableCell className="text-right font-medium">{campaign.finishedAt ? formatWhen(campaign.finishedAt) : '—'}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell className="text-muted-foreground">Environment ID</TableCell>
+                              <TableCell className="text-right font-medium">{campaign.environmentId ?? '—'}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell className="text-muted-foreground">Project ID</TableCell>
+                              <TableCell className="text-right font-medium">{campaign.projectId ?? '—'}</TableCell>
+                            </TableRow>
                             <TableRow>
                               <TableCell className="text-muted-foreground">Environment</TableCell>
                               <TableCell className="text-right font-medium">{campaign.environment}</TableCell>
                             </TableRow>
                             <TableRow>
-                              <TableCell className="text-muted-foreground">Owner</TableCell>
-                              <TableCell className="text-right font-medium">{campaign.owner}</TableCell>
+                              <TableCell className="text-muted-foreground">App version</TableCell>
+                              <TableCell className="text-right font-medium">{campaign.appVersion}</TableCell>
                             </TableRow>
                             <TableRow>
-                              <TableCell className="text-muted-foreground">Schedule</TableCell>
-                              <TableCell className="text-right font-medium">{campaign.schedule}</TableCell>
-                            </TableRow>
-                            <TableRow>
-                              <TableCell className="text-muted-foreground">Repository</TableCell>
-                              <TableCell className="text-right font-medium">{campaign.repository}</TableCell>
+                              <TableCell className="text-muted-foreground">Trigger mode</TableCell>
+                              <TableCell className="text-right font-medium">{campaign.triggerMode}</TableCell>
                             </TableRow>
                             <TableRow>
                               <TableCell className="text-muted-foreground">Branch</TableCell>
                               <TableCell className="text-right font-medium">{campaign.branch}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell className="text-muted-foreground">Owner</TableCell>
+                              <TableCell className="text-right font-medium">{campaign.owner}</TableCell>
                             </TableRow>
                           </TableBody>
                         </Table>
@@ -1686,12 +1435,53 @@ export default function CampaignDetailsPage() {
 
                   <Card>
                     <CardHeader>
-                      <CardTitle>Quality gate</CardTitle>
+                      <CardTitle>Latest execution result</CardTitle>
+                      <CardDescription>Result returned by the ms-execution backend.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {latestExecution ? (
+                        <>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="rounded-lg border border-border bg-card p-3">
+                              <p className="text-xs uppercase tracking-wide text-muted-foreground">Execution ID</p>
+                              <p className="mt-1 text-sm font-medium text-foreground">#{latestExecution.id}</p>
+                            </div>
+                            <div className="rounded-lg border border-border bg-card p-3">
+                              <p className="text-xs uppercase tracking-wide text-muted-foreground">Status</p>
+                              <p className="mt-1 text-sm font-medium text-foreground">{latestExecution.status}</p>
+                            </div>
+                            <div className="rounded-lg border border-border bg-card p-3">
+                              <p className="text-xs uppercase tracking-wide text-muted-foreground">Execution type</p>
+                              <p className="mt-1 text-sm font-medium text-foreground">{latestExecution.executionType}</p>
+                            </div>
+                            <div className="rounded-lg border border-border bg-card p-3">
+                              <p className="text-xs uppercase tracking-wide text-muted-foreground">Campaign ID</p>
+                              <p className="mt-1 text-sm font-medium text-foreground">{latestExecution.campaignId}</p>
+                            </div>
+                          </div>
+
+                          <div className="rounded-lg border border-border bg-card p-3">
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">Execution date</p>
+                            <p className="mt-1 text-sm font-medium text-foreground">{formatWhen(latestExecution.executionDate)}</p>
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              Execution number: {latestExecution.executionNumber ?? '—'}
+                            </p>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No backend execution result returned yet.</p>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Execution health</CardTitle>
                       <CardDescription>Simple guardrails for visibility.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 bg-secondary rounded-lg flex items-center justify-center text-primary">
+                        <div className="w-10 h-10 rounded-lg bg-secondary/80 flex items-center justify-center text-primary shadow-sm">
                           <ShieldCheck className="h-5 w-5" />
                         </div>
                         <div className="flex-1">
@@ -1715,41 +1505,7 @@ export default function CampaignDetailsPage() {
           )}
         </div>
 
-        <DiscoveryCompletionDialog
-          open={discoveryDialogOpen}
-          onOpenChange={setDiscoveryDialogOpen}
-          questions={extractDiscoveryQuestions(discoveryFlow)}
-          answers={discoveryAnswers}
-          onAnswerChange={(jsonPath, value) => setDiscoveryAnswers((prev) => ({ ...prev, [jsonPath]: value }))}
-          onSubmit={() => void submitDiscoveryAnswers()}
-          submitting={discoverySubmitting}
-        />
-
-        <Dialog
-          open={schemaDialog.open}
-          onOpenChange={(open) => setSchemaDialog((prev) => ({ ...prev, open }))}
-        >
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Request schema</DialogTitle>
-              <DialogDescription>{schemaDialog.title}</DialogDescription>
-            </DialogHeader>
-
-            {schemaDialog.schema ? (
-              <pre className="max-h-[60vh] overflow-auto rounded-md border border-border bg-muted/20 p-3 text-xs whitespace-pre-wrap">
-                {schemaDialog.schema}
-              </pre>
-            ) : (
-              <p className="text-sm text-muted-foreground">No request schema available.</p>
-            )}
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setSchemaDialog((p) => ({ ...p, open: false }))}>
-                Close
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {/* Discovery dialog and schema viewer removed with endpoints feature */}
       </main>
     </div>
   )

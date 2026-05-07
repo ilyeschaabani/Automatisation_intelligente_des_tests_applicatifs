@@ -17,15 +17,6 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
-import {
   Table,
   TableBody,
   TableCell,
@@ -36,42 +27,19 @@ import {
 import { toast } from '@/hooks/use-toast'
 
 import {
-  attachCampaignTestCases,
-  createTestCase,
   createCampaign,
   getCampaign,
   getProjects,
-  listTestCases,
-  updateCampaign,
   type Project,
   type TestCampaignDto,
   type TestCampaignCreateRequest,
-  type TestCampaignUpdateRequest,
-  type TestCaseDto,
 } from '@/lib/api-client'
+import { environmentService } from '@/services/environments'
+import { testCaseService } from '@/services/testCases'
+import { testSuiteService } from '@/services/suites'
+import type { Environment, TestCase } from '@/types/ms-gestion'
 
-function toIsoOrNull(value: string): string | null {
-  const trimmed = value.trim()
-  if (!trimmed) return null
-  const date = new Date(trimmed)
-  if (Number.isNaN(date.getTime())) return null
-  return date.toISOString()
-}
-
-function pad2(value: number): string {
-  return String(value).padStart(2, '0')
-}
-
-function toDateTimeLocalValue(date: Date): string {
-  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`
-}
-
-function isoToLocalInputValue(iso: string | null | undefined): string {
-  if (!iso) return ''
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return ''
-  return toDateTimeLocalValue(date)
-}
+type CampaignCaseRow = TestCase & { suiteName: string }
 
 type CampaignFormProps = {
   mode: 'create' | 'edit'
@@ -90,29 +58,18 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
 
   const [projectId, setProjectId] = useState<number | null>(null)
   const [name, setName] = useState('')
-  const [version, setVersion] = useState('')
-  const [status, setStatus] = useState('')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [environment, setEnvironment] = useState('')
-  const [triggerType, setTriggerType] = useState('')
-  const [sessionStatus, setSessionStatus] = useState('')
-  const [executionStartDate, setExecutionStartDate] = useState('')
-  const [executionEndDate, setExecutionEndDate] = useState('')
-  const [createdBy, setCreatedBy] = useState('')
+  const [appVersion, setAppVersion] = useState('')
+  const [gitBranch, setGitBranch] = useState('')
+  const [environmentId, setEnvironmentId] = useState<number | null>(null)
+  const [triggerMode, setTriggerMode] = useState('MANUAL')
 
-  const [testCases, setTestCases] = useState<TestCaseDto[]>([])
+  const [environments, setEnvironments] = useState<Environment[]>([])
+  const [environmentsLoading, setEnvironmentsLoading] = useState(false)
+  const [environmentsError, setEnvironmentsError] = useState<string | null>(null)
+
+  const [testCases, setTestCases] = useState<CampaignCaseRow[]>([])
   const [testCasesLoading, setTestCasesLoading] = useState(false)
   const [testCasesError, setTestCasesError] = useState<string | null>(null)
-
-  const [isCreateTestCaseOpen, setIsCreateTestCaseOpen] = useState(false)
-  const [isCreatingTestCase, setIsCreatingTestCase] = useState(false)
-  const [newTestCaseName, setNewTestCaseName] = useState('')
-  const [newTestCaseDescription, setNewTestCaseDescription] = useState('')
-  const [newTestCaseType, setNewTestCaseType] = useState('')
-  const [newTestCasePriority, setNewTestCasePriority] = useState('')
-  const [newTestCaseTool, setNewTestCaseTool] = useState('')
-  const [newTestCaseRiskScore, setNewTestCaseRiskScore] = useState('')
 
   const [search, setSearch] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
@@ -152,8 +109,14 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
   }, [])
 
   useEffect(() => {
+    if (mode === 'edit') return
+    setEnvironmentId(null)
+    setSelectedIds(new Set())
+  }, [mode, projectId])
+
+  useEffect(() => {
     if (mode !== 'edit') return
-    if (!campaignId) return
+    if (!campaignId || !projectId) return
 
     let cancelled = false
 
@@ -161,24 +124,16 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
       setCampaignLoading(true)
       setSubmitError(null)
       try {
-        const loaded = await getCampaign(campaignId)
+        const loaded = await getCampaign(projectId, campaignId)
         if (cancelled) return
 
         setCampaign(loaded)
-        setProjectId(loaded.projectId)
         setName(loaded.name ?? '')
-        setVersion(String(loaded.version ?? ''))
-        setStatus(String(loaded.status ?? ''))
-        setStartDate(isoToLocalInputValue(loaded.startDate))
-        setEndDate(isoToLocalInputValue(loaded.endDate))
-        setEnvironment(String(loaded.environment ?? ''))
-        setTriggerType(String(loaded.triggerType ?? ''))
-        setSessionStatus(String(loaded.sessionStatus ?? ''))
-        setExecutionStartDate(isoToLocalInputValue(loaded.executionStartDate))
-        setExecutionEndDate(isoToLocalInputValue(loaded.executionEndDate))
-        setCreatedBy(String(loaded.createdBy ?? ''))
-
-        setSelectedIds(new Set(Array.isArray(loaded.testCaseIds) ? loaded.testCaseIds : []))
+        setAppVersion(String(loaded.appVersion ?? ''))
+        setGitBranch(String(loaded.gitBranch ?? ''))
+        setTriggerMode(String(loaded.triggerMode ?? 'MANUAL'))
+        setEnvironmentId(loaded.environmentId ?? null)
+        setSelectedIds(new Set())
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to load campaign'
         if (!cancelled) {
@@ -194,31 +149,66 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
     return () => {
       cancelled = true
     }
-  }, [campaignId, mode])
+  }, [campaignId, mode, projectId])
 
   useEffect(() => {
+    if (!projectId) {
+      setEnvironments([])
+      setTestCases([])
+      return
+    }
+
     let cancelled = false
 
     const run = async () => {
+      setEnvironmentsLoading(true)
+      setEnvironmentsError(null)
       setTestCasesLoading(true)
       setTestCasesError(null)
       try {
-        const data = await listTestCases()
+        const [envs, suitesData] = await Promise.all([
+          environmentService.getAll(projectId),
+          testSuiteService.getAll(projectId),
+        ])
         if (cancelled) return
-        setTestCases(Array.isArray(data) ? data : [])
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to load test cases'
-        if (!cancelled) {
+
+        const suitesList = Array.isArray(suitesData) ? suitesData : []
+        setEnvironments(Array.isArray(envs) ? envs : [])
+        if (suitesList.length === 0) {
           setTestCases([])
+          return
+        }
+
+        const casesBySuite = await Promise.all(
+          suitesList.map(async (suite) => {
+            const cases = await testCaseService.getAll(suite.id)
+            return (Array.isArray(cases) ? cases : []).map((tc) => ({
+              ...tc,
+              suiteName: suite.name,
+            }))
+          }),
+        )
+
+        if (cancelled) return
+        setTestCases(casesBySuite.flat())
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to load project data'
+        if (!cancelled) {
+          setEnvironments([])
+          setTestCases([])
+          setEnvironmentsError(message)
           setTestCasesError(message)
           toast({
-            title: 'Failed to load test cases',
+            title: 'Failed to load project data',
             description: message,
             variant: 'destructive',
           })
         }
       } finally {
-        if (!cancelled) setTestCasesLoading(false)
+        if (!cancelled) {
+          setEnvironmentsLoading(false)
+          setTestCasesLoading(false)
+        }
       }
     }
 
@@ -226,83 +216,24 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
     return () => {
       cancelled = true
     }
-  }, [])
-
-  const resetNewTestCaseForm = () => {
-    setNewTestCaseName('')
-    setNewTestCaseDescription('')
-    setNewTestCaseType('')
-    setNewTestCasePriority('')
-    setNewTestCaseTool('')
-    setNewTestCaseRiskScore('')
-  }
-
-  const onCreateTestCase = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newTestCaseName.trim()) return
-
-    setIsCreatingTestCase(true)
-    try {
-      const riskScoreRaw = newTestCaseRiskScore.trim()
-      const riskScore = riskScoreRaw ? Number(riskScoreRaw) : null
-      if (riskScoreRaw && Number.isNaN(riskScore as number)) {
-        throw new Error('Risk score must be a number')
-      }
-
-      const created = await createTestCase({
-        name: newTestCaseName.trim(),
-        description: newTestCaseDescription.trim() ? newTestCaseDescription.trim() : null,
-        testType: newTestCaseType.trim() ? newTestCaseType.trim() : null,
-        priority: newTestCasePriority.trim() ? newTestCasePriority.trim() : null,
-        tool: newTestCaseTool.trim() ? newTestCaseTool.trim() : null,
-        riskScore,
-      })
-
-      setTestCases((prev) => {
-        const next = [created, ...prev]
-        const byId = new Map<number, TestCaseDto>()
-        for (const tc of next) byId.set(tc.id, tc)
-        return Array.from(byId.values())
-      })
-      setSelectedIds((prev) => {
-        const next = new Set(prev)
-        next.add(created.id)
-        return next
-      })
-
-      toast({
-        title: 'Test case created',
-        description: `Added ${created.name}`,
-      })
-
-      setIsCreateTestCaseOpen(false)
-      resetNewTestCaseForm()
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to create test case'
-      toast({
-        title: 'Test case create failed',
-        description: message,
-        variant: 'destructive',
-      })
-    } finally {
-      setIsCreatingTestCase(false)
-    }
-  }
+  }, [projectId])
 
   const filteredTestCases = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return testCases
 
     return testCases.filter((tc) => {
-      const nameValue = String(tc.name ?? '').toLowerCase()
-      const toolValue = String(tc.tool ?? '').toLowerCase()
-      const typeValue = String(tc.testType ?? '').toLowerCase()
+      const nameValue = String(tc.title ?? '').toLowerCase()
+      const typeValue = String(tc.type ?? '').toLowerCase()
       const priorityValue = String(tc.priority ?? '').toLowerCase()
+      const suiteValue = String(tc.suiteName ?? '').toLowerCase()
+      const riskValue = String(tc.riskLevel ?? '').toLowerCase()
       return (
         nameValue.includes(q) ||
-        toolValue.includes(q) ||
         typeValue.includes(q) ||
         priorityValue.includes(q) ||
+        suiteValue.includes(q) ||
+        riskValue.includes(q) ||
         String(tc.id).includes(q)
       )
     })
@@ -334,41 +265,35 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
     setSelectedIds(new Set())
   }
 
-  const canSubmit = Boolean(projectId && name.trim()) && !submitting
+  const canSubmit = Boolean(projectId && name.trim() && environmentId) && !submitting
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!projectId) return
     if (!name.trim()) return
+    if (!environmentId) {
+      setSubmitError('Select an environment.')
+      return
+    }
 
     setSubmitting(true)
     setSubmitError(null)
 
     try {
-      const basePayload = {
-        name: name.trim(),
-        version: version.trim() ? version.trim() : null,
-        status: status.trim() ? status.trim() : null,
-        startDate: toIsoOrNull(startDate),
-        endDate: toIsoOrNull(endDate),
-        environment: environment.trim() ? environment.trim() : null,
-        triggerType: triggerType.trim() ? triggerType.trim() : null,
-        sessionStatus: sessionStatus.trim() ? sessionStatus.trim() : null,
-        executionStartDate: toIsoOrNull(executionStartDate),
-        executionEndDate: toIsoOrNull(executionEndDate),
-        createdBy: createdBy.trim() ? createdBy.trim() : null,
-      }
-
       const testCaseIds = Array.from(selectedIds)
 
       if (mode === 'create') {
         const createPayload: TestCampaignCreateRequest = {
           projectId,
-          ...basePayload,
+          name: name.trim(),
+          environmentId,
+          appVersion: appVersion.trim() ? appVersion.trim() : null,
+          gitBranch: gitBranch.trim() ? gitBranch.trim() : null,
+          triggerMode: triggerMode.trim() ? triggerMode.trim() : 'MANUAL',
+          testCaseIds,
         }
 
         const created = await createCampaign(createPayload)
-        await attachCampaignTestCases(created.id, testCaseIds)
 
         toast({
           title: 'Campaign created',
@@ -380,22 +305,7 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
         return
       }
 
-      if (!campaignId) throw new Error('Missing campaign id')
-
-      const updatePayload: TestCampaignUpdateRequest = {
-        ...basePayload,
-      }
-
-      const updated = await updateCampaign(campaignId, updatePayload)
-      await attachCampaignTestCases(campaignId, testCaseIds)
-
-      toast({
-        title: 'Campaign saved',
-        description: `Updated ${updated.name}`,
-      })
-
-      router.push(`/campaigns/${campaignId}`)
-      router.refresh()
+      throw new Error('Campaign updates are not supported yet.')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to save campaign'
       setSubmitError(message)
@@ -478,123 +388,70 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="campaignVersion">Version</Label>
+              <Label htmlFor="campaignVersion">App version</Label>
               <Input
                 id="campaignVersion"
-                value={version}
-                onChange={(e) => setVersion(e.target.value)}
+                value={appVersion}
+                onChange={(e) => setAppVersion(e.target.value)}
                 placeholder="v2.5"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="campaignStatus">Status</Label>
-              <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger id="campaignStatus">
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="DRAFT">DRAFT</SelectItem>
-                  <SelectItem value="SCHEDULED">SCHEDULED</SelectItem>
-                  <SelectItem value="RUNNING">RUNNING</SelectItem>
-                  <SelectItem value="COMPLETED">COMPLETED</SelectItem>
-                  <SelectItem value="FAILED">FAILED</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="startDate">Start date</Label>
+              <Label htmlFor="campaignBranch">Git branch</Label>
               <Input
-                id="startDate"
-                type="datetime-local"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                id="campaignBranch"
+                value={gitBranch}
+                onChange={(e) => setGitBranch(e.target.value)}
+                placeholder="main"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="endDate">End date</Label>
-              <Input
-                id="endDate"
-                type="datetime-local"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="environment">Environment</Label>
-              <Select value={environment} onValueChange={setEnvironment}>
+              <Label htmlFor="environment">Environment *</Label>
+              <Select
+                value={environmentId ? String(environmentId) : ''}
+                onValueChange={(value) => setEnvironmentId(Number(value))}
+                disabled={environmentsLoading || environments.length === 0}
+              >
                 <SelectTrigger id="environment">
-                  <SelectValue placeholder="Select environment" />
+                  <SelectValue
+                    placeholder={
+                      environmentsLoading ? 'Loading environments…' : 'Select environment'
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="QA">QA</SelectItem>
-                  <SelectItem value="UAT">UAT</SelectItem>
-                  <SelectItem value="STAGING">STAGING</SelectItem>
-                  <SelectItem value="PREPROD">PREPROD</SelectItem>
-                  <SelectItem value="PROD">PROD</SelectItem>
+                  {environments.length === 0 ? (
+                    <SelectItem value="__none" disabled>
+                      No environments found
+                    </SelectItem>
+                  ) : (
+                    environments.map((env) => (
+                      <SelectItem key={env.id} value={String(env.id)}>
+                        {env.name}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
+              {environmentsError ? (
+                <p className="text-xs text-destructive">{environmentsError}</p>
+              ) : null}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="triggerType">Trigger type</Label>
-              <Select value={triggerType} onValueChange={setTriggerType}>
+              <Label htmlFor="triggerType">Trigger mode</Label>
+              <Select value={triggerMode} onValueChange={setTriggerMode}>
                 <SelectTrigger id="triggerType">
-                  <SelectValue placeholder="Select trigger type" />
+                  <SelectValue placeholder="Select trigger mode" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="MANUAL">MANUAL</SelectItem>
-                  <SelectItem value="PIPELINE">PIPELINE</SelectItem>
                   <SelectItem value="SCHEDULED">SCHEDULED</SelectItem>
+                  <SelectItem value="CI">CI</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="sessionStatus">Session status</Label>
-              <Select value={sessionStatus} onValueChange={setSessionStatus}>
-                <SelectTrigger id="sessionStatus">
-                  <SelectValue placeholder="Select session status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="OPEN">OPEN</SelectItem>
-                  <SelectItem value="IN_PROGRESS">IN_PROGRESS</SelectItem>
-                  <SelectItem value="CLOSED">CLOSED</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="executionStartDate">Execution start</Label>
-              <Input
-                id="executionStartDate"
-                type="datetime-local"
-                value={executionStartDate}
-                onChange={(e) => setExecutionStartDate(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="executionEndDate">Execution end</Label>
-              <Input
-                id="executionEndDate"
-                type="datetime-local"
-                value={executionEndDate}
-                onChange={(e) => setExecutionEndDate(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="createdBy">Created by</Label>
-              <Input
-                id="createdBy"
-                value={createdBy}
-                onChange={(e) => setCreatedBy(e.target.value)}
-                placeholder="qa.platform"
-              />
             </div>
           </div>
 
@@ -608,129 +465,6 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
               </div>
 
               <div className="flex items-center gap-2">
-                <Dialog open={isCreateTestCaseOpen} onOpenChange={setIsCreateTestCaseOpen}>
-                  <DialogTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={testCasesLoading}
-                    >
-                      Add test case
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>New Test Case</DialogTitle>
-                      <DialogDescription>
-                        Create a test case.
-                      </DialogDescription>
-                    </DialogHeader>
-
-                    <form className="space-y-5" onSubmit={onCreateTestCase}>
-                      <div className="space-y-2">
-                        <Label htmlFor="newTestCaseName">Name *</Label>
-                        <Input
-                          id="newTestCaseName"
-                          value={newTestCaseName}
-                          onChange={(e) => setNewTestCaseName(e.target.value)}
-                          placeholder="Login - valid credentials"
-                          required
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="newTestCaseDescription">Description</Label>
-                        <Input
-                          id="newTestCaseDescription"
-                          value={newTestCaseDescription}
-                          onChange={(e) => setNewTestCaseDescription(e.target.value)}
-                          placeholder="Optional description"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Test type</Label>
-                        <Select value={newTestCaseType} onValueChange={setNewTestCaseType}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="FUNCTIONAL">FUNCTIONAL</SelectItem>
-                            <SelectItem value="PERFORMANCE">PERFORMANCE</SelectItem>
-                            <SelectItem value="REGRESSION">REGRESSION</SelectItem>
-                            <SelectItem value="SECURITY">SECURITY</SelectItem>
-                            <SelectItem value="API">API</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Priority</Label>
-                        <Select value={newTestCasePriority} onValueChange={setNewTestCasePriority}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select priority" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="LOW">LOW</SelectItem>
-                            <SelectItem value="MEDIUM">MEDIUM</SelectItem>
-                            <SelectItem value="HIGH">HIGH</SelectItem>
-                            <SelectItem value="CRITICAL">CRITICAL</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="newTestCaseTool">Tool</Label>
-                        <Select
-                          value={newTestCaseTool}
-                          onValueChange={(v) => setNewTestCaseTool(v === '__none' ? '' : v)}
-                        >
-                          <SelectTrigger id="newTestCaseTool">
-                            <SelectValue placeholder="Select tool" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none">None</SelectItem>
-                            <SelectItem value="SELENIUM">SELENIUM</SelectItem>
-                            <SelectItem value="PLAYWRIGHT">PLAYWRIGHT</SelectItem>
-                            <SelectItem value="CYPRESS">CYPRESS</SelectItem>
-                            <SelectItem value="POSTMAN">POSTMAN</SelectItem>
-                            <SelectItem value="REST_ASSURED">REST_ASSURED</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="newTestCaseRiskScore">Risk score</Label>
-                        <Input
-                          id="newTestCaseRiskScore"
-                          inputMode="decimal"
-                          value={newTestCaseRiskScore}
-                          onChange={(e) => setNewTestCaseRiskScore(e.target.value)}
-                          placeholder="0"
-                        />
-                      </div>
-
-                      <DialogFooter className="gap-2 sm:gap-0">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => {
-                            setIsCreateTestCaseOpen(false)
-                            resetNewTestCaseForm()
-                          }}
-                          disabled={isCreatingTestCase}
-                        >
-                          Cancel
-                        </Button>
-                        <Button type="submit" disabled={isCreatingTestCase || !newTestCaseName.trim()}>
-                          {isCreatingTestCase ? 'Creating…' : 'Create test case'}
-                        </Button>
-                      </DialogFooter>
-                    </form>
-                  </DialogContent>
-                </Dialog>
-
                 <Button
                   variant="outline"
                   size="sm"
@@ -754,7 +488,7 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by name, tool, type, priority, id…"
+                placeholder="Search by title, suite, type, priority, risk, id…"
                 disabled={testCasesLoading}
               />
               <div className="text-xs text-muted-foreground whitespace-nowrap">
@@ -784,9 +518,10 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
                         />
                       </TableHead>
                       <TableHead>Name</TableHead>
+                      <TableHead className="w-40">Suite</TableHead>
                       <TableHead className="w-32">Type</TableHead>
                       <TableHead className="w-32">Priority</TableHead>
-                      <TableHead className="w-40">Tool</TableHead>
+                      <TableHead className="w-40">Risk</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -796,13 +531,14 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
                           <Checkbox
                             checked={selectedIds.has(tc.id)}
                             onCheckedChange={() => toggleOne(tc.id)}
-                            aria-label={`Select test case ${tc.name}`}
+                            aria-label={`Select test case ${tc.title}`}
                           />
                         </TableCell>
-                        <TableCell className="font-medium">{tc.name}</TableCell>
-                        <TableCell>{tc.testType ?? '—'}</TableCell>
+                        <TableCell className="font-medium">{tc.title}</TableCell>
+                        <TableCell>{tc.suiteName}</TableCell>
+                        <TableCell>{tc.type ?? '—'}</TableCell>
                         <TableCell>{tc.priority ?? '—'}</TableCell>
-                        <TableCell>{tc.tool ?? '—'}</TableCell>
+                        <TableCell>{tc.riskLevel ?? '—'}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

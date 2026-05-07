@@ -36,9 +36,9 @@ const demoCampaignCard = {
 function mapStatus(status: unknown): CardStatus {
   const value = String(status ?? '').toUpperCase()
   if (value === 'RUNNING') return 'Running'
-  if (value === 'COMPLETED') return 'Completed'
-  if (value === 'FAILED') return 'Failed'
-  if (value === 'SCHEDULED') return 'Scheduled'
+  if (value === 'FINISHED') return 'Completed'
+  if (value === 'FINISHED_WITH_ERRORS') return 'Failed'
+  if (value === 'PENDING') return 'Scheduled'
   return 'Scheduled'
 }
 
@@ -198,10 +198,11 @@ export default function CampaignsPage() {
                   type={mapType(campaign)}
                   status={mapStatus(campaign.status)}
                   progress={0}
-                  tests={Array.isArray(campaign.testCaseIds) ? campaign.testCaseIds.length : 0}
+                  projectId={campaign.projectId}
+                  tests={0}
                   passed={0}
                   failed={0}
-                  lastRun="—"
+                  lastRun={campaign.finishedAt ?? campaign.startedAt ?? campaign.createdAt ?? '—'}
                 />
               ))
             )}
