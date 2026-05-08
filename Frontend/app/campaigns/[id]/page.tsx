@@ -74,6 +74,7 @@ import {
   listExecutions,
   startCampaignRun,
   continueCampaignRun,
+  getTestCasesForCampaign,
   type CampaignRunContinueRequest,
   type CampaignRunResponse,
   type EditableFileDto,
@@ -81,6 +82,7 @@ import {
   type ExecutionStatus,
   type TestCampaignDto,
   type TestExecutionDto,
+  type TestCaseWithStatusDto,
 } from '@/lib/api-client'
 import { environmentService } from '@/services/environments'
 import type { Environment } from '@/types/ms-gestion'
@@ -178,6 +180,8 @@ const executionSteps = [
   'Running Maven tests',
   'Saving execution result',
 ] as const
+
+const perStep = Math.floor(100 / executionSteps.length)
 
 function slugify(value: string): string {
   return value
@@ -426,6 +430,30 @@ export default function CampaignDetailsPage() {
   const [runFileEdits, setRunFileEdits] = useState<Record<string, string>>({})
   const [runProgressValue, setRunProgressValue] = useState(0)
   const [runStepIndex, setRunStepIndex] = useState(0)
+  const [executionUiRunning, setExecutionUiRunning] = useState(false)
+  const animationRef = useRef<number | null>(null)
+  const lastAnimatedStep = useRef<number | null>(null)
+
+  const stopStepAnimation = () => {
+    if (animationRef.current) {
+      window.clearInterval(animationRef.current)
+      animationRef.current = null
+    }
+  }
+
+  const startStepAnimation = (stepIndex: number) => {
+    stopStepAnimation()
+    const base = stepIndex * perStep
+    const cap = base + perStep - 1
+    animationRef.current = window.setInterval(() => {
+      setRunProgressValue((prev) => {
+        if (!Number.isFinite(prev)) return base
+        const next = Math.min(cap, Math.max(prev + 1, base + 1))
+        return next
+      })
+    }, 400)
+    lastAnimatedStep.current = stepIndex
+  }
 
   const [remoteCampaign, setRemoteCampaign] = useState<Campaign | null>(null)
   const [remoteLoading, setRemoteLoading] = useState(false)
@@ -506,8 +534,20 @@ export default function CampaignDetailsPage() {
 
   const campaign = remoteCampaign ?? seedCampaign
 
+  const showExecutionPanel =
+    executionUiRunning ||
+    latestExecution?.status === 'RUNNING' ||
+    latestExecution?.status === 'QUEUED' ||
+    latestExecution?.status === 'FINISHED' ||
+    latestExecution?.status === 'ERROR' ||
+    remoteCampaign?.status === 'Running'
+
   const isExecutionRunning =
-    runSubmitting || latestExecution?.status === 'RUNNING' || latestExecution?.status === 'QUEUED'
+    executionUiRunning ||
+    runSubmitting ||
+    latestExecution?.status === 'RUNNING' ||
+    latestExecution?.status === 'QUEUED' ||
+    (remoteCampaign?.status === 'Running')
 
   useEffect(() => {
     if (!isExecutionRunning || !campaignNumericId) {
@@ -521,6 +561,8 @@ export default function CampaignDetailsPage() {
       const index = executionSteps.findIndex((step) => step.toLowerCase() === normalized)
       return index >= 0 ? index : 0
     }
+
+    // use component-scoped start/stop animation helpers
 
     const pollStatus = async () => {
       try {
@@ -539,20 +581,43 @@ export default function CampaignDetailsPage() {
           const backendStep = stepIndexFromValue(data.currentStep)
 
           if (status === 'PENDING') {
+            stopStepAnimation()
             setRunStepIndex(0)
             setRunProgressValue(Math.max(0, backendProgress))
             return
           }
 
           if (status === 'RUNNING') {
-            setRunStepIndex(Math.min(backendStep, executionSteps.length - 1))
-            setRunProgressValue(Math.max(0, Math.min(99, backendProgress || 10)))
+            const cappedStep = Math.min(backendStep, executionSteps.length - 1)
+            setRunStepIndex(cappedStep)
+
+            // If step changed, start a fresh in-step animation that grows the bar
+            if (lastAnimatedStep.current !== cappedStep) {
+              // set progress to the beginning of the step
+              setRunProgressValue(cappedStep * perStep)
+              startStepAnimation(cappedStep)
+            } else {
+              // Keep animating; but if backend gives an absolute progress, respect it
+              const stepBase = cappedStep * perStep
+              const stepCap = stepBase + perStep
+              if (Number.isFinite(backendProgress) && backendProgress > runProgressValue) {
+                // Respect backend if within this step's range, otherwise clamp
+                const bounded = Math.min(stepCap - 1, Math.max(runProgressValue, backendProgress))
+                setRunProgressValue(bounded)
+              }
+            }
             return
           }
 
           if (status === 'FINISHED' || status === 'FINISHED_WITH_ERRORS') {
+            stopStepAnimation()
             setRunStepIndex(executionSteps.length - 1)
             setRunProgressValue(100)
+            setExecutionUiRunning(false)
+            // mark placeholder execution as finished so UI updates quickly
+            setLatestExecution((prev) => (prev ? { ...prev, status: 'FINISHED' } : prev))
+            // stop runSubmitting if it was still true
+            setRunSubmitting(false)
           }
         }
       } catch (error) {
@@ -570,6 +635,10 @@ export default function CampaignDetailsPage() {
     return () => {
       cancelled = true
       window.clearInterval(pollInterval)
+      if (animationRef.current) {
+        window.clearInterval(animationRef.current)
+        animationRef.current = null
+      }
     }
   }, [isExecutionRunning, campaignNumericId])
 
@@ -582,15 +651,32 @@ export default function CampaignDetailsPage() {
   }, [runSubmitting])
 
   const passRate = useMemo(() => {
-    if (!campaign) return 0
-    return computePassRate(campaign.passed, campaign.tests)
-  }, [campaign])
+    if (!backendExecutions.length) return 0
+    const passed = backendExecutions.filter((r) => r.status === 'FINISHED').length
+    const total = backendExecutions.length
+    return total ? (passed / total) * 100 : 0
+  }, [backendExecutions])
+
+  const executionMetrics = useMemo(() => {
+    const total = backendExecutions.length
+    const passed = backendExecutions.filter((r) => r.status === 'FINISHED').length
+    const failed = backendExecutions.filter((r) => r.status === 'ERROR').length
+    const failureRate = total ? (failed / total) * 100 : 0
+    const riskScore = clampPercent(failureRate * 2)
+    
+    return { total, passed, failed, passRate: (passed / total) * 100 || 0, riskScore }
+  }, [backendExecutions])
 
   const riskScore = useMemo(() => {
     if (!campaign) return 0
     const failureRate = campaign.tests ? (campaign.failed / campaign.tests) * 100 : 0
     // Simple UI-only signal: higher failures => higher risk.
     return clampPercent(failureRate * 2)
+  }, [campaign])
+
+  const seedPassRate = useMemo(() => {
+    if (!campaign) return 0
+    return computePassRate(campaign.passed, campaign.tests)
   }, [campaign])
 
   const recentRunsSeed = useMemo(() => {
@@ -621,14 +707,52 @@ export default function CampaignDetailsPage() {
     return seedTestsFor(campaign)
   }, [campaign, remoteCampaign])
 
+  const [testCasesFromApi, setTestCasesFromApi] = useState<TestCaseWithStatusDto[]>([])
+  const [testCasesLoading, setTestCasesLoading] = useState(false)
   const [selectedTestIds, setSelectedTestIds] = useState<string[]>([])
   const [storedRuns, setStoredRuns] = useState<CampaignExecution[]>([])
+  
+  // Fetch test cases from API when campaign is loaded
+  useEffect(() => {
+    if (!remoteCampaign || !campaignNumericId || !resolvedProjectId) {
+      setTestCasesFromApi([])
+      setSelectedTestIds([])
+      return
+    }
+
+    let cancelled = false
+
+    const loadTestCases = async () => {
+      setTestCasesLoading(true)
+      try {
+        const testCases = await getTestCasesForCampaign(resolvedProjectId, campaignNumericId)
+        if (!cancelled) {
+          setTestCasesFromApi(testCases)
+        }
+      } catch (error) {
+        console.warn('Failed to load test cases for campaign:', error)
+        if (!cancelled) {
+          setTestCasesFromApi([])
+        }
+      } finally {
+        if (!cancelled) {
+          setTestCasesLoading(false)
+        }
+      }
+    }
+
+    void loadTestCases()
+    return () => {
+      cancelled = true
+    }
+  }, [remoteCampaign, campaignNumericId, resolvedProjectId])
   
 
   useEffect(() => {
     if (!campaignNumericId) {
       setBackendExecutions([])
       setLatestExecution(null)
+      setExecutionUiRunning(false)
       setStoredRuns([])
       setSelectedTestIds([])
       return
@@ -787,19 +911,15 @@ export default function CampaignDetailsPage() {
     }
     setLatestExecution(placeholderExecution)
     setBackendExecutions((prev) => [placeholderExecution, ...prev])
-    
-    // Initialize progress from response campaign data if available
-    if (response.campaign) {
-      const backendProgress = Number(response.campaign.progress ?? 0)
-      const backendStep = response.campaign.currentStep ?? ''
-      setRunProgressValue(Math.max(0, backendProgress))
-      
-      const stepIndex = executionSteps.findIndex((step) => 
-        step.toLowerCase() === String(backendStep ?? '').trim().toLowerCase()
-      )
-      if (stepIndex >= 0) {
-        setRunStepIndex(stepIndex)
-      }
+    setExecutionUiRunning(true)
+
+    // Bootstrap the UI immediately; backend polling will refine the step and percentage.
+    setRunStepIndex(0)
+    setRunProgressValue(5)
+    try {
+      startStepAnimation(0)
+    } catch (e) {
+      // ignore in environments where window timers are restricted
     }
 
 
@@ -832,6 +952,7 @@ export default function CampaignDetailsPage() {
       return
     }
 
+    setExecutionUiRunning(true)
     setRunSubmitting(true)
     try {
       const branchValue = String(campaign?.branch ?? '').trim()
@@ -841,6 +962,7 @@ export default function CampaignDetailsPage() {
       await applyRunResponse(response)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to start campaign run'
+      setExecutionUiRunning(false)
       toast({ title: 'Run failed', description: message, variant: 'destructive' })
     } finally {
       setRunSubmitting(false)
@@ -885,12 +1007,14 @@ export default function CampaignDetailsPage() {
     if (Object.keys(envValues).length > 0) payload.envValues = envValues
     if (Object.keys(runFileEdits).length > 0) payload.fileOverrides = runFileEdits
 
+    setExecutionUiRunning(true)
     setRunSubmitting(true)
     try {
       const response = await continueCampaignRun(campaignNumericId, payload)
       await applyRunResponse(response)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to continue campaign run'
+      setExecutionUiRunning(false)
       toast({ title: 'Run failed', description: message, variant: 'destructive' })
     } finally {
       setRunSubmitting(false)
@@ -910,6 +1034,12 @@ export default function CampaignDetailsPage() {
     setStoredRuns((prev) => [created, ...prev])
     setSelectedTestIds([])
   }
+
+  const runButtonLabel = runSubmitting
+    ? 'Running...'
+    : latestExecution?.status === 'FINISHED' || latestExecution?.status === 'ERROR'
+    ? 'Rerun campaign'
+    : 'Run campaign'
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -1050,31 +1180,35 @@ export default function CampaignDetailsPage() {
                       disabled={runSubmitting}
                     >
                       <Play className="h-4 w-4" />
-                      {runSubmitting ? 'Running...' : 'Run campaign'}
+                      {runButtonLabel}
                     </Button>
                   </div>
 
-                  {isExecutionRunning ? (
+                  {showExecutionPanel ? (
                     <Card className="mt-6 border-primary/20 bg-primary/5">
                       <CardContent className="space-y-4 p-4 sm:p-5">
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           <div>
-                            <p className="text-sm font-semibold text-foreground">ms-execution is running the campaign</p>
+                            <p className="text-sm font-semibold text-foreground">
+                              {isExecutionRunning ? 'ms-execution is running the campaign' : 'ms-execution finished the campaign'}
+                            </p>
                             <p className="text-sm text-muted-foreground">
-                              {campaign.name} is being cloned, executed, and persisted in the backend.
+                              {isExecutionRunning
+                                ? `${campaign.name} is being cloned, executed, and persisted in the backend.`
+                                : `${campaign.name} finished successfully and the final progress is preserved.`}
                             </p>
                           </div>
                           <Badge variant="secondary" className="w-fit rounded-full">
-                            {executionSteps[runStepIndex]}
+                            {isExecutionRunning ? executionSteps[runStepIndex] : 'Completed'}
                           </Badge>
                         </div>
 
                         <div className="space-y-2">
                           <div className="flex items-center justify-between text-xs text-muted-foreground">
                             <span>Loading progress</span>
-                            <span>{formatPercent(runProgressValue)}</span>
+                            <span>{formatPercent(isExecutionRunning ? runProgressValue : 100)}</span>
                           </div>
-                          <Progress value={runProgressValue} className="h-2.5" />
+                          <Progress value={isExecutionRunning ? runProgressValue : 100} className="h-2.5" />
                         </div>
 
                         <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
@@ -1182,18 +1316,7 @@ export default function CampaignDetailsPage() {
           </DialogContent>
                   </Dialog>
 
-                  <div className="mt-8 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Execution progress</span>
-                      <span className="text-sm font-semibold text-foreground">
-                        {formatPercent(isExecutionRunning ? runProgressValue : campaign.progress)}
-                      </span>
-                    </div>
-                    <Progress
-                      value={clampPercent(isExecutionRunning ? runProgressValue : campaign.progress)}
-                      className="h-2.5"
-                    />
-                  </div>
+                  
                 </div>
               </Card>
 
@@ -1214,21 +1337,21 @@ export default function CampaignDetailsPage() {
                             <p className="text-sm text-muted-foreground">Total tests</p>
                             <Play className="h-4 w-4 text-muted-foreground" />
                           </div>
-                          <p className="mt-2 text-2xl font-bold text-foreground">{campaign.tests}</p>
+                          <p className="mt-2 text-2xl font-bold text-foreground">{executionMetrics.total || campaign.tests}</p>
                         </div>
                         <div className="rounded-lg border border-border bg-card p-4">
                           <div className="flex items-center justify-between">
                             <p className="text-sm text-muted-foreground">Passed</p>
                             <CheckCircle2 className="h-4 w-4 text-green-600" />
                           </div>
-                          <p className="mt-2 text-2xl font-bold text-foreground">{campaign.passed}</p>
+                          <p className="mt-2 text-2xl font-bold text-foreground">{executionMetrics.passed || campaign.passed}</p>
                         </div>
                         <div className="rounded-lg border border-border bg-card p-4">
                           <div className="flex items-center justify-between">
                             <p className="text-sm text-muted-foreground">Failed</p>
                             <AlertCircle className="h-4 w-4 text-red-600" />
                           </div>
-                          <p className="mt-2 text-2xl font-bold text-foreground">{campaign.failed}</p>
+                          <p className="mt-2 text-2xl font-bold text-foreground">{executionMetrics.failed || campaign.failed}</p>
                         </div>
                       </div>
 
@@ -1238,17 +1361,17 @@ export default function CampaignDetailsPage() {
                         <div>
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-sm text-muted-foreground">Pass rate</span>
-                            <span className="text-sm font-semibold text-foreground">{formatPercent(passRate)}</span>
+                            <span className="text-sm font-semibold text-foreground">{formatPercent(executionMetrics.passRate || seedPassRate)}</span>
                           </div>
-                          <Progress value={passRate} className="h-2" />
+                          <Progress value={executionMetrics.passRate || seedPassRate} className="h-2" />
                         </div>
 
                         <div>
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-sm text-muted-foreground">Risk signal</span>
-                            <span className="text-sm font-semibold text-foreground">{formatPercent(riskScore)}</span>
+                            <span className="text-sm font-semibold text-foreground">{formatPercent(executionMetrics.riskScore || riskScore)}</span>
                           </div>
-                          <Progress value={riskScore} className="h-2" />
+                          <Progress value={executionMetrics.riskScore || riskScore} className="h-2" />
                         </div>
                       </div>
                     </CardContent>
@@ -1327,43 +1450,66 @@ export default function CampaignDetailsPage() {
                             <TableRow>
                               <TableHead className="w-12"></TableHead>
                               <TableHead>Test</TableHead>
-                              <TableHead className="w-32">Area</TableHead>
-                              <TableHead className="w-24 text-right">Type</TableHead>
+                              <TableHead className="w-32">Type</TableHead>
+                              <TableHead className="w-24">Status</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {tests.map((t) => {
-                              const checked = selectedTestIds.includes(t.id)
-                              return (
-                                <TableRow key={t.id}>
-                                  <TableCell>
-                                    <Checkbox
-                                      checked={checked}
-                                      onCheckedChange={(next) => {
-                                        const shouldCheck = next === true
-                                        setSelectedTestIds((prev) => {
-                                          const has = prev.includes(t.id)
-                                          if (shouldCheck && !has) return [...prev, t.id]
-                                          if (!shouldCheck && has) return prev.filter((x) => x !== t.id)
-                                          return prev
-                                        })
-                                      }}
-                                      aria-label={`Select ${t.id}`}
-                                    />
-                                  </TableCell>
-                                  <TableCell>
-                                    <div className="flex flex-col">
-                                      <span className="font-medium text-foreground">{t.name}</span>
-                                      <span className="text-xs text-muted-foreground">{t.id}</span>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="text-muted-foreground">{t.area}</TableCell>
-                                  <TableCell className="text-right">
-                                    <Badge variant="secondary">{t.kind}</Badge>
-                                  </TableCell>
-                                </TableRow>
-                              )
-                            })}
+                            {testCasesLoading ? (
+                              <TableRow>
+                                <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">
+                                  Loading test cases...
+                                </TableCell>
+                              </TableRow>
+                            ) : testCasesFromApi.length === 0 ? (
+                              <TableRow>
+                                <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">
+                                  No test cases found for this campaign
+                                </TableCell>
+                              </TableRow>
+                            ) : (
+                              testCasesFromApi.map((tc) => {
+                                const testIdStr = String(tc.id)
+                                const checked = selectedTestIds.includes(testIdStr)
+                                return (
+                                  <TableRow key={tc.id}>
+                                    <TableCell>
+                                      <Checkbox
+                                        checked={checked}
+                                        onCheckedChange={(next) => {
+                                          const shouldCheck = next === true
+                                          setSelectedTestIds((prev) => {
+                                            const has = prev.includes(testIdStr)
+                                            if (shouldCheck && !has) return [...prev, testIdStr]
+                                            if (!shouldCheck && has) return prev.filter((x) => x !== testIdStr)
+                                            return prev
+                                          })
+                                        }}
+                                        aria-label={`Select ${tc.title}`}
+                                      />
+                                    </TableCell>
+                                    <TableCell>
+                                      <div className="flex flex-col">
+                                        <span className="font-medium text-foreground">{tc.title}</span>
+                                        <span className="text-xs text-muted-foreground">{tc.scriptPath}</span>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Badge variant="outline" className="font-mono text-xs">
+                                        {tc.type || 'UNKNOWN'}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Badge
+                                        variant={tc.executionStatus === 'FINISHED' ? 'default' : tc.executionStatus === 'ERROR' ? 'destructive' : 'secondary'}
+                                      >
+                                        {tc.executionStatus || 'Not run'}
+                                      </Badge>
+                                    </TableCell>
+                                  </TableRow>
+                                )
+                              })
+                            )}
                           </TableBody>
                         </Table>
                       </div>

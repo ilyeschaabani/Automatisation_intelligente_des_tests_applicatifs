@@ -15,6 +15,9 @@ public class ExecutionResult {
     private Long testCaseId;
 
     @Enumerated(EnumType.STRING)
+    private TestCase.TestType testType;
+
+    @Enumerated(EnumType.STRING)
     private ResultStatus status;
 
     private Long durationMs;
@@ -33,11 +36,12 @@ public class ExecutionResult {
     public ExecutionResult() {
     }
 
-    public ExecutionResult(Long id, Long campaignId, Long testCaseId, ResultStatus status, Long durationMs,
+    public ExecutionResult(Long id, Long campaignId, Long testCaseId, TestCase.TestType testType, ResultStatus status, Long durationMs,
                            String errorMessage, String logs, String screenshotUrl, LocalDateTime executedAt) {
         this.id = id;
         this.campaignId = campaignId;
         this.testCaseId = testCaseId;
+        this.testType = testType;
         this.status = status;
         this.durationMs = durationMs;
         this.errorMessage = errorMessage;
@@ -68,6 +72,14 @@ public class ExecutionResult {
 
     public void setTestCaseId(Long testCaseId) {
         this.testCaseId = testCaseId;
+    }
+
+    public TestCase.TestType getTestType() {
+        return testType;
+    }
+
+    public void setTestType(TestCase.TestType testType) {
+        this.testType = testType;
     }
 
     public ResultStatus getStatus() {

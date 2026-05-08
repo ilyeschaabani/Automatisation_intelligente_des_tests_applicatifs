@@ -23,18 +23,18 @@ export async function GET(request: Request) {
   const url = new URL(request.url)
   const projectId = url.searchParams.get('projectId')
 
-  if (!projectId) {
-    return NextResponse.json({ error: 'projectId is required' }, { status: 400 })
+  let upstreamUrl = `${TEST_MANAGEMENT_SERVICE_URL}/api/campaigns`
+  
+  // If projectId is provided, filter by project
+  if (projectId) {
+    upstreamUrl = `${TEST_MANAGEMENT_SERVICE_URL}/api/projects/${encodeURIComponent(projectId)}/campaigns`
   }
 
-  const upstream = await fetch(
-    `${TEST_MANAGEMENT_SERVICE_URL}/api/projects/${encodeURIComponent(projectId)}/campaigns`,
-    {
+  const upstream = await fetch(upstreamUrl, {
     method: 'GET',
     headers: buildMsGestionHeaders(cookieStore, request),
     cache: 'no-store',
-  },
-  )
+  })
 
   const response = new NextResponse(upstream.body, {
     status: upstream.status,
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
   const projectId = url.searchParams.get('projectId')
 
   if (!projectId) {
-    return NextResponse.json({ error: 'projectId is required' }, { status: 400 })
+    return NextResponse.json({ error: 'projectId is required for creating campaigns' }, { status: 400 })
   }
 
   const upstream = await fetch(

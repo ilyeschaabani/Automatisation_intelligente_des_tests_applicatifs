@@ -8,4 +8,6 @@ import java.util.List;
 public interface CampaignRepository extends JpaRepository<Campaign, Long> {
 
     List<Campaign> findByProjectId(Long projectId);
+
+    List<Campaign> findByProjectIdIn(java.util.List<Long> projectIds);
 }

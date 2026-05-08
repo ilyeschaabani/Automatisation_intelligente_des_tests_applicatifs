@@ -25,6 +25,8 @@ public class TestCaseService {
     private final TestSuiteRepository testSuiteRepository;
     private final ProjectMemberRepository projectMemberRepository;
 
+    private final LlmService llmService;
+
     @Transactional
     public TestCaseResponse add(Long suiteId, CreateTestCaseRequest request) {
         TestSuite suite = getSuiteOrThrow(suiteId);
@@ -37,10 +39,26 @@ public class TestCaseService {
         tc.setType(TestCase.TestType.valueOf(request.getType().toUpperCase()));
         tc.setPriority(request.getPriority());
         tc.setRiskLevel(TestCase.RiskLevel.valueOf(request.getRiskLevel().toUpperCase()));
-        tc.setScriptPath(request.getScriptPath());
         tc.setTestData(request.getTestData());
         tc.setTags(request.getTags());
         tc.setMaxDurationSeconds(request.getMaxDurationSeconds());
+
+        // -------------------------------------------------------
+        // NOUVEAU : gestion du mode IA / manuel
+        // -------------------------------------------------------
+        if (Boolean.TRUE.equals(request.getUseAI())) {
+            String generatedCode = llmService.generateTestCode(
+                    request.getType(),
+                    request.getDescriptionAI()
+            );
+            tc.setGeneratedCode(generatedCode);
+            tc.setGenerated(true);
+            // On peut laisser scriptPath null, ou lui donner un nom symbolique
+        } else {
+            tc.setScriptPath(request.getScriptPath());
+            tc.setGenerated(false);
+        }
+
         tc = testCaseRepository.save(tc);
         return mapToResponse(tc);
     }
@@ -134,6 +152,8 @@ public class TestCaseService {
                 .active(tc.getActive())
                 .flaky(tc.getFlaky())
                 .createdAt(tc.getCreatedAt())
+                .generatedCode(tc.getGeneratedCode())
+                .generated(tc.getGenerated())
                 .build();
     }
 

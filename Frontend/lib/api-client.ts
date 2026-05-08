@@ -70,6 +70,7 @@ export type ExecutionResultBackendDto = {
   id: number
   campaignId: number
   testCaseId: number | null
+  testType?: string | null
   status: string // SUCCESS, FAILURE, ERROR
   durationMs: number | null
   errorMessage: string | null
@@ -104,7 +105,7 @@ export function mapExecutionResultToTestExecutionDto(result: ExecutionResultBack
     executionNumber: null,
     executionDate: result.executedAt,
     executionType: 'INITIAL',
-    status: result.status === 'SUCCESS' ? 'FINISHED' : result.status === 'ERROR' ? 'ERROR' : 'FINISHED',
+    status: result.status === 'SUCCESS' ? 'FINISHED' : 'ERROR',
     campaignId: campaignId,
   }
 }
@@ -249,6 +250,25 @@ export interface TestCampaignUpdateRequest {
   gitBranch?: string | null
   triggerMode?: string | null
   testCaseIds?: number[]
+}
+
+export interface TestCaseWithStatusDto {
+  id: number
+  title: string
+  description?: string | null
+  type?: string | null
+  priority?: number | null
+  riskLevel?: string | null
+  scriptPath?: string | null
+  tags?: string | null
+  maxDurationSeconds?: number | null
+  active?: boolean | null
+  flaky?: boolean | null
+  createdAt?: string | null
+  executionStatus?: ExecutionStatus | null
+  executionDurationMs?: number | null
+  lastExecutedAt?: string | null
+  lastErrorMessage?: string | null
 }
 
 export type RepoResolveResponse = {
@@ -627,9 +647,14 @@ export async function deleteExecution(id: number): Promise<void> {
   })
 }
 
-export async function listCampaigns(params: { projectId: number }): Promise<TestCampaignDto[]> {
-  const query = new URLSearchParams({ projectId: String(params.projectId) })
-  return requestJson<TestCampaignDto[]>(`/api/campaigns?${query.toString()}`, { cache: 'no-store' })
+export async function listCampaigns(params?: { projectId?: number }): Promise<TestCampaignDto[]> {
+  if (params?.projectId) {
+    const query = new URLSearchParams({ projectId: String(params.projectId) })
+    return requestJson<TestCampaignDto[]>(`/api/campaigns?${query.toString()}`, { cache: 'no-store' })
+  } else {
+    // Fetch all campaigns when projectId is not provided
+    return requestJson<TestCampaignDto[]>(`/api/campaigns`, { cache: 'no-store' })
+  }
 }
 
 export async function getCampaign(projectId: number, id: number): Promise<TestCampaignDto> {
@@ -639,6 +664,14 @@ export async function getCampaign(projectId: number, id: number): Promise<TestCa
     {
     cache: 'no-store',
     },
+  )
+}
+
+export async function getTestCasesForCampaign(projectId: number, campaignId: number): Promise<TestCaseWithStatusDto[]> {
+  const query = new URLSearchParams({ projectId: String(projectId) })
+  return requestJson<TestCaseWithStatusDto[]>(
+    `/api/campaigns/${encodeURIComponent(String(campaignId))}/testcases?${query.toString()}`,
+    { cache: 'no-store' },
   )
 }
 

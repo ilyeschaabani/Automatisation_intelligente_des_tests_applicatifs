@@ -2,6 +2,7 @@ package com.pfe.platform.ms_gestion.controller;
 
 import com.pfe.platform.ms_gestion.dto.request.CreateCampaignRequest;
 import com.pfe.platform.ms_gestion.dto.response.CampaignResponse;
+import com.pfe.platform.ms_gestion.dto.response.TestCaseWithStatusResponse;
 import com.pfe.platform.ms_gestion.service.CampaignService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -33,5 +34,11 @@ public class CampaignController {
     public ResponseEntity<CampaignResponse> get(@PathVariable Long projectId,
                                                 @PathVariable Long campaignId) {
         return ResponseEntity.ok(campaignService.getCampaign(projectId, campaignId));
+    }
+
+    @GetMapping("/{campaignId}/testcases")
+    public ResponseEntity<List<TestCaseWithStatusResponse>> getTestCases(@PathVariable Long projectId,
+                                                                          @PathVariable Long campaignId) {
+        return ResponseEntity.ok(campaignService.getTestCasesForCampaign(projectId, campaignId));
     }
 }

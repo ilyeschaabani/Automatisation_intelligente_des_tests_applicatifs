@@ -3,18 +3,24 @@ package com.pfe.platform.ms_gestion.service;
 
 import com.pfe.platform.ms_gestion.dto.request.CreateCampaignRequest;
 import com.pfe.platform.ms_gestion.dto.response.CampaignResponse;
+import com.pfe.platform.ms_gestion.dto.response.TestCaseWithStatusResponse;
 import com.pfe.platform.ms_gestion.entity.*;
 import com.pfe.platform.ms_gestion.repository.*;
 import com.pfe.platform.ms_gestion.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CampaignService {
     private final CampaignRepository campaignRepository;
     private final CampaignTestCaseRepository campaignTestCaseRepository;
@@ -22,6 +28,10 @@ public class CampaignService {
     private final EnvironmentRepository environmentRepository;
     private final TestCaseRepository testCaseRepository;
     private final ProjectMemberRepository projectMemberRepository;
+    private final RestTemplate restTemplate;
+
+    @Value("${ms-execution.service.url:http://localhost:8083}")
+    private String msExecutionUrl;
 
     @Transactional
     public CampaignResponse create(Long projectId, CreateCampaignRequest request) {
@@ -73,10 +83,91 @@ public class CampaignService {
                 .stream().map(this::mapToResponse).collect(Collectors.toList());
     }
 
+        public List<CampaignResponse> listAll() {
+            // List all campaigns accessible to the current user (campaigns in projects they're members of)
+            Long userId = SecurityUtils.getCurrentUserId();
+            List<Long> projectIds = projectMemberRepository.findByUserId(userId)
+                    .stream()
+                    .map(member -> member.getProject().getId())
+                    .collect(Collectors.toList());
+        
+            if (projectIds.isEmpty()) {
+                return List.of();
+            }
+        
+            return campaignRepository.findByProjectIdIn(projectIds)
+                    .stream().map(this::mapToResponse).collect(Collectors.toList());
+        }
     public CampaignResponse getCampaign(Long projectId, Long campaignId) {
         Campaign campaign = getCampaignOrThrow(campaignId, projectId);
         checkMembership(campaign.getProject(), SecurityUtils.getCurrentUserId());
         return mapToResponse(campaign);
+    }
+
+    public List<TestCaseWithStatusResponse> getTestCasesForCampaign(Long projectId, Long campaignId) {
+        Campaign campaign = getCampaignOrThrow(campaignId, projectId);
+        checkMembership(campaign.getProject(), SecurityUtils.getCurrentUserId());
+
+        // Fetch test cases linked to this campaign
+        List<CampaignTestCase> campaignTestCases = campaignTestCaseRepository.findByCampaignId(campaignId);
+        
+        // Fetch execution results from ms-execution
+        Map<Long, Map<String, Object>> executionStatusMap = new java.util.HashMap<>();
+        try {
+            String url = msExecutionUrl + "/api/execution/results/" + campaignId;
+            List<Map<String, Object>> results = restTemplate.getForObject(url, List.class);
+            if (results != null) {
+                for (Map<String, Object> result : results) {
+                    Long testCaseId = ((Number) result.get("testCaseId")).longValue();
+                    executionStatusMap.put(testCaseId, result);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Could not fetch execution results from ms-execution for campaign {}: {}", campaignId, e.getMessage());
+        }
+
+        // Map to response DTOs
+        return campaignTestCases.stream()
+                .map(ctc -> mapTestCaseToResponse(ctc.getTestCase(), executionStatusMap.get(ctc.getTestCase().getId())))
+                .sorted((a, b) -> a.getId().compareTo(b.getId()))
+                .collect(Collectors.toList());
+    }
+
+    private TestCaseWithStatusResponse mapTestCaseToResponse(TestCase tc, Map<String, Object> executionResult) {
+        String executionStatus = null;
+        Long executionDurationMs = null;
+        String lastErrorMessage = null;
+
+        if (executionResult != null) {
+            Object status = executionResult.get("status");
+            if (status != null) {
+                // Map backend status (SUCCESS, FAILURE, ERROR) to frontend status
+                String backendStatus = status.toString();
+                executionStatus = backendStatus.equals("SUCCESS") ? "FINISHED" : "ERROR";
+            }
+            executionDurationMs = executionResult.get("durationMs") != null 
+                ? ((Number) executionResult.get("durationMs")).longValue() 
+                : null;
+            lastErrorMessage = (String) executionResult.get("errorMessage");
+        }
+
+        return TestCaseWithStatusResponse.builder()
+                .id(tc.getId())
+                .title(tc.getTitle())
+                .description(tc.getDescription())
+                .type(tc.getType() != null ? tc.getType().name() : null)
+                .priority(tc.getPriority())
+                .riskLevel(tc.getRiskLevel() != null ? tc.getRiskLevel().name() : null)
+                .scriptPath(tc.getScriptPath())
+                .tags(tc.getTags())
+                .maxDurationSeconds(tc.getMaxDurationSeconds())
+                .active(tc.getActive())
+                .flaky(tc.getFlaky())
+                .createdAt(tc.getCreatedAt())
+                .executionStatus(executionStatus)
+                .executionDurationMs(executionDurationMs)
+                .lastErrorMessage(lastErrorMessage)
+                .build();
     }
 
     // Méthodes privées (réutiliser les mêmes que dans les autres services,

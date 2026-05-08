@@ -8,6 +8,7 @@ public class ExecutionResultDto {
     private Long id;
     private Long campaignId;
     private Long testCaseId;
+    private String testType;
     private String status;
     private Long durationMs;
     private String errorMessage;
@@ -18,11 +19,12 @@ public class ExecutionResultDto {
     public ExecutionResultDto() {
     }
 
-    public ExecutionResultDto(Long id, Long campaignId, Long testCaseId, String status, Long durationMs,
+    public ExecutionResultDto(Long id, Long campaignId, Long testCaseId, String testType, String status, Long durationMs,
                               String errorMessage, String logs, String screenshotUrl, LocalDateTime executedAt) {
         this.id = id;
         this.campaignId = campaignId;
         this.testCaseId = testCaseId;
+        this.testType = testType;
         this.status = status;
         this.durationMs = durationMs;
         this.errorMessage = errorMessage;
@@ -53,6 +55,14 @@ public class ExecutionResultDto {
 
     public void setTestCaseId(Long testCaseId) {
         this.testCaseId = testCaseId;
+    }
+
+    public String getTestType() {
+        return testType;
+    }
+
+    public void setTestType(String testType) {
+        this.testType = testType;
     }
 
     public String getStatus() {
@@ -108,6 +118,7 @@ public class ExecutionResultDto {
                 entity.getId(),
                 entity.getCampaignId(),
                 entity.getTestCaseId(),
+                entity.getTestType() != null ? entity.getTestType().name() : null,
                 entity.getStatus() != null ? entity.getStatus().name() : null,
                 entity.getDurationMs(),
                 entity.getErrorMessage(),

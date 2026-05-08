@@ -43,8 +43,17 @@ public class ExecutionController {
                 return ResponseEntity.ok(CampaignRunResponseDto.alreadyRunning(campaignId));
             }
 
+            // Set status to RUNNING immediately before starting async execution
+            campaign.setStatus(Campaign.CampaignStatus.RUNNING);
+            campaign.setStartedAt(java.time.LocalDateTime.now());
+            campaign.setProgress(5);
+            campaign.setCurrentStep("Cloning repository");
+            campaignRepository.save(campaign);
+
+            // Start async execution
             executionService.runCampaign(campaignId);
             
+            // Return the updated campaign status immediately
             List<ExecutionResultDto> results = executionResultRepository.findByCampaignId(campaignId)
                     .stream()
                     .map(ExecutionResultDto::fromEntity)

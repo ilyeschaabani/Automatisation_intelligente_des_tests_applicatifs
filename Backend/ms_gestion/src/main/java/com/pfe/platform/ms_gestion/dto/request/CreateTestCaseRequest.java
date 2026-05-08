@@ -18,4 +18,7 @@ public class CreateTestCaseRequest {
     private String testData; // JSON
     private String tags;
     private Integer maxDurationSeconds;
+    private String generatedCode;      // optionnel, rempli par l'IA
+    private Boolean useAI = false;     // si true, on génère
+    private String descriptionAI;      // description en langage naturel
 }

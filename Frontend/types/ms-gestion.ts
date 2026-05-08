@@ -1,5 +1,5 @@
 export type ProjectStatus = 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
-export type TestType = 'WEB' | 'API';
+export type TestType = 'WEB' | 'API' | 'UNIT' | 'INTEGRATION';
 export type RiskLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 export type MemberRole = 'ADMIN' | 'TESTER' | 'DEVOPS';
 

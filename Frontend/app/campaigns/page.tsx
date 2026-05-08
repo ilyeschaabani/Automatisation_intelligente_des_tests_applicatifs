@@ -84,16 +84,12 @@ export default function CampaignsPage() {
   }, [])
 
   useEffect(() => {
-    if (!selectedProjectId) {
-      setCampaigns([])
-      return
-    }
-
     let cancelled = false
     const run = async () => {
       setCampaignsLoading(true)
       try {
-        const data = await listCampaigns({ projectId: selectedProjectId })
+        // Load all campaigns without project filter
+        const data = await listCampaigns({})
         if (cancelled) return
         setCampaigns(Array.isArray(data) ? data : [])
       } catch (error) {
@@ -111,7 +107,7 @@ export default function CampaignsPage() {
     return () => {
       cancelled = true
     }
-  }, [selectedProjectId])
+  }, [])  // Empty dependency array - load all campaigns on mount
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()

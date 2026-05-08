@@ -435,6 +435,8 @@ export default function SuiteTestCasesPage() {
               <SelectContent>
                 <SelectItem value="WEB">WEB</SelectItem>
                 <SelectItem value="API">API</SelectItem>
+                <SelectItem value="UNIT">UNIT</SelectItem>
+                <SelectItem value="INTEGRATION">INTEGRATION</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -559,6 +561,8 @@ export default function SuiteTestCasesPage() {
               <SelectContent>
                 <SelectItem value="WEB">WEB</SelectItem>
                 <SelectItem value="API">API</SelectItem>
+                <SelectItem value="UNIT">UNIT</SelectItem>
+                <SelectItem value="INTEGRATION">INTEGRATION</SelectItem>
               </SelectContent>
             </Select>
           </div>

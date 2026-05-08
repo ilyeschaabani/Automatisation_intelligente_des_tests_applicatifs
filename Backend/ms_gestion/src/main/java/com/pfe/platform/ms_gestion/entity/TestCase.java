@@ -50,6 +50,11 @@ public class TestCase {
     private Integer maxDurationSeconds;
 
     private Boolean active = true;
+    @Column(columnDefinition = "TEXT")
+    private String generatedCode;
+
+    @Column(nullable = false)
+    private Boolean generated = false;
 
     private Boolean flaky = false;
 
