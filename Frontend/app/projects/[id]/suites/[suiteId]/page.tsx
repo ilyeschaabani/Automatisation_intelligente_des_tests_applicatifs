@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronLeft, Plus, RefreshCw, Trash2, Wand2 } from 'lucide-react'
+import { Switch } from '@/components/ui/switch'
 
 import { AuthGuard } from '@/components/auth-guard'
 import { Header } from '@/components/header'
@@ -32,7 +33,9 @@ import {
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { testCaseService } from '@/services/testCases'
+import { llmService } from '@/services/llm'
 import { testSuiteService } from '@/services/suites'
+import { projectService } from '@/services/projects'
 import type {
   CreateTestCaseRequest,
   RiskLevel,
@@ -40,6 +43,7 @@ import type {
   TestSuite,
   TestType,
   UpdateTestCaseRequest,
+  Project,
 } from '@/types/ms-gestion'
 
 type LoadState = 'loading' | 'ready' | 'error'
@@ -68,6 +72,21 @@ const emptyCaseForm: CaseFormState = {
   maxDurationSeconds: '',
 }
 
+// Additional UI state for AI generation
+type AICaseState = {
+  useAI: boolean
+  descriptionAI: string
+  generatedCode: string
+  codeValidated: boolean
+}
+
+const emptyAICase: AICaseState = {
+  useAI: false,
+  descriptionAI: '',
+  generatedCode: '',
+  codeValidated: false,
+}
+
 const formatDate = (value?: string) => {
   if (!value) return '—'
   const date = new Date(value)
@@ -84,6 +103,7 @@ export default function SuiteTestCasesPage() {
   const hasIds = Number.isFinite(projectId) && Number.isFinite(suiteId)
 
   const [suite, setSuite] = useState<TestSuite | null>(null)
+  const [project, setProject] = useState<Project | null>(null)
   const [suiteState, setSuiteState] = useState<LoadState>('loading')
   const [suiteError, setSuiteError] = useState<string | null>(null)
 
@@ -93,6 +113,8 @@ export default function SuiteTestCasesPage() {
 
   const [formState, setFormState] = useState<CaseFormState>(emptyCaseForm)
   const [formError, setFormError] = useState<string | null>(null)
+  const [aiState, setAiState] = useState<AICaseState>(emptyAICase)
+  const [generating, setGenerating] = useState(false)
 
   const [createOpen, setCreateOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
@@ -117,6 +139,16 @@ export default function SuiteTestCasesPage() {
     }
   }
 
+  const loadProject = async () => {
+    if (!hasIds) return
+    try {
+      const p = await projectService.getById(projectId)
+      setProject(p)
+    } catch (e) {
+      setProject(null)
+    }
+  }
+
   const loadCases = async () => {
     if (!hasIds) return
     setCaseState('loading')
@@ -133,7 +165,7 @@ export default function SuiteTestCasesPage() {
   }
 
   const loadAll = async () => {
-    await Promise.all([loadSuite(), loadCases()])
+    await Promise.all([loadSuite(), loadCases(), loadProject()])
   }
 
   useEffect(() => {
@@ -144,11 +176,49 @@ export default function SuiteTestCasesPage() {
   const resetForm = () => {
     setFormState(emptyCaseForm)
     setFormError(null)
+    setAiState(emptyAICase)
   }
 
-  const openCreate = () => {
+  const openCreate = async () => {
     resetForm()
+    // Ensure we have project info before opening so UI can default to AI mode
+    try {
+      let p = project
+      if (!p) {
+        p = await projectService.getById(projectId)
+        setProject(p)
+      }
+      if (p && p.aiProject) {
+        setAiState((prev) => ({ ...prev, useAI: true }))
+      } else {
+        setAiState(emptyAICase)
+      }
+    } catch (e) {
+      setAiState(emptyAICase)
+    }
     setCreateOpen(true)
+  }
+
+  const generateScript = async () => {
+    setFormError(null)
+    if (!formState.type) {
+      setFormError('Select a test type before generating.')
+      return
+    }
+    setGenerating(true)
+    try {
+      const payload = { type: formState.type, description: aiState.descriptionAI || formState.description }
+      const resp = await llmService.generateTest(payload)
+      setAiState((prev) => ({ ...prev, generatedCode: resp.generatedCode, codeValidated: false }))
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to generate script')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  const validateScript = () => {
+    setAiState((prev) => ({ ...prev, codeValidated: true }))
   }
 
   const openEdit = (testCase: TestCase) => {
@@ -166,6 +236,13 @@ export default function SuiteTestCasesPage() {
         testCase.maxDurationSeconds != null ? String(testCase.maxDurationSeconds) : '',
     })
     setEditOpen(true)
+    // if this case was generated, prefill AI state
+    setAiState({
+      useAI: Boolean(project?.aiProject) || Boolean((testCase as any).useAI),
+      descriptionAI: '',
+      generatedCode: String((testCase as any).generatedCode ?? ''),
+      codeValidated: Boolean((testCase as any).generated),
+    })
   }
 
   const openDelete = (testCase: TestCase) => {
@@ -205,6 +282,35 @@ export default function SuiteTestCasesPage() {
       testData: formState.testData.trim() || undefined,
       tags: formState.tags.trim() || undefined,
       maxDurationSeconds,
+    }
+
+    // Three cases for code handling:
+    // 1. If generatedCode exists (and validated) -> send it
+    // 2. If project.aiProject OR useAI=true with description -> backend regenerates
+    // 3. Otherwise -> manual mode with scriptPath
+    if (aiState.generatedCode && aiState.generatedCode.trim()) {
+      // Case 1: User has generated/edited code and validated it
+      if (!aiState.codeValidated) {
+        setFormError('You must validate the generated script before saving.')
+        return null
+      }
+      payload.generatedCode = aiState.generatedCode
+      payload.useAI = false
+    } else if ((project?.aiProject && aiState.descriptionAI && aiState.descriptionAI.trim()) || (aiState.useAI && aiState.descriptionAI && aiState.descriptionAI.trim())) {
+      // Case 2: Backend should regenerate from AI description (project forces AI or user requested AI)
+      payload.useAI = true
+      payload.descriptionAI = aiState.descriptionAI
+      // When project forces AI, we must not send a scriptPath
+      if (project?.aiProject) {
+        delete (payload as any).scriptPath
+      }
+    } else if (project?.aiProject) {
+      // Project requires AI but no description provided
+      setFormError('AI description is required for AI projects.')
+      return null
+    } else {
+      // Case 3: Manual mode
+      payload.useAI = false
     }
 
     return payload
@@ -399,6 +505,8 @@ export default function SuiteTestCasesPage() {
         description="Define the test case details."
         submitLabel="Create test case"
         isSubmitting={isSubmitting}
+        disableSubmit={aiState.useAI && !aiState.codeValidated}
+        size="xl"
         onSubmit={submitCreate}
       >
         <div className="space-y-2">
@@ -422,6 +530,71 @@ export default function SuiteTestCasesPage() {
             placeholder="Optional description"
           />
         </div>
+        <div className="flex items-center gap-3">
+          <Label>Mode</Label>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Manual</span>
+            <Switch
+              checked={project?.aiProject ? true : aiState.useAI}
+              onCheckedChange={(v) => {
+                if (project?.aiProject) return
+                setAiState((prev) => ({ ...prev, useAI: Boolean(v) }))
+              }}
+              disabled={Boolean(project?.aiProject)}
+            />
+            <span className="text-sm text-muted-foreground">AI</span>
+          </div>
+        </div>
+
+        {(project?.aiProject || aiState.useAI) ? (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="case-description-ai">AI description {project?.aiProject ? <span className="text-destructive">*</span> : null}</Label>
+              <Textarea
+                id="case-description-ai"
+                value={aiState.descriptionAI}
+                onChange={(e) => setAiState((prev) => ({ ...prev, descriptionAI: e.target.value }))}
+                placeholder="Describe what the test should do in natural language"
+                required={Boolean(project?.aiProject)}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={generateScript} disabled={generating}>
+                {generating ? 'Generating…' : 'Generate script'}
+              </Button>
+              {aiState.generatedCode ? (
+                <Button type="button" onClick={() => setAiState((prev) => ({ ...prev, generatedCode: '', codeValidated: false }))} variant="ghost">
+                  Regenerate
+                </Button>
+              ) : null}
+            </div>
+
+            {aiState.generatedCode ? (
+              <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-semibold">Generated code (editable)</Label>
+                  <span className="text-xs text-muted-foreground">Click to edit</span>
+                </div>
+                <Textarea
+                  className="font-mono text-sm bg-background resize-none focus:ring-2 focus:ring-primary/50"
+                  value={aiState.generatedCode}
+                  onChange={(e) => setAiState((prev) => ({ ...prev, generatedCode: e.target.value, codeValidated: false }))}
+                  rows={20}
+                />
+                <div className="flex gap-2 pt-2">
+                  <Button type="button" onClick={validateScript} disabled={aiState.codeValidated}>
+                    {aiState.codeValidated ? '✓ Validated' : 'Validate script'}
+                  </Button>
+                  {aiState.codeValidated && (
+                    <span className="text-xs text-green-600 flex items-center gap-1">
+                      ✓ Code validated and ready to save
+                    </span>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </>
+        ) : null}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Type</Label>
@@ -488,17 +661,19 @@ export default function SuiteTestCasesPage() {
             />
           </div>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="case-script">Script path</Label>
-          <Input
-            id="case-script"
-            value={formState.scriptPath}
-            onChange={(event) =>
-              setFormState((prev) => ({ ...prev, scriptPath: event.target.value }))
-            }
-            placeholder="tests/login.spec.ts"
-          />
-        </div>
+        {!(project?.aiProject || aiState.useAI) ? (
+          <div className="space-y-2">
+            <Label htmlFor="case-script">Script path</Label>
+            <Input
+              id="case-script"
+              value={formState.scriptPath}
+              onChange={(event) =>
+                setFormState((prev) => ({ ...prev, scriptPath: event.target.value }))
+              }
+              placeholder="tests/login.spec.ts"
+            />
+          </div>
+        ) : null}
         <div className="space-y-2">
           <Label htmlFor="case-tags">Tags</Label>
           <Input
@@ -527,6 +702,8 @@ export default function SuiteTestCasesPage() {
         description="Update the test case metadata."
         submitLabel="Save changes"
         isSubmitting={isSubmitting}
+        disableSubmit={aiState.useAI && !aiState.codeValidated}
+        size="xl"
         onSubmit={submitEdit}
       >
         <div className="space-y-2">
@@ -548,6 +725,69 @@ export default function SuiteTestCasesPage() {
             }
           />
         </div>
+        <div className="flex items-center gap-3">
+          <Label>Mode</Label>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Manual</span>
+            <Switch
+              checked={project?.aiProject ? true : aiState.useAI}
+              onCheckedChange={(v) => {
+                if (project?.aiProject) return
+                setAiState((prev) => ({ ...prev, useAI: Boolean(v) }))
+              }}
+              disabled={Boolean(project?.aiProject)}
+            />
+            <span className="text-sm text-muted-foreground">AI</span>
+          </div>
+        </div>
+
+        {(project?.aiProject || aiState.useAI) ? (
+          <>
+            <div className="space-y-2">
+              <Label>AI description</Label>
+              <Textarea
+                value={aiState.descriptionAI}
+                onChange={(e) => setAiState((prev) => ({ ...prev, descriptionAI: e.target.value }))}
+                placeholder="Describe what the test should do in natural language"
+              />
+            </div>
+            <div className="flex gap-2 mb-2">
+              <Button type="button" variant="outline" onClick={generateScript} disabled={generating}>
+                {generating ? 'Generating…' : 'Generate script'}
+              </Button>
+              {aiState.generatedCode ? (
+                <Button type="button" onClick={() => setAiState((prev) => ({ ...prev, generatedCode: '', codeValidated: false }))} variant="ghost">
+                  Regenerate
+                </Button>
+              ) : null}
+            </div>
+
+            {aiState.generatedCode ? (
+              <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-semibold">Generated code (editable)</Label>
+                  <span className="text-xs text-muted-foreground">Click to edit</span>
+                </div>
+                <Textarea
+                  className="font-mono text-sm bg-background resize-none focus:ring-2 focus:ring-primary/50"
+                  value={aiState.generatedCode}
+                  onChange={(e) => setAiState((prev) => ({ ...prev, generatedCode: e.target.value, codeValidated: false }))}
+                  rows={20}
+                />
+                <div className="flex gap-2 pt-2">
+                  <Button type="button" onClick={validateScript} disabled={aiState.codeValidated}>
+                    {aiState.codeValidated ? '✓ Validated' : 'Validate script'}
+                  </Button>
+                  {aiState.codeValidated && (
+                    <span className="text-xs text-green-600 flex items-center gap-1">
+                      ✓ Code validated and ready to save
+                    </span>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </>
+        ) : null}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Type</Label>
@@ -612,16 +852,18 @@ export default function SuiteTestCasesPage() {
             />
           </div>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="case-edit-script">Script path</Label>
-          <Input
-            id="case-edit-script"
-            value={formState.scriptPath}
-            onChange={(event) =>
-              setFormState((prev) => ({ ...prev, scriptPath: event.target.value }))
-            }
-          />
-        </div>
+        {!(project?.aiProject || aiState.useAI) ? (
+          <div className="space-y-2">
+            <Label htmlFor="case-edit-script">Script path</Label>
+            <Input
+              id="case-edit-script"
+              value={formState.scriptPath}
+              onChange={(event) =>
+                setFormState((prev) => ({ ...prev, scriptPath: event.target.value }))
+              }
+            />
+          </div>
+        ) : null}
         <div className="space-y-2">
           <Label htmlFor="case-edit-tags">Tags</Label>
           <Input

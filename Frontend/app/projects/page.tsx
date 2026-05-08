@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
@@ -43,6 +44,7 @@ type ProjectFormState = {
   description: string
   gitRepoUrl: string
   gitDefaultBranch: string
+  useAiMode: boolean // Use internal Maven template without Git repo
 }
 
 type GitHubMeResponse = {
@@ -89,6 +91,7 @@ const emptyForm: ProjectFormState = {
   description: '',
   gitRepoUrl: '',
   gitDefaultBranch: 'main',
+  useAiMode: false,
 }
 
 const statusVariant: Record<
@@ -284,7 +287,8 @@ export default function ProjectsPage() {
     return projects.filter((project) => {
       const name = String(project.name ?? '').toLowerCase()
       const repo = String(project.gitRepoUrl ?? '').toLowerCase()
-      return name.includes(query) || repo.includes(query)
+      const isAi = project.aiProject || project.aiBuiltin || !project.gitRepoUrl || project.gitRepoUrl === 'ai-builtin'
+      return name.includes(query) || repo.includes(query) || (isAi && 'ia'.includes(query))
     })
   }, [projects, search])
 
@@ -305,11 +309,13 @@ export default function ProjectsPage() {
   const openEdit = (project: Project) => {
     setEditingProject(project)
     setFormError(null)
+    const isAiMode = project.aiProject || !project.gitRepoUrl || project.gitRepoUrl === 'ai-builtin' || project.aiBuiltin
     setFormState({
       name: project.name ?? '',
       description: project.description ?? '',
       gitRepoUrl: project.gitRepoUrl ?? '',
       gitDefaultBranch: project.gitDefaultBranch ?? 'main',
+      useAiMode: isAiMode,
     })
     setSelectedBranch(project.gitDefaultBranch ?? 'main')
     setSelectedRepoKey('')
@@ -515,7 +521,7 @@ export default function ProjectsPage() {
     setIsSubmitting(true)
     setFormError(null)
 
-    if (selectedRepoKey && !formState.gitDefaultBranch.trim()) {
+    if (!formState.useAiMode && selectedRepoKey && !formState.gitDefaultBranch.trim()) {
       setFormError('Select a default branch for the repository.')
       setIsSubmitting(false)
       return
@@ -525,8 +531,9 @@ export default function ProjectsPage() {
       const payload: CreateProjectRequest = {
         name: formState.name.trim(),
         description: formState.description.trim() || undefined,
-        gitRepoUrl: formState.gitRepoUrl.trim() || undefined,
-        gitDefaultBranch: formState.gitDefaultBranch.trim() || 'main',
+        gitRepoUrl: formState.useAiMode ? 'ai-builtin' : formState.gitRepoUrl.trim() || undefined,
+        gitDefaultBranch: formState.useAiMode ? 'main' : formState.gitDefaultBranch.trim() || 'main',
+        aiBuiltin: formState.useAiMode,
       }
       await projectService.create(payload)
       setCreateOpen(false)
@@ -545,7 +552,7 @@ export default function ProjectsPage() {
     setIsSubmitting(true)
     setFormError(null)
 
-    if (selectedRepoKey && !formState.gitDefaultBranch.trim()) {
+    if (!formState.useAiMode && selectedRepoKey && !formState.gitDefaultBranch.trim()) {
       setFormError('Select a default branch for the repository.')
       setIsSubmitting(false)
       return
@@ -555,8 +562,9 @@ export default function ProjectsPage() {
       const payload: UpdateProjectRequest = {
         name: formState.name.trim(),
         description: formState.description.trim() || undefined,
-        gitRepoUrl: formState.gitRepoUrl.trim() || undefined,
-        gitDefaultBranch: formState.gitDefaultBranch.trim() || 'main',
+        gitRepoUrl: formState.useAiMode ? 'ai-builtin' : formState.gitRepoUrl.trim() || undefined,
+        gitDefaultBranch: formState.useAiMode ? 'main' : formState.gitDefaultBranch.trim() || 'main',
+        aiBuiltin: formState.useAiMode,
       }
       await projectService.update(editingProject.id, payload)
       setEditOpen(false)
@@ -651,12 +659,19 @@ export default function ProjectsPage() {
                     {filteredProjects.map((project) => (
                       <TableRow key={project.id}>
                         <TableCell className="font-medium">
-                          <Link
-                            href={`/projects/${project.id}`}
-                            className="text-primary hover:underline"
-                          >
-                            {project.name}
-                          </Link>
+                          <div className="flex items-center gap-2">
+                            <Link
+                              href={`/projects/${project.id}`}
+                              className="text-primary hover:underline"
+                            >
+                              {project.name}
+                            </Link>
+                            {(project.aiProject || project.aiBuiltin || !project.gitRepoUrl || project.gitRepoUrl === 'ai-builtin') ? (
+                              <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                                IA
+                              </Badge>
+                            ) : null}
+                          </div>
                         </TableCell>
                         <TableCell>{project.gitRepoUrl || '—'}</TableCell>
                         <TableCell>{project.gitDefaultBranch || 'main'}</TableCell>
@@ -728,9 +743,22 @@ export default function ProjectsPage() {
             placeholder="Optional description"
           />
         </div>
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Label>GitHub repository</Label>
+
+        <div className="flex items-center gap-3">
+          <Label htmlFor="project-ai-mode">Use AI-built template (no Git repo)</Label>
+          <Switch
+            id="project-ai-mode"
+            checked={formState.useAiMode}
+            onCheckedChange={(checked) =>
+              setFormState((prev) => ({ ...prev, useAiMode: checked }))
+            }
+          />
+        </div>
+
+        {!formState.useAiMode ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label>GitHub repository</Label>
             {gitHubConnection.kind === 'notConnected' && connectUrl ? (
               <Button variant="outline" size="sm" asChild>
                 <a href={connectUrl}>Connect GitHub</a>
@@ -800,47 +828,48 @@ export default function ProjectsPage() {
               <Input value={formState.gitRepoUrl} readOnly placeholder="Repository URL" />
             </div>
           ) : null}
+
+          <div className="space-y-2">
+            <Label>Default branch</Label>
+            {branchState.kind === 'loading' ? (
+              <p className="text-sm text-muted-foreground">Loading branches...</p>
+            ) : null}
+
+            {branchState.kind === 'error' ? (
+              <p className="text-sm text-destructive">{branchState.message}</p>
+            ) : null}
+
+            {branchState.kind === 'available' && branchState.branches.length > 0 ? (
+              <Select
+                value={selectedBranch}
+                onValueChange={(value) => {
+                  setSelectedBranch(value)
+                  setFormState((prev) => ({ ...prev, gitDefaultBranch: value }))
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branchState.branches.map((branch) => (
+                    <SelectItem key={branch} value={branch}>
+                      {branch}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input
+                value={formState.gitDefaultBranch}
+                onChange={(event) =>
+                  setFormState((prev) => ({ ...prev, gitDefaultBranch: event.target.value }))
+                }
+                placeholder="main"
+              />
+            )}
+          </div>
         </div>
-
-        <div className="space-y-2">
-          <Label>Default branch</Label>
-          {branchState.kind === 'loading' ? (
-            <p className="text-sm text-muted-foreground">Loading branches...</p>
-          ) : null}
-
-          {branchState.kind === 'error' ? (
-            <p className="text-sm text-destructive">{branchState.message}</p>
-          ) : null}
-
-          {branchState.kind === 'available' && branchState.branches.length > 0 ? (
-            <Select
-              value={selectedBranch}
-              onValueChange={(value) => {
-                setSelectedBranch(value)
-                setFormState((prev) => ({ ...prev, gitDefaultBranch: value }))
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a branch" />
-              </SelectTrigger>
-              <SelectContent>
-                {branchState.branches.map((branch) => (
-                  <SelectItem key={branch} value={branch}>
-                    {branch}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <Input
-              value={formState.gitDefaultBranch}
-              onChange={(event) =>
-                setFormState((prev) => ({ ...prev, gitDefaultBranch: event.target.value }))
-              }
-              placeholder="main"
-            />
-          )}
-        </div>
+        ) : null}
         {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
       </FormDialog>
 
@@ -874,9 +903,22 @@ export default function ProjectsPage() {
             }
           />
         </div>
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Label>GitHub repository</Label>
+
+        <div className="flex items-center gap-3">
+          <Label htmlFor="edit-project-ai-mode">Use AI-built template (no Git repo)</Label>
+          <Switch
+            id="edit-project-ai-mode"
+            checked={formState.useAiMode}
+            onCheckedChange={(checked) =>
+              setFormState((prev) => ({ ...prev, useAiMode: checked }))
+            }
+          />
+        </div>
+
+        {!formState.useAiMode ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label>GitHub repository</Label>
             {gitHubConnection.kind === 'notConnected' && connectUrl ? (
               <Button variant="outline" size="sm" asChild>
                 <a href={connectUrl}>Connect GitHub</a>
@@ -946,47 +988,48 @@ export default function ProjectsPage() {
               <Input value={formState.gitRepoUrl} readOnly placeholder="Repository URL" />
             </div>
           ) : null}
+
+          <div className="space-y-2">
+            <Label>Default branch</Label>
+            {branchState.kind === 'loading' ? (
+              <p className="text-sm text-muted-foreground">Loading branches...</p>
+            ) : null}
+
+            {branchState.kind === 'error' ? (
+              <p className="text-sm text-destructive">{branchState.message}</p>
+            ) : null}
+
+            {branchState.kind === 'available' && branchState.branches.length > 0 ? (
+              <Select
+                value={selectedBranch}
+                onValueChange={(value) => {
+                  setSelectedBranch(value)
+                  setFormState((prev) => ({ ...prev, gitDefaultBranch: value }))
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branchState.branches.map((branch) => (
+                    <SelectItem key={branch} value={branch}>
+                      {branch}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input
+                value={formState.gitDefaultBranch}
+                onChange={(event) =>
+                  setFormState((prev) => ({ ...prev, gitDefaultBranch: event.target.value }))
+                }
+                placeholder="main"
+              />
+            )}
+          </div>
         </div>
-
-        <div className="space-y-2">
-          <Label>Default branch</Label>
-          {branchState.kind === 'loading' ? (
-            <p className="text-sm text-muted-foreground">Loading branches...</p>
-          ) : null}
-
-          {branchState.kind === 'error' ? (
-            <p className="text-sm text-destructive">{branchState.message}</p>
-          ) : null}
-
-          {branchState.kind === 'available' && branchState.branches.length > 0 ? (
-            <Select
-              value={selectedBranch}
-              onValueChange={(value) => {
-                setSelectedBranch(value)
-                setFormState((prev) => ({ ...prev, gitDefaultBranch: value }))
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a branch" />
-              </SelectTrigger>
-              <SelectContent>
-                {branchState.branches.map((branch) => (
-                  <SelectItem key={branch} value={branch}>
-                    {branch}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <Input
-              value={formState.gitDefaultBranch}
-              onChange={(event) =>
-                setFormState((prev) => ({ ...prev, gitDefaultBranch: event.target.value }))
-              }
-              placeholder="main"
-            />
-          )}
-        </div>
+        ) : null}
         {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
       </FormDialog>
 

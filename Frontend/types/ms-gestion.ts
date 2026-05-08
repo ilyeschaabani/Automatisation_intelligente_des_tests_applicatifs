@@ -10,6 +10,8 @@ export interface Project {
   gitRepoUrl?: string;
   gitDefaultBranch: string;
   status: ProjectStatus;
+  aiBuiltin?: boolean; // True when project uses AI-built template (no Git repo)
+  aiProject?: boolean; // True when project is considered AI (no git repo)
   createdAt: string;
 }
 
@@ -18,6 +20,7 @@ export interface CreateProjectRequest {
   description?: string;
   gitRepoUrl?: string;
   gitDefaultBranch?: string; // default 'main'
+  aiBuiltin?: boolean; // True to use internal Maven template without Git
 }
 
 export interface UpdateProjectRequest extends CreateProjectRequest {}
@@ -63,6 +66,10 @@ export interface TestCase {
   priority?: number;
   riskLevel?: RiskLevel;
   scriptPath?: string;
+  // Fields for AI-generated tests
+  generated?: boolean;
+  generatedCode?: string | null;
+  useAI?: boolean;
   testData?: string; // JSON string
   tags?: string;
   maxDurationSeconds?: number;
@@ -78,6 +85,11 @@ export interface CreateTestCaseRequest {
   priority?: number;
   riskLevel?: RiskLevel;
   scriptPath?: string;
+  // AI-related fields
+  useAI?: boolean;
+  descriptionAI?: string;
+  generatedCode?: string;
+  generated?: boolean;
   testData?: string;
   tags?: string;
   maxDurationSeconds?: number;

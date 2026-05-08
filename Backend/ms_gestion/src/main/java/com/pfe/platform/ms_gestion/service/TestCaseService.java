@@ -1,6 +1,7 @@
 package com.pfe.platform.ms_gestion.service;
 
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pfe.platform.ms_gestion.dto.request.CreateTestCaseRequest;
 import com.pfe.platform.ms_gestion.dto.response.TestCaseResponse;
 import com.pfe.platform.ms_gestion.entity.Project;
@@ -26,6 +27,7 @@ public class TestCaseService {
     private final ProjectMemberRepository projectMemberRepository;
 
     private final LlmService llmService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Transactional
     public TestCaseResponse add(Long suiteId, CreateTestCaseRequest request) {
@@ -39,24 +41,51 @@ public class TestCaseService {
         tc.setType(TestCase.TestType.valueOf(request.getType().toUpperCase()));
         tc.setPriority(request.getPriority());
         tc.setRiskLevel(TestCase.RiskLevel.valueOf(request.getRiskLevel().toUpperCase()));
-        tc.setTestData(request.getTestData());
+        tc.setTestData(ensureValidJson(request.getTestData()));
         tc.setTags(request.getTags());
         tc.setMaxDurationSeconds(request.getMaxDurationSeconds());
 
         // -------------------------------------------------------
-        // NOUVEAU : gestion du mode IA / manuel
+        // Gestion du mode IA / manuel
+        // Si le projet parent est en mode IA (pas de gitRepoUrl), on force la génération IA
+        // Sinon, conserver le comportement précédent (useAI / generatedCode / scriptPath)
         // -------------------------------------------------------
-        if (Boolean.TRUE.equals(request.getUseAI())) {
+        boolean projectIsAi = false;
+        if (suite.getProject() != null) {
+            String repo = suite.getProject().getGitRepoUrl();
+            projectIsAi = (repo == null || repo.isBlank());
+        }
+
+        if (projectIsAi) {
+            // Force generation from LLM using descriptionAI if provided, otherwise use description
+            String promptDesc = request.getDescriptionAI() != null && !request.getDescriptionAI().isBlank()
+                    ? request.getDescriptionAI()
+                    : request.getDescription();
             String generatedCode = llmService.generateTestCode(
                     request.getType(),
-                    request.getDescriptionAI()
+                    promptDesc
             );
             tc.setGeneratedCode(generatedCode);
             tc.setGenerated(true);
-            // On peut laisser scriptPath null, ou lui donner un nom symbolique
+            // do not set scriptPath
         } else {
-            tc.setScriptPath(request.getScriptPath());
-            tc.setGenerated(false);
+            if (Boolean.TRUE.equals(request.getUseAI()) && request.getDescriptionAI() != null) {
+                // Cas 1 : régénérer depuis l'IA
+                String generatedCode = llmService.generateTestCode(
+                        request.getType(),
+                        request.getDescriptionAI()
+                );
+                tc.setGeneratedCode(generatedCode);
+                tc.setGenerated(true);
+            } else if (request.getGeneratedCode() != null && !request.getGeneratedCode().trim().isEmpty()) {
+                // Cas 2 : code généré/édité par l'utilisateur
+                tc.setGeneratedCode(request.getGeneratedCode());
+                tc.setGenerated(true);
+            } else {
+                // Cas 3 : mode manuel
+                tc.setScriptPath(request.getScriptPath());
+                tc.setGenerated(false);
+            }
         }
 
         tc = testCaseRepository.save(tc);
@@ -86,10 +115,30 @@ public class TestCaseService {
         tc.setType(TestCase.TestType.valueOf(request.getType().toUpperCase()));
         tc.setPriority(request.getPriority());
         tc.setRiskLevel(TestCase.RiskLevel.valueOf(request.getRiskLevel().toUpperCase()));
-        tc.setScriptPath(request.getScriptPath());
-        tc.setTestData(request.getTestData());
+        tc.setTestData(ensureValidJson(request.getTestData()));
         tc.setTags(request.getTags());
         tc.setMaxDurationSeconds(request.getMaxDurationSeconds());
+
+        // Handle AI mode updates (same three cases as add())
+        if (Boolean.TRUE.equals(request.getUseAI()) && request.getDescriptionAI() != null) {
+            // Cas 1 : régénérer depuis l'IA
+            String generatedCode = llmService.generateTestCode(
+                    request.getType(),
+                    request.getDescriptionAI()
+            );
+            tc.setGeneratedCode(generatedCode);
+            tc.setGenerated(true);
+        } else if (request.getGeneratedCode() != null && !request.getGeneratedCode().trim().isEmpty()) {
+            // Cas 2 : code généré/édité par l'utilisateur
+            tc.setGeneratedCode(request.getGeneratedCode());
+            tc.setGenerated(true);
+        } else {
+            // Cas 3 : mode manuel
+            tc.setScriptPath(request.getScriptPath());
+            tc.setGenerated(false);
+            tc.setGeneratedCode(null);
+        }
+
         return mapToResponse(testCaseRepository.save(tc));
     }
 
@@ -155,6 +204,31 @@ public class TestCaseService {
                 .generatedCode(tc.getGeneratedCode())
                 .generated(tc.getGenerated())
                 .build();
+    }
+
+    /**
+     * Ensures test data is valid JSON. If the input is not valid JSON,
+     * wraps it in a JSON object: {"data": "<value>"}
+     */
+    private String ensureValidJson(String testData) {
+        if (testData == null || testData.trim().isEmpty()) {
+            return null;
+        }
+
+        try {
+            // Try to parse as JSON to validate it
+            objectMapper.readTree(testData);
+            // If successful, it's valid JSON
+            return testData;
+        } catch (Exception e) {
+            // If parsing fails, wrap it as a JSON object
+            try {
+                return objectMapper.writeValueAsString(java.util.Map.of("data", testData));
+            } catch (Exception ex) {
+                // Fallback: return as string in JSON format
+                return "{\"data\": \"" + testData.replace("\"", "\\\"") + "\"}";
+            }
+        }
     }
 
 }

@@ -111,6 +111,7 @@ public class ProjectService {
                 .gitDefaultBranch(p.getGitDefaultBranch())
                 .status(p.getStatus().name())
                 .createdAt(p.getCreatedAt())
+                .aiProject(p.getGitRepoUrl() == null || p.getGitRepoUrl().isBlank() || "ai-builtin".equals(p.getGitRepoUrl()))
                 .build();
     }
 }

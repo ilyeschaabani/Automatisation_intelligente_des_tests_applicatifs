@@ -8,18 +8,24 @@ import org.eclipse.jgit.api.errors.GitAPIException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.Resource;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 @Service
 @RequiredArgsConstructor
@@ -54,7 +60,7 @@ public class ExecutionService {
             campaign.setStatus(Campaign.CampaignStatus.RUNNING);
             campaign.setStartedAt(LocalDateTime.now());
             campaign.setProgress(5);
-            campaign.setCurrentStep("Cloning repository");
+            campaign.setCurrentStep("Preparing execution environment");
             campaignRepository.save(campaign);
             log.info("Campaign status updated to RUNNING");
         }
@@ -67,21 +73,18 @@ public class ExecutionService {
                 .orElse(null);
         log.info("Environment loaded: {}", env != null ? env.getId() : "NULL");
 
-        // Clonage du dépôt Git
+        // Préparation de l'environnement d'exécution (Git externe ou template IA)
         Path repoDir = null;
         try {
-            String branch = campaign.getGitBranch() != null ? campaign.getGitBranch() :
-                    (project.getGitDefaultBranch() != null ? project.getGitDefaultBranch() : "main");
-            log.info("Cloning repository from: {} on branch: {}", project.getGitRepoUrl(), branch);
-            repoDir = cloneRepository(project.getGitRepoUrl(), branch);
-            log.info("Repository cloned successfully to: {}", repoDir);
+            repoDir = prepareRepository(project, campaign);
+            log.info("Repository ready at: {}", repoDir);
             campaign.setProgress(20);
             campaign.setCurrentStep("Preparing campaign context");
             campaignRepository.save(campaign);
             patchKnownTestSuite(repoDir);
         } catch (Exception e) {
-            log.error("FATAL: Git clone failed", e);
-            finishWithError(campaign, "Erreur lors du clonage Git : " + e.getMessage());
+            log.error("FATAL: Repository preparation failed", e);
+            finishWithError(campaign, "Erreur lors de la préparation du dépôt : " + e.getMessage());
             return;
         }
 
@@ -153,7 +156,50 @@ public class ExecutionService {
         campaignRepository.save(campaign);
     }
 
-    private Path cloneRepository(String repoUrl, String branch) throws GitAPIException, IOException {
+    // --- Préparation du dépôt d'exécution (Git externe ou template IA intégré) ---
+    private Path prepareRepository(Project project, Campaign campaign) throws IOException, GitAPIException {
+        String gitUrl = project.getGitRepoUrl();
+        if (gitUrl == null || gitUrl.isBlank() || "ai-builtin".equalsIgnoreCase(gitUrl)) {
+            log.info("Using built-in AI test template (no Git URL)");
+            return prepareBuiltInTemplate();
+        } else {
+            String branch = campaign.getGitBranch() != null ? campaign.getGitBranch() :
+                    (project.getGitDefaultBranch() != null ? project.getGitDefaultBranch() : "main");
+            log.info("Cloning repository from: {} on branch: {}", gitUrl, branch);
+            return cloneRepository(gitUrl, branch);
+        }
+    }
+
+    private Path prepareBuiltInTemplate() throws IOException {
+        // 1. Charger le template compressé depuis les ressources
+        Resource resource = new ClassPathResource("ai-test-template.zip");
+        if (!resource.exists()) {
+            throw new RuntimeException("Template IA introuvable (ai-test-template.zip)");
+        }
+
+        // 2. Créer un répertoire temporaire
+        Path execDir = createTempDir("exec-");
+
+        // 3. Décompresser le ZIP
+        try (ZipInputStream zis = new ZipInputStream(resource.getInputStream())) {
+            ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                Path entryPath = execDir.resolve(entry.getName());
+                if (entry.isDirectory()) {
+                    Files.createDirectories(entryPath);
+                } else {
+                    Files.createDirectories(entryPath.getParent());
+                    Files.copy(zis, entryPath, StandardCopyOption.REPLACE_EXISTING);
+                }
+                zis.closeEntry();
+            }
+        }
+
+        log.info("AI template prepared at: {}", execDir);
+        return execDir;
+    }
+
+    private Path createTempDir(String prefix) throws IOException {
         Path tempDirPath;
         if (tempDirConfig != null && !tempDirConfig.trim().isEmpty()) {
             tempDirPath = Paths.get(tempDirConfig);
@@ -166,8 +212,11 @@ public class ExecutionService {
                 Files.createDirectories(tempDirPath);
             }
         }
+        return Files.createTempDirectory(tempDirPath, prefix);
+    }
 
-        Path dir = Files.createTempDirectory(tempDirPath, "exec-");
+    private Path cloneRepository(String repoUrl, String branch) throws GitAPIException, IOException {
+        Path dir = createTempDir("exec-");
         Git.cloneRepository()
                 .setURI(repoUrl)
                 .setDirectory(dir.toFile())
@@ -205,28 +254,23 @@ public class ExecutionService {
             String className;
             // ----- TEST GÉNÉRÉ PAR IA -----
             if (Boolean.TRUE.equals(tc.getGenerated()) && tc.getGeneratedCode() != null) {
-                // Nettoyage des backticks éventuels
                 String cleanCode = tc.getGeneratedCode()
                         .replaceAll("(?i)```java\\s*", "")
                         .replaceAll("```", "")
                         .trim();
 
-                // Sous-répertoire selon le type
                 String subDir = getTestPackageByType(tc.getType());
                 Path genDir = repoDir.resolve("src/test/java").resolve(subDir);
                 Files.createDirectories(genDir);
 
-                // Nom de classe unique
                 String shortClassName = "Generated_" + tc.getId();
                 Path testFile = genDir.resolve(shortClassName + ".java");
 
-                // Remplacement du nom de la classe dans le code
                 String finalCode = cleanCode.replaceFirst(
                         "\\bclass\\s+\\w+",
                         "class " + shortClassName
                 );
 
-                // Ajout du package si absent
                 if (!finalCode.contains("package " + subDir.replace('/', '.'))) {
                     finalCode = "package " + subDir.replace('/', '.') + ";\n\n" + finalCode;
                 }
@@ -236,7 +280,6 @@ public class ExecutionService {
 
                 className = subDir.replace('/', '.') + "." + shortClassName;
             } else {
-                // Mode manuel
                 className = tc.getScriptPath()
                         .replace("/", ".")
                         .replace(".java", "");

@@ -11,6 +11,7 @@ import java.util.Map;
 
 @Service
 public class LlmService {
+
     private final RestTemplate restTemplate = new RestTemplate();
 
     public String generateTestCode(String type, String description) {
