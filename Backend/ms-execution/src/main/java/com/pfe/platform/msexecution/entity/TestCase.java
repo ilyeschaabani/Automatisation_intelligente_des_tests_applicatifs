@@ -10,6 +10,11 @@ public class TestCase {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "suite_id", nullable = true)
+    private TestSuite suite;
+    
     @Enumerated(EnumType.STRING)
     private TestType type; // WEB, API
     private String scriptPath;
@@ -36,10 +41,16 @@ public class TestCase {
         return id;
     }
 
-
-
     public void setId(Long id) {
         this.id = id;
+    }
+
+    public TestSuite getSuite() {
+        return suite;
+    }
+
+    public void setSuite(TestSuite suite) {
+        this.suite = suite;
     }
 
     public TestType getType() {

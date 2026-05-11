@@ -22,7 +22,9 @@ import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -39,6 +41,7 @@ public class ExecutionService {
     private final ProjectRepository projectRepository;
     private final EnvironmentRepository environmentRepository;
     private final TestCaseRepository testCaseRepository;
+    private final TestSuiteRepository testSuiteRepository;
 
     @Value("${execution.temp-dir:}")
     private String tempDirConfig;
@@ -98,6 +101,9 @@ public class ExecutionService {
             log.warn("No test cases found for campaign! Marking as finished successfully.");
         }
 
+        // Map to cache suite repositories (clone once per suite)
+        Map<Long, Path> suiteRepoDirs = new HashMap<>();
+
         boolean globalSuccess = true;
         int executedCount = 0;
         int totalTests = Math.max(ctcList.size(), 1);
@@ -109,9 +115,34 @@ public class ExecutionService {
                 continue;
             }
 
+            // Determine working directory: suite repo if available, else project repo
+            Path workDir = repoDir;
+            if (tc.getSuite() != null && tc.getSuite().getGitRepoUrl() != null 
+                && !tc.getSuite().getGitRepoUrl().isBlank()) {
+                
+                Long suiteId = tc.getSuite().getId();
+                if (!suiteRepoDirs.containsKey(suiteId)) {
+                    // Clone suite repository (once per suite)
+                    String branch = tc.getSuite().getGitBranch() != null 
+                            ? tc.getSuite().getGitBranch() 
+                            : "main";
+                    try {
+                        Path clonedPath = cloneRepository(tc.getSuite().getGitRepoUrl(), branch);
+                        suiteRepoDirs.put(suiteId, clonedPath);
+                        log.info("Cloned suite repository ID {} from {} at {}", 
+                                suiteId, tc.getSuite().getGitRepoUrl(), clonedPath);
+                    } catch (Exception e) {
+                        log.error("Failed to clone suite {} repository, falling back to project repo", 
+                                suiteId, e);
+                        // Fallback to project repository
+                    }
+                }
+                workDir = suiteRepoDirs.getOrDefault(suiteId, repoDir);
+            }
+
             log.info("Executing test: {} ({})", tc.getId(),
                     tc.getGenerated() ? "GENERATED-" + tc.getId() : tc.getScriptPath());
-            ExecutionResult result = executeRealTest(tc, env, repoDir);
+            ExecutionResult result = executeRealTest(tc, env, workDir);
             result.setCampaignId(campaignId);
             result.setTestCaseId(tc.getId());
 
@@ -131,6 +162,16 @@ public class ExecutionService {
                     result.getStatus() == ExecutionResult.ResultStatus.ERROR) {
                 globalSuccess = false;
             }
+        }
+
+        // Clean up cloned suite repositories
+        suiteRepoDirs.values().forEach(this::deleteDirectory);
+        log.info("Cleaned up {} cloned suite repositories", suiteRepoDirs.size());
+
+        // Clean up project repository
+        if (repoDir != null) {
+            deleteDirectory(repoDir);
+            log.info("Cleaned up project repository at: {}", repoDir);
         }
 
         log.info("Execution complete. Executed: {}, Global success: {}", executedCount, globalSuccess);

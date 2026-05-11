@@ -8,4 +8,7 @@ public class CreateTestSuiteRequest {
     @NotBlank
     private String name;
     private String description;
+    private String gitRepoUrl;
+    private String gitBranch;
+    private String type; // WEB, API, UNIT, INTEGRATION
 }

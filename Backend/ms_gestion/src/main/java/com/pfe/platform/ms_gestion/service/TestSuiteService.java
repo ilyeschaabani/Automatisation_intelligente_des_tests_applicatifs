@@ -11,6 +11,8 @@ import com.pfe.platform.ms_gestion.repository.TestSuiteRepository;
 import com.pfe.platform.ms_gestion.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -32,10 +34,28 @@ public class TestSuiteService {
             throw new RuntimeException("Une suite avec ce nom existe déjà dans ce projet");
         }
 
+        // Validate: if suite type is UNIT, gitRepoUrl and gitBranch are required
+        if (request.getType() != null && "UNIT".equalsIgnoreCase(request.getType())) {
+            if (request.getGitRepoUrl() == null || request.getGitRepoUrl().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "gitRepoUrl is required when suite type is UNIT");
+            }
+            if (request.getGitBranch() == null || request.getGitBranch().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "gitBranch is required when suite type is UNIT");
+            }
+        }
+
         TestSuite suite = new TestSuite();
         suite.setProject(project);
         suite.setName(request.getName());
         suite.setDescription(request.getDescription());
+        suite.setGitRepoUrl(request.getGitRepoUrl());
+        suite.setGitBranch(request.getGitBranch());
+        if (request.getType() != null) {
+            try {
+                suite.setType(TestSuite.TestType.valueOf(request.getType().toUpperCase()));
+            } catch (Exception ignored) {
+            }
+        }
         suite = testSuiteRepository.save(suite);
         return mapToResponse(suite);
     }
@@ -63,8 +83,26 @@ public class TestSuiteService {
             throw new RuntimeException("Une suite avec ce nom existe déjà dans ce projet");
         }
 
+        // Validate: if suite type is UNIT, gitRepoUrl and gitBranch are required
+        if (request.getType() != null && "UNIT".equalsIgnoreCase(request.getType())) {
+            if (request.getGitRepoUrl() == null || request.getGitRepoUrl().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "gitRepoUrl is required when suite type is UNIT");
+            }
+            if (request.getGitBranch() == null || request.getGitBranch().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "gitBranch is required when suite type is UNIT");
+            }
+        }
+
         suite.setName(request.getName());
         suite.setDescription(request.getDescription());
+        suite.setGitRepoUrl(request.getGitRepoUrl());
+        suite.setGitBranch(request.getGitBranch());
+        if (request.getType() != null) {
+            try {
+                suite.setType(TestSuite.TestType.valueOf(request.getType().toUpperCase()));
+            } catch (Exception ignored) {
+            }
+        }
         return mapToResponse(testSuiteRepository.save(suite));
     }
 
@@ -116,6 +154,9 @@ public class TestSuiteService {
                 .id(s.getId())
                 .name(s.getName())
                 .description(s.getDescription())
+                .type(s.getType() != null ? s.getType().name() : null)
+                .gitRepoUrl(s.getGitRepoUrl())
+                .gitBranch(s.getGitBranch())
                 .createdAt(s.getCreatedAt())
                 .build();
     }

@@ -47,12 +47,18 @@ export interface TestSuite {
   id: number;
   name: string;
   description?: string;
+  type?: TestType;
+  gitRepoUrl?: string;
+  gitBranch?: string;
   createdAt: string;
 }
 
 export interface CreateTestSuiteRequest {
   name: string;
+  type?: TestType;
   description?: string;
+  gitRepoUrl?: string;
+  gitBranch?: string;
 }
 
 export interface UpdateTestSuiteRequest extends CreateTestSuiteRequest {}

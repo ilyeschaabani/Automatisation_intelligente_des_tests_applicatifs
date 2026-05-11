@@ -32,8 +32,20 @@ public class TestSuite {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    @Column(nullable = true)
+    private String gitRepoUrl;
+
+    @Column(nullable = true)
+    private String gitBranch;
+
     private LocalDateTime createdAt = LocalDateTime.now();
 
     @OneToMany(mappedBy = "suite", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TestCase> testCases = new ArrayList<>();
+    
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = true)
+    private TestType type = TestType.WEB;
+
+    public enum TestType { WEB, API, UNIT, INTEGRATION }
 }
