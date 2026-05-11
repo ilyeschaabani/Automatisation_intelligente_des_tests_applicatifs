@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronLeft, Plus, RefreshCw, Trash2, Wand2 } from 'lucide-react'
-import { Switch } from '@/components/ui/switch'
 
 import { AuthGuard } from '@/components/auth-guard'
 import { Header } from '@/components/header'
@@ -52,6 +51,7 @@ type CaseFormState = {
   title: string
   description: string
   type: TestType
+  springProfile: string
   priority: string
   riskLevel: RiskLevel | ''
   scriptPath: string
@@ -64,6 +64,7 @@ const emptyCaseForm: CaseFormState = {
   title: '',
   description: '',
   type: 'WEB',
+  springProfile: '',
   priority: '',
   riskLevel: '',
   scriptPath: '',
@@ -74,14 +75,12 @@ const emptyCaseForm: CaseFormState = {
 
 // Additional UI state for AI generation
 type AICaseState = {
-  useAI: boolean
   descriptionAI: string
   generatedCode: string
   codeValidated: boolean
 }
 
 const emptyAICase: AICaseState = {
-  useAI: false,
   descriptionAI: '',
   generatedCode: '',
   codeValidated: false,
@@ -174,40 +173,39 @@ export default function SuiteTestCasesPage() {
   }, [hasIds])
 
   const resetForm = () => {
-    setFormState(emptyCaseForm)
+    setFormState({
+      ...emptyCaseForm,
+      type: suite?.type ?? emptyCaseForm.type,
+    })
     setFormError(null)
     setAiState(emptyAICase)
   }
 
   const openCreate = async () => {
     resetForm()
-    // Ensure we have project info before opening so UI can default to AI mode
+    // Ensure we have project info before opening so UI can show AI section when needed
     try {
-      let p = project
-      if (!p) {
-        p = await projectService.getById(projectId)
+      if (!project) {
+        const p = await projectService.getById(projectId)
         setProject(p)
       }
-      if (p && p.aiProject) {
-        setAiState((prev) => ({ ...prev, useAI: true }))
-      } else {
-        setAiState(emptyAICase)
-      }
     } catch (e) {
-      setAiState(emptyAICase)
+      // ignore
     }
+    setAiState(emptyAICase)
     setCreateOpen(true)
   }
 
   const generateScript = async () => {
     setFormError(null)
-    if (!formState.type) {
-      setFormError('Select a test type before generating.')
+    const suiteType = suite?.type
+    if (!suiteType) {
+      setFormError('Suite type is not loaded yet. Please retry.')
       return
     }
     setGenerating(true)
     try {
-      const payload = { type: formState.type, description: aiState.descriptionAI || formState.description }
+      const payload = { type: suiteType, description: aiState.descriptionAI || formState.description }
       const resp = await llmService.generateTest(payload)
       setAiState((prev) => ({ ...prev, generatedCode: resp.generatedCode, codeValidated: false }))
     } catch (err) {
@@ -226,7 +224,8 @@ export default function SuiteTestCasesPage() {
     setFormState({
       title: testCase.title ?? '',
       description: testCase.description ?? '',
-      type: testCase.type,
+      type: suite?.type ?? testCase.type,
+      springProfile: testCase.springProfile ?? '',
       priority: testCase.priority != null ? String(testCase.priority) : '',
       riskLevel: testCase.riskLevel ?? '',
       scriptPath: testCase.scriptPath ?? '',
@@ -238,7 +237,6 @@ export default function SuiteTestCasesPage() {
     setEditOpen(true)
     // if this case was generated, prefill AI state
     setAiState({
-      useAI: Boolean(project?.aiProject) || Boolean((testCase as any).useAI),
       descriptionAI: '',
       generatedCode: String((testCase as any).generatedCode ?? ''),
       codeValidated: Boolean((testCase as any).generated),
@@ -251,6 +249,16 @@ export default function SuiteTestCasesPage() {
   }
 
   const buildPayload = (): CreateTestCaseRequest | UpdateTestCaseRequest | null => {
+    const suiteType = suite?.type
+    if (!suiteType) {
+      setFormError('Suite type is not loaded yet. Please retry.')
+      return null
+    }
+
+    const isIntegration = suiteType === 'INTEGRATION'
+    const showTestData = suiteType !== 'UNIT'
+    const requireScriptPathInManual = suiteType === 'WEB' || suiteType === 'API'
+
     const title = formState.title.trim()
     if (!title) {
       setFormError('Title is required.')
@@ -275,18 +283,26 @@ export default function SuiteTestCasesPage() {
     const payload: CreateTestCaseRequest = {
       title,
       description: formState.description.trim() || undefined,
-      type: formState.type,
+      type: suiteType,
+      springProfile: isIntegration ? (formState.springProfile.trim() || undefined) : undefined,
       priority,
       riskLevel: formState.riskLevel ? (formState.riskLevel as RiskLevel) : undefined,
       scriptPath: formState.scriptPath.trim() || undefined,
-      testData: formState.testData.trim() || undefined,
+      testData: showTestData ? (formState.testData.trim() || undefined) : undefined,
       tags: formState.tags.trim() || undefined,
       maxDurationSeconds,
     }
 
+    if (!isIntegration) {
+      delete (payload as any).springProfile
+    }
+    if (!showTestData) {
+      delete (payload as any).testData
+    }
+
     // Three cases for code handling:
     // 1. If generatedCode exists (and validated) -> send it
-    // 2. If project.aiProject OR useAI=true with description -> backend regenerates
+    // 2. If project.aiProject with description -> backend regenerates
     // 3. Otherwise -> manual mode with scriptPath
     if (aiState.generatedCode && aiState.generatedCode.trim()) {
       // Case 1: User has generated/edited code and validated it
@@ -296,21 +312,24 @@ export default function SuiteTestCasesPage() {
       }
       payload.generatedCode = aiState.generatedCode
       payload.useAI = false
-    } else if ((project?.aiProject && aiState.descriptionAI && aiState.descriptionAI.trim()) || (aiState.useAI && aiState.descriptionAI && aiState.descriptionAI.trim())) {
-      // Case 2: Backend should regenerate from AI description (project forces AI or user requested AI)
-      payload.useAI = true
-      payload.descriptionAI = aiState.descriptionAI
-      // When project forces AI, we must not send a scriptPath
-      if (project?.aiProject) {
-        delete (payload as any).scriptPath
-      }
+      delete (payload as any).scriptPath
     } else if (project?.aiProject) {
-      // Project requires AI but no description provided
-      setFormError('AI description is required for AI projects.')
-      return null
+      // Case 2: AI project: backend generates (descriptionAI preferred, fallback to description)
+      const prompt = (aiState.descriptionAI || formState.description).trim()
+      if (!prompt) {
+        setFormError('Description is required for AI projects.')
+        return null
+      }
+      payload.useAI = true
+      payload.descriptionAI = prompt
+      delete (payload as any).scriptPath
     } else {
       // Case 3: Manual mode
       payload.useAI = false
+      if (requireScriptPathInManual && (!payload.scriptPath || !String(payload.scriptPath).trim())) {
+        setFormError('Script path is required for WEB/API test cases in manual mode.')
+        return null
+      }
     }
 
     return payload
@@ -505,7 +524,7 @@ export default function SuiteTestCasesPage() {
         description="Define the test case details."
         submitLabel="Create test case"
         isSubmitting={isSubmitting}
-        disableSubmit={aiState.useAI && !aiState.codeValidated}
+        disableSubmit={Boolean(aiState.generatedCode && aiState.generatedCode.trim()) && !aiState.codeValidated}
         size="xl"
         onSubmit={submitCreate}
       >
@@ -530,32 +549,16 @@ export default function SuiteTestCasesPage() {
             placeholder="Optional description"
           />
         </div>
-        <div className="flex items-center gap-3">
-          <Label>Mode</Label>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Manual</span>
-            <Switch
-              checked={project?.aiProject ? true : aiState.useAI}
-              onCheckedChange={(v) => {
-                if (project?.aiProject) return
-                setAiState((prev) => ({ ...prev, useAI: Boolean(v) }))
-              }}
-              disabled={Boolean(project?.aiProject)}
-            />
-            <span className="text-sm text-muted-foreground">AI</span>
-          </div>
-        </div>
-
-        {(project?.aiProject || aiState.useAI) ? (
+        {project?.aiProject ? (
           <>
             <div className="space-y-2">
-              <Label htmlFor="case-description-ai">AI description {project?.aiProject ? <span className="text-destructive">*</span> : null}</Label>
+              <Label htmlFor="case-description-ai">AI description <span className="text-destructive">*</span></Label>
               <Textarea
                 id="case-description-ai"
                 value={aiState.descriptionAI}
                 onChange={(e) => setAiState((prev) => ({ ...prev, descriptionAI: e.target.value }))}
                 placeholder="Describe what the test should do in natural language"
-                required={Boolean(project?.aiProject)}
+                required
               />
             </div>
             <div className="flex gap-2">
@@ -568,74 +571,55 @@ export default function SuiteTestCasesPage() {
                 </Button>
               ) : null}
             </div>
-
-            {aiState.generatedCode ? (
-              <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-4">
-                <div className="flex items-center justify-between">
-                  <Label className="text-base font-semibold">Generated code (editable)</Label>
-                  <span className="text-xs text-muted-foreground">Click to edit</span>
-                </div>
-                <Textarea
-                  className="font-mono text-sm bg-background resize-none focus:ring-2 focus:ring-primary/50"
-                  value={aiState.generatedCode}
-                  onChange={(e) => setAiState((prev) => ({ ...prev, generatedCode: e.target.value, codeValidated: false }))}
-                  rows={20}
-                />
-                <div className="flex gap-2 pt-2">
-                  <Button type="button" onClick={validateScript} disabled={aiState.codeValidated}>
-                    {aiState.codeValidated ? '✓ Validated' : 'Validate script'}
-                  </Button>
-                  {aiState.codeValidated && (
-                    <span className="text-xs text-green-600 flex items-center gap-1">
-                      ✓ Code validated and ready to save
-                    </span>
-                  )}
-                </div>
-              </div>
-            ) : null}
           </>
         ) : null}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Type</Label>
-            <Select
-              value={formState.type}
-              onValueChange={(value) => setFormState((prev) => ({ ...prev, type: value as TestType }))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="WEB">WEB</SelectItem>
-                <SelectItem value="API">API</SelectItem>
-                <SelectItem value="UNIT">UNIT</SelectItem>
-                <SelectItem value="INTEGRATION">INTEGRATION</SelectItem>
-              </SelectContent>
-            </Select>
+
+        {aiState.generatedCode ? (
+          <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-4">
+            <div className="flex items-center justify-between">
+              <Label className="text-base font-semibold">Generated code (editable)</Label>
+              <span className="text-xs text-muted-foreground">Click to edit</span>
+            </div>
+            <Textarea
+              className="font-mono text-sm bg-background resize-none focus:ring-2 focus:ring-primary/50"
+              value={aiState.generatedCode}
+              onChange={(e) => setAiState((prev) => ({ ...prev, generatedCode: e.target.value, codeValidated: false }))}
+              rows={20}
+            />
+            <div className="flex gap-2 pt-2">
+              <Button type="button" onClick={validateScript} disabled={aiState.codeValidated}>
+                {aiState.codeValidated ? '✓ Validated' : 'Validate script'}
+              </Button>
+              {aiState.codeValidated && (
+                <span className="text-xs text-green-600 flex items-center gap-1">
+                  ✓ Code validated and ready to save
+                </span>
+              )}
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label>Risk level</Label>
-            <Select
-              value={formState.riskLevel || 'UNSET'}
-              onValueChange={(value) =>
-                setFormState((prev) => ({
-                  ...prev,
-                  riskLevel: value === 'UNSET' ? '' : (value as RiskLevel),
-                }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select risk" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="UNSET">None</SelectItem>
-                <SelectItem value="CRITICAL">CRITICAL</SelectItem>
-                <SelectItem value="HIGH">HIGH</SelectItem>
-                <SelectItem value="MEDIUM">MEDIUM</SelectItem>
-                <SelectItem value="LOW">LOW</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        ) : null}
+        <div className="space-y-2">
+          <Label>Risk level</Label>
+          <Select
+            value={formState.riskLevel || 'UNSET'}
+            onValueChange={(value) =>
+              setFormState((prev) => ({
+                ...prev,
+                riskLevel: value === 'UNSET' ? '' : (value as RiskLevel),
+              }))
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select risk" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="UNSET">None</SelectItem>
+              <SelectItem value="CRITICAL">CRITICAL</SelectItem>
+              <SelectItem value="HIGH">HIGH</SelectItem>
+              <SelectItem value="MEDIUM">MEDIUM</SelectItem>
+              <SelectItem value="LOW">LOW</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
@@ -671,6 +655,21 @@ export default function SuiteTestCasesPage() {
                 setFormState((prev) => ({ ...prev, scriptPath: event.target.value }))
               }
               placeholder="tests/login.spec.ts"
+              required={suite?.type === 'WEB' || suite?.type === 'API'}
+            />
+          </div>
+        ) : null}
+
+        {suite?.type === 'INTEGRATION' ? (
+          <div className="space-y-2">
+            <Label htmlFor="case-spring-profile">Spring profile</Label>
+            <Input
+              id="case-spring-profile"
+              value={formState.springProfile}
+              onChange={(event) =>
+                setFormState((prev) => ({ ...prev, springProfile: event.target.value }))
+              }
+              placeholder="test"
             />
           </div>
         ) : null}
@@ -683,15 +682,17 @@ export default function SuiteTestCasesPage() {
             placeholder="smoke,auth"
           />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="case-data">Test data (JSON)</Label>
-          <Textarea
-            id="case-data"
-            value={formState.testData}
-            onChange={(event) => setFormState((prev) => ({ ...prev, testData: event.target.value }))}
-            placeholder='{"email": "demo@bank.com"}'
-          />
-        </div>
+        {suite?.type !== 'UNIT' ? (
+          <div className="space-y-2">
+            <Label htmlFor="case-data">Test data (JSON)</Label>
+            <Textarea
+              id="case-data"
+              value={formState.testData}
+              onChange={(event) => setFormState((prev) => ({ ...prev, testData: event.target.value }))}
+              placeholder='{"email": "demo@bank.com"}'
+            />
+          </div>
+        ) : null}
         {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
       </FormDialog>
 
@@ -702,7 +703,7 @@ export default function SuiteTestCasesPage() {
         description="Update the test case metadata."
         submitLabel="Save changes"
         isSubmitting={isSubmitting}
-        disableSubmit={aiState.useAI && !aiState.codeValidated}
+        disableSubmit={Boolean(aiState.generatedCode && aiState.generatedCode.trim()) && !aiState.codeValidated}
         size="xl"
         onSubmit={submitEdit}
       >
@@ -725,23 +726,7 @@ export default function SuiteTestCasesPage() {
             }
           />
         </div>
-        <div className="flex items-center gap-3">
-          <Label>Mode</Label>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Manual</span>
-            <Switch
-              checked={project?.aiProject ? true : aiState.useAI}
-              onCheckedChange={(v) => {
-                if (project?.aiProject) return
-                setAiState((prev) => ({ ...prev, useAI: Boolean(v) }))
-              }}
-              disabled={Boolean(project?.aiProject)}
-            />
-            <span className="text-sm text-muted-foreground">AI</span>
-          </div>
-        </div>
-
-        {(project?.aiProject || aiState.useAI) ? (
+        {project?.aiProject ? (
           <>
             <div className="space-y-2">
               <Label>AI description</Label>
@@ -761,74 +746,55 @@ export default function SuiteTestCasesPage() {
                 </Button>
               ) : null}
             </div>
-
-            {aiState.generatedCode ? (
-              <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-4">
-                <div className="flex items-center justify-between">
-                  <Label className="text-base font-semibold">Generated code (editable)</Label>
-                  <span className="text-xs text-muted-foreground">Click to edit</span>
-                </div>
-                <Textarea
-                  className="font-mono text-sm bg-background resize-none focus:ring-2 focus:ring-primary/50"
-                  value={aiState.generatedCode}
-                  onChange={(e) => setAiState((prev) => ({ ...prev, generatedCode: e.target.value, codeValidated: false }))}
-                  rows={20}
-                />
-                <div className="flex gap-2 pt-2">
-                  <Button type="button" onClick={validateScript} disabled={aiState.codeValidated}>
-                    {aiState.codeValidated ? '✓ Validated' : 'Validate script'}
-                  </Button>
-                  {aiState.codeValidated && (
-                    <span className="text-xs text-green-600 flex items-center gap-1">
-                      ✓ Code validated and ready to save
-                    </span>
-                  )}
-                </div>
-              </div>
-            ) : null}
           </>
         ) : null}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Type</Label>
-            <Select
-              value={formState.type}
-              onValueChange={(value) => setFormState((prev) => ({ ...prev, type: value as TestType }))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="WEB">WEB</SelectItem>
-                <SelectItem value="API">API</SelectItem>
-                <SelectItem value="UNIT">UNIT</SelectItem>
-                <SelectItem value="INTEGRATION">INTEGRATION</SelectItem>
-              </SelectContent>
-            </Select>
+
+        {aiState.generatedCode ? (
+          <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-4">
+            <div className="flex items-center justify-between">
+              <Label className="text-base font-semibold">Generated code (editable)</Label>
+              <span className="text-xs text-muted-foreground">Click to edit</span>
+            </div>
+            <Textarea
+              className="font-mono text-sm bg-background resize-none focus:ring-2 focus:ring-primary/50"
+              value={aiState.generatedCode}
+              onChange={(e) => setAiState((prev) => ({ ...prev, generatedCode: e.target.value, codeValidated: false }))}
+              rows={20}
+            />
+            <div className="flex gap-2 pt-2">
+              <Button type="button" onClick={validateScript} disabled={aiState.codeValidated}>
+                {aiState.codeValidated ? '✓ Validated' : 'Validate script'}
+              </Button>
+              {aiState.codeValidated && (
+                <span className="text-xs text-green-600 flex items-center gap-1">
+                  ✓ Code validated and ready to save
+                </span>
+              )}
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label>Risk level</Label>
-            <Select
-              value={formState.riskLevel || 'UNSET'}
-              onValueChange={(value) =>
-                setFormState((prev) => ({
-                  ...prev,
-                  riskLevel: value === 'UNSET' ? '' : (value as RiskLevel),
-                }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select risk" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="UNSET">None</SelectItem>
-                <SelectItem value="CRITICAL">CRITICAL</SelectItem>
-                <SelectItem value="HIGH">HIGH</SelectItem>
-                <SelectItem value="MEDIUM">MEDIUM</SelectItem>
-                <SelectItem value="LOW">LOW</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        ) : null}
+        <div className="space-y-2">
+          <Label>Risk level</Label>
+          <Select
+            value={formState.riskLevel || 'UNSET'}
+            onValueChange={(value) =>
+              setFormState((prev) => ({
+                ...prev,
+                riskLevel: value === 'UNSET' ? '' : (value as RiskLevel),
+              }))
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select risk" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="UNSET">None</SelectItem>
+              <SelectItem value="CRITICAL">CRITICAL</SelectItem>
+              <SelectItem value="HIGH">HIGH</SelectItem>
+              <SelectItem value="MEDIUM">MEDIUM</SelectItem>
+              <SelectItem value="LOW">LOW</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
@@ -861,6 +827,21 @@ export default function SuiteTestCasesPage() {
               onChange={(event) =>
                 setFormState((prev) => ({ ...prev, scriptPath: event.target.value }))
               }
+              required={suite?.type === 'WEB' || suite?.type === 'API'}
+            />
+          </div>
+        ) : null}
+
+        {suite?.type === 'INTEGRATION' ? (
+          <div className="space-y-2">
+            <Label htmlFor="case-edit-spring-profile">Spring profile</Label>
+            <Input
+              id="case-edit-spring-profile"
+              value={formState.springProfile}
+              onChange={(event) =>
+                setFormState((prev) => ({ ...prev, springProfile: event.target.value }))
+              }
+              placeholder="test"
             />
           </div>
         ) : null}
@@ -872,14 +853,16 @@ export default function SuiteTestCasesPage() {
             onChange={(event) => setFormState((prev) => ({ ...prev, tags: event.target.value }))}
           />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="case-edit-data">Test data (JSON)</Label>
-          <Textarea
-            id="case-edit-data"
-            value={formState.testData}
-            onChange={(event) => setFormState((prev) => ({ ...prev, testData: event.target.value }))}
-          />
-        </div>
+        {suite?.type !== 'UNIT' ? (
+          <div className="space-y-2">
+            <Label htmlFor="case-edit-data">Test data (JSON)</Label>
+            <Textarea
+              id="case-edit-data"
+              value={formState.testData}
+              onChange={(event) => setFormState((prev) => ({ ...prev, testData: event.target.value }))}
+            />
+          </div>
+        ) : null}
         {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
       </FormDialog>
 

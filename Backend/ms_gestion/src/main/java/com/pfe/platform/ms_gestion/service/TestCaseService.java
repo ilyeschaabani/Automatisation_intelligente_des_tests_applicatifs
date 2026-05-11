@@ -39,6 +39,7 @@ public class TestCaseService {
         tc.setTitle(request.getTitle());
         tc.setDescription(request.getDescription());
         tc.setType(TestCase.TestType.valueOf(request.getType().toUpperCase()));
+        tc.setSpringProfile(request.getSpringProfile());
         tc.setPriority(request.getPriority());
         tc.setRiskLevel(TestCase.RiskLevel.valueOf(request.getRiskLevel().toUpperCase()));
         tc.setTestData(ensureValidJson(request.getTestData()));
@@ -113,6 +114,7 @@ public class TestCaseService {
         tc.setTitle(request.getTitle());
         tc.setDescription(request.getDescription());
         tc.setType(TestCase.TestType.valueOf(request.getType().toUpperCase()));
+        tc.setSpringProfile(request.getSpringProfile());
         tc.setPriority(request.getPriority());
         tc.setRiskLevel(TestCase.RiskLevel.valueOf(request.getRiskLevel().toUpperCase()));
         tc.setTestData(ensureValidJson(request.getTestData()));
@@ -192,6 +194,7 @@ public class TestCaseService {
                 .title(tc.getTitle())
                 .description(tc.getDescription())
                 .type(tc.getType().name())
+                .springProfile(tc.getSpringProfile())
                 .priority(tc.getPriority())
                 .riskLevel(tc.getRiskLevel().name())
                 .scriptPath(tc.getScriptPath())

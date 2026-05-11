@@ -13,6 +13,7 @@ public class TestCaseResponse {
     private String title;
     private String description;
     private String type;
+    private String springProfile;
     private Integer priority;
     private String riskLevel;
     private String scriptPath;

@@ -34,6 +34,8 @@ public class TestCase {
     @Enumerated(EnumType.STRING)
     private TestType type;
 
+    private String springProfile;
+
     private Integer priority;
 
     @Enumerated(EnumType.STRING)

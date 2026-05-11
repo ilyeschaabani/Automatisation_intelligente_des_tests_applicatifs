@@ -12,6 +12,7 @@ public class CreateTestCaseRequest {
     private String description;
     @NotNull
     private String type; // WEB, API, UNIT, INTEGRATION
+    private String springProfile;
     private Integer priority;
     private String riskLevel; // CRITICAL, HIGH, MEDIUM, LOW
     private String scriptPath;

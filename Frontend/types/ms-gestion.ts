@@ -71,6 +71,7 @@ export interface TestCase {
   title: string;
   description?: string;
   type: TestType;
+  springProfile?: string;
   priority?: number;
   riskLevel?: RiskLevel;
   scriptPath?: string;
@@ -90,6 +91,7 @@ export interface CreateTestCaseRequest {
   title: string;
   description?: string;
   type: TestType;        // required
+  springProfile?: string;
   priority?: number;
   riskLevel?: RiskLevel;
   scriptPath?: string;
