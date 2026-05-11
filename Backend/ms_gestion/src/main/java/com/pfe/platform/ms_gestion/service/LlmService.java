@@ -46,6 +46,7 @@ public class LlmService {
             Tu es un assistant spécialisé en automatisation de tests Java avec TestNG.
             Génère **uniquement** le code Java complet (imports, classe, méthode), sans explications.
             Le code doit être directement compilable et utilisable dans un projet Maven.
+            Your response must contain ONLY the Java code. Do NOT include any introductory or concluding text. Start directly with 'package' or 'import'.
             
             Type de test : %s
             Description : %s

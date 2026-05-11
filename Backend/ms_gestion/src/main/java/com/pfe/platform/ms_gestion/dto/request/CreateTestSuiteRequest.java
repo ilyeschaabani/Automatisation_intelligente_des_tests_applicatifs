@@ -10,5 +10,6 @@ public class CreateTestSuiteRequest {
     private String description;
     private String gitRepoUrl;
     private String gitBranch;
+    private String modulePath;
     private String type; // WEB, API, UNIT, INTEGRATION
 }

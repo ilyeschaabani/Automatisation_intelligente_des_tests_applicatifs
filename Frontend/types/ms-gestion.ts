@@ -50,6 +50,7 @@ export interface TestSuite {
   type?: TestType;
   gitRepoUrl?: string;
   gitBranch?: string;
+  modulePath?: string;
   createdAt: string;
 }
 
@@ -59,6 +60,7 @@ export interface CreateTestSuiteRequest {
   description?: string;
   gitRepoUrl?: string;
   gitBranch?: string;
+  modulePath?: string;
 }
 
 export interface UpdateTestSuiteRequest extends CreateTestSuiteRequest {}

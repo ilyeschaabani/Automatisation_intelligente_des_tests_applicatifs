@@ -14,6 +14,10 @@ public class TestCase {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "suite_id", nullable = true)
     private TestSuite suite;
+
+    // Read-only access to suite FK without triggering lazy loading
+    @Column(name = "suite_id", insertable = false, updatable = false)
+    private Long suiteId;
     
     @Enumerated(EnumType.STRING)
     private TestType type; // WEB, API
@@ -51,6 +55,10 @@ public class TestCase {
 
     public void setSuite(TestSuite suite) {
         this.suite = suite;
+    }
+
+    public Long getSuiteId() {
+        return suiteId;
     }
 
     public TestType getType() {

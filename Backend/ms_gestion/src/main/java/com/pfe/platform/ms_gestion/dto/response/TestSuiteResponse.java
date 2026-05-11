@@ -15,5 +15,6 @@ public class TestSuiteResponse {
     private String type;
     private String gitRepoUrl;
     private String gitBranch;
+    private String modulePath;
     private LocalDateTime createdAt;
 }

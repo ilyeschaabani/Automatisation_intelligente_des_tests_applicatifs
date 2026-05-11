@@ -38,6 +38,9 @@ public class TestSuite {
     @Column(nullable = true)
     private String gitBranch;
 
+    @Column(name = "module_path", nullable = true, length = 255)
+    private String modulePath;
+
     private LocalDateTime createdAt = LocalDateTime.now();
 
     @OneToMany(mappedBy = "suite", cascade = CascadeType.ALL, orphanRemoval = true)

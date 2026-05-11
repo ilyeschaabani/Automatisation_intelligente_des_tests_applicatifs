@@ -12,6 +12,8 @@ public class TestSuite {
     private String name;
     private String gitRepoUrl;
     private String gitBranch;
+    @Column(name = "module_path", length = 255)
+    private String modulePath;
 
     public TestSuite() {
     }
@@ -53,5 +55,13 @@ public class TestSuite {
 
     public void setGitBranch(String gitBranch) {
         this.gitBranch = gitBranch;
+    }
+
+    public String getModulePath() {
+        return modulePath;
+    }
+
+    public void setModulePath(String modulePath) {
+        this.modulePath = modulePath;
     }
 }

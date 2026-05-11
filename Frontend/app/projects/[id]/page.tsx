@@ -72,6 +72,7 @@ type SuiteFormState = {
   description: string
   gitRepoUrl: string
   gitBranch: string
+  modulePath: string
   type?: SuiteType
 }
 
@@ -96,6 +97,7 @@ const emptySuiteForm: SuiteFormState = {
   description: '',
   gitRepoUrl: '',
   gitBranch: '',
+  modulePath: '',
   type: 'WEB',
 }
 
@@ -391,6 +393,7 @@ export default function ProjectDetailsPage() {
       description: suite.description ?? '',
       gitRepoUrl: suite.gitRepoUrl ?? '',
       gitBranch,
+      modulePath: suite.modulePath ?? '',
       type,
     })
     setSuiteEditOpen(true)
@@ -715,6 +718,7 @@ export default function ProjectDetailsPage() {
         description: suiteForm.description.trim() || undefined,
         gitRepoUrl: suiteForm.gitRepoUrl.trim() || undefined,
         gitBranch: suiteForm.gitBranch.trim() || undefined,
+        modulePath: suiteForm.modulePath.trim() || undefined,
       }
       await testSuiteService.create(projectId, payload)
       setSuiteCreateOpen(false)
@@ -740,6 +744,7 @@ export default function ProjectDetailsPage() {
         description: suiteForm.description.trim() || undefined,
         gitRepoUrl: suiteForm.gitRepoUrl.trim() || undefined,
         gitBranch: suiteForm.gitBranch.trim() || undefined,
+        modulePath: suiteForm.modulePath.trim() || undefined,
       }
       await testSuiteService.update(projectId, suiteEditing.id, payload)
       setSuiteEditOpen(false)
@@ -1163,7 +1168,7 @@ export default function ProjectDetailsPage() {
         onSubmit={submitSuiteCreate}
         disableSubmit={
           suiteForm.type === 'UNIT' &&
-          (!suiteForm.gitRepoUrl.trim() || !suiteForm.gitBranch.trim())
+          (!suiteForm.gitRepoUrl.trim() || !suiteForm.gitBranch.trim() || !suiteForm.modulePath.trim())
         }
       >
         <div className="space-y-2">
@@ -1198,6 +1203,7 @@ export default function ProjectDetailsPage() {
                 // clear git fields when switching away
                 gitRepoUrl: value === 'UNIT' ? prev.gitRepoUrl : '',
                 gitBranch: value === 'UNIT' ? (prev.gitBranch.trim() ? prev.gitBranch : 'main') : '',
+                modulePath: value === 'UNIT' ? prev.modulePath : '',
               }))
             }}
           >
@@ -1215,6 +1221,21 @@ export default function ProjectDetailsPage() {
 
         {suiteForm.type === 'UNIT' ? (
           <>
+            <div className="space-y-2">
+              <Label htmlFor="suite-module-path">Chemin du module (relatif)</Label>
+              <Input
+                id="suite-module-path"
+                value={suiteForm.modulePath}
+                onChange={(event) =>
+                  setSuiteForm((prev) => ({ ...prev, modulePath: event.target.value }))
+                }
+                placeholder="backend/AuthenticationMicroservice"
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                Chemin relatif depuis la racine du dépôt cloné.
+              </p>
+            </div>
             <div className="space-y-2">
               <Label>Git Repository</Label>
               <Select
@@ -1332,7 +1353,7 @@ export default function ProjectDetailsPage() {
         onSubmit={submitSuiteEdit}
         disableSubmit={
           suiteForm.type === 'UNIT' &&
-          (!suiteForm.gitRepoUrl.trim() || !suiteForm.gitBranch.trim())
+          (!suiteForm.gitRepoUrl.trim() || !suiteForm.gitBranch.trim() || !suiteForm.modulePath.trim())
         }
       >
         <div className="space-y-2">
@@ -1364,6 +1385,7 @@ export default function ProjectDetailsPage() {
                 type: value as SuiteType,
                 gitRepoUrl: value === 'UNIT' ? prev.gitRepoUrl : '',
                 gitBranch: value === 'UNIT' ? (prev.gitBranch.trim() ? prev.gitBranch : 'main') : '',
+                modulePath: value === 'UNIT' ? prev.modulePath : '',
               }))
             }}
           >
@@ -1381,6 +1403,21 @@ export default function ProjectDetailsPage() {
 
         {suiteForm.type === 'UNIT' ? (
           <>
+            <div className="space-y-2">
+              <Label htmlFor="suite-edit-module-path">Chemin du module (relatif)</Label>
+              <Input
+                id="suite-edit-module-path"
+                value={suiteForm.modulePath}
+                onChange={(event) =>
+                  setSuiteForm((prev) => ({ ...prev, modulePath: event.target.value }))
+                }
+                placeholder="backend/AuthenticationMicroservice"
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                Chemin relatif depuis la racine du dépôt cloné.
+              </p>
+            </div>
             <div className="space-y-2">
               <Label>Git Repository</Label>
               <Select

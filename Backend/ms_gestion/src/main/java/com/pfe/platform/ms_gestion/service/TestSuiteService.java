@@ -15,6 +15,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -42,6 +44,9 @@ public class TestSuiteService {
             if (request.getGitBranch() == null || request.getGitBranch().isBlank()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "gitBranch is required when suite type is UNIT");
             }
+            if (request.getModulePath() == null || request.getModulePath().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "modulePath is required when suite type is UNIT");
+            }
         }
 
         TestSuite suite = new TestSuite();
@@ -50,6 +55,7 @@ public class TestSuiteService {
         suite.setDescription(request.getDescription());
         suite.setGitRepoUrl(request.getGitRepoUrl());
         suite.setGitBranch(request.getGitBranch());
+        suite.setModulePath(normalizeModulePathOrNull(request.getModulePath()));
         if (request.getType() != null) {
             try {
                 suite.setType(TestSuite.TestType.valueOf(request.getType().toUpperCase()));
@@ -91,12 +97,16 @@ public class TestSuiteService {
             if (request.getGitBranch() == null || request.getGitBranch().isBlank()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "gitBranch is required when suite type is UNIT");
             }
+            if (request.getModulePath() == null || request.getModulePath().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "modulePath is required when suite type is UNIT");
+            }
         }
 
         suite.setName(request.getName());
         suite.setDescription(request.getDescription());
         suite.setGitRepoUrl(request.getGitRepoUrl());
         suite.setGitBranch(request.getGitBranch());
+        suite.setModulePath(normalizeModulePathOrNull(request.getModulePath()));
         if (request.getType() != null) {
             try {
                 suite.setType(TestSuite.TestType.valueOf(request.getType().toUpperCase()));
@@ -157,7 +167,35 @@ public class TestSuiteService {
                 .type(s.getType() != null ? s.getType().name() : null)
                 .gitRepoUrl(s.getGitRepoUrl())
                 .gitBranch(s.getGitBranch())
+                .modulePath(s.getModulePath())
                 .createdAt(s.getCreatedAt())
                 .build();
+    }
+
+    private String normalizeModulePathOrNull(String modulePath) {
+        if (modulePath == null) return null;
+        String trimmed = modulePath.trim();
+        if (trimmed.isBlank()) return null;
+
+        Path path;
+        try {
+            path = Paths.get(trimmed);
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "modulePath is invalid");
+        }
+
+        if (path.isAbsolute()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "modulePath must be a relative path");
+        }
+
+        Path normalized = path.normalize();
+        for (Path part : normalized) {
+            if ("..".equals(part.toString())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "modulePath must not contain '..'");
+            }
+        }
+
+        // Store a portable representation (forward slashes) so ms-execution can safely resolve it on Linux/Windows.
+        return normalized.toString().replace('\\', '/');
     }
 }
