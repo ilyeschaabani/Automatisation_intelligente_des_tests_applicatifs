@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -73,6 +74,7 @@ type SuiteFormState = {
   gitRepoUrl: string
   gitBranch: string
   modulePath: string
+  useGitRepo: boolean
   type?: SuiteType
 }
 
@@ -98,6 +100,7 @@ const emptySuiteForm: SuiteFormState = {
   gitRepoUrl: '',
   gitBranch: '',
   modulePath: '',
+  useGitRepo: false,
   type: 'WEB',
 }
 
@@ -135,6 +138,13 @@ const normalizeRepoUrl = (url: string): string =>
     .toLowerCase()
     .replace(/\.git$/, '')
     .replace(/\/+$/, '')
+
+const isRepoMandatorySuiteType = (type?: SuiteType): boolean => type === 'UNIT' || type === 'INTEGRATION'
+
+const isWebOrApiSuiteType = (type?: SuiteType): boolean => type === 'WEB' || type === 'API'
+
+const shouldShowGitRepoFields = (type?: SuiteType, useGitRepo?: boolean): boolean =>
+  isRepoMandatorySuiteType(type) || (isWebOrApiSuiteType(type) && Boolean(useGitRepo))
 
 const extractBranchNames = (payload: unknown): string[] => {
   const list: unknown[] = Array.isArray(payload)
@@ -379,7 +389,7 @@ export default function ProjectDetailsPage() {
 
   const openSuiteCreate = () => {
     resetSuiteForm()
-    setSuiteForm((prev) => ({ ...prev, type: 'WEB' }))
+    setSuiteForm((prev) => ({ ...prev, type: 'WEB', useGitRepo: false }))
     setSuiteCreateOpen(true)
   }
 
@@ -387,13 +397,14 @@ export default function ProjectDetailsPage() {
     setSuiteEditing(suite)
     const type = (suite.type ?? 'WEB') as SuiteType
     const gitBranchRaw = suite.gitBranch ?? ''
-    const gitBranch = type === 'UNIT' && !gitBranchRaw.trim() ? 'main' : gitBranchRaw
+    const gitBranch = (type === 'UNIT' || type === 'INTEGRATION') && !gitBranchRaw.trim() ? 'main' : gitBranchRaw
     setSuiteForm({
       name: suite.name ?? '',
       description: suite.description ?? '',
       gitRepoUrl: suite.gitRepoUrl ?? '',
       gitBranch,
       modulePath: suite.modulePath ?? '',
+      useGitRepo: isRepoMandatorySuiteType(type) || Boolean((suite.gitRepoUrl ?? '').trim()),
       type,
     })
     setSuiteEditOpen(true)
@@ -559,10 +570,13 @@ export default function ProjectDetailsPage() {
   }
 
   useEffect(() => {
-    if ((suiteCreateOpen || suiteEditOpen) && suiteForm.type === 'UNIT') {
+    if (!suiteCreateOpen && !suiteEditOpen) return
+
+    const showGitRepoFields = shouldShowGitRepoFields(suiteForm.type, suiteForm.useGitRepo)
+    if (showGitRepoFields) {
       void fetchGitHubRepos()
     }
-  }, [suiteCreateOpen, suiteEditOpen, suiteForm.type])
+  }, [suiteCreateOpen, suiteEditOpen, suiteForm.type, suiteForm.useGitRepo])
 
   const fetchBranches = async (owner: string, repo: string) => {
     const cacheKey = `${owner}/${repo}`
@@ -600,7 +614,8 @@ export default function ProjectDetailsPage() {
   }
 
   useEffect(() => {
-    if (suiteForm.type !== 'UNIT') return
+    const showGitRepoFields = shouldShowGitRepoFields(suiteForm.type, suiteForm.useGitRepo)
+    if (!showGitRepoFields) return
     if (!suiteCreateOpen && !suiteEditOpen) return
     if (!suiteForm.gitRepoUrl.trim()) {
       setBranchState({ kind: 'idle', branches: [] })
@@ -640,10 +655,11 @@ export default function ProjectDetailsPage() {
       const branches = await fetchBranches(repo.owner, repo.name)
       applyBranch(branches)
     })()
-  }, [suiteForm.type, suiteForm.gitRepoUrl, suiteCreateOpen, suiteEditOpen, gitReposState, gitRepos])
+  }, [suiteForm.type, suiteForm.useGitRepo, suiteForm.gitRepoUrl, suiteCreateOpen, suiteEditOpen, gitReposState, gitRepos])
 
   useEffect(() => {
-    if (suiteForm.type !== 'UNIT') return
+    const showGitRepoFields = shouldShowGitRepoFields(suiteForm.type, suiteForm.useGitRepo)
+    if (!showGitRepoFields) return
     if (gitReposState !== 'ready') return
     if (gitRepos.length === 0) return
     if (!suiteForm.gitRepoUrl.trim()) return
@@ -657,7 +673,7 @@ export default function ProjectDetailsPage() {
       if (prev.gitRepoUrl !== current) return prev
       return { ...prev, gitRepoUrl: match.url }
     })
-  }, [suiteForm.type, suiteForm.gitRepoUrl, gitReposState, gitRepos])
+  }, [suiteForm.type, suiteForm.useGitRepo, suiteForm.gitRepoUrl, gitReposState, gitRepos])
 
   const submitEnvEdit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -712,13 +728,17 @@ export default function ProjectDetailsPage() {
     setFormError(null)
 
     try {
+      const showGitRepoFields = shouldShowGitRepoFields(suiteForm.type, suiteForm.useGitRepo)
       const payload: CreateTestSuiteRequest = {
         name: suiteForm.name.trim(),
         type: (suiteForm.type as any) || undefined,
         description: suiteForm.description.trim() || undefined,
-        gitRepoUrl: suiteForm.gitRepoUrl.trim() || undefined,
-        gitBranch: suiteForm.gitBranch.trim() || undefined,
-        modulePath: suiteForm.modulePath.trim() || undefined,
+        gitRepoUrl: showGitRepoFields ? suiteForm.gitRepoUrl.trim() || undefined : undefined,
+        gitBranch: showGitRepoFields ? suiteForm.gitBranch.trim() || undefined : undefined,
+        modulePath:
+          suiteForm.type === 'UNIT' || suiteForm.type === 'INTEGRATION'
+            ? suiteForm.modulePath.trim() || undefined
+            : undefined,
       }
       await testSuiteService.create(projectId, payload)
       setSuiteCreateOpen(false)
@@ -738,13 +758,17 @@ export default function ProjectDetailsPage() {
     setFormError(null)
 
     try {
+      const showGitRepoFields = shouldShowGitRepoFields(suiteForm.type, suiteForm.useGitRepo)
       const payload: UpdateTestSuiteRequest = {
         name: suiteForm.name.trim(),
         type: (suiteForm.type as any) || undefined,
         description: suiteForm.description.trim() || undefined,
-        gitRepoUrl: suiteForm.gitRepoUrl.trim() || undefined,
-        gitBranch: suiteForm.gitBranch.trim() || undefined,
-        modulePath: suiteForm.modulePath.trim() || undefined,
+        gitRepoUrl: showGitRepoFields ? suiteForm.gitRepoUrl.trim() || undefined : undefined,
+        gitBranch: showGitRepoFields ? suiteForm.gitBranch.trim() || undefined : undefined,
+        modulePath:
+          suiteForm.type === 'UNIT' || suiteForm.type === 'INTEGRATION'
+            ? suiteForm.modulePath.trim() || undefined
+            : undefined,
       }
       await testSuiteService.update(projectId, suiteEditing.id, payload)
       setSuiteEditOpen(false)
@@ -1167,8 +1191,10 @@ export default function ProjectDetailsPage() {
         isSubmitting={isSuiteSubmitting}
         onSubmit={submitSuiteCreate}
         disableSubmit={
-          suiteForm.type === 'UNIT' &&
-          (!suiteForm.gitRepoUrl.trim() || !suiteForm.gitBranch.trim() || !suiteForm.modulePath.trim())
+          (isRepoMandatorySuiteType(suiteForm.type) &&
+            (!suiteForm.gitRepoUrl.trim() || !suiteForm.gitBranch.trim())) ||
+          ((suiteForm.type === 'UNIT' || suiteForm.type === 'INTEGRATION') &&
+            !suiteForm.modulePath.trim())
         }
       >
         <div className="space-y-2">
@@ -1200,10 +1226,19 @@ export default function ProjectDetailsPage() {
               setSuiteForm((prev) => ({
                 ...prev,
                 type: value as SuiteType,
-                // clear git fields when switching away
-                gitRepoUrl: value === 'UNIT' ? prev.gitRepoUrl : '',
-                gitBranch: value === 'UNIT' ? (prev.gitBranch.trim() ? prev.gitBranch : 'main') : '',
-                modulePath: value === 'UNIT' ? prev.modulePath : '',
+                ...(value === 'UNIT' || value === 'INTEGRATION'
+                  ? {
+                      useGitRepo: true,
+                      gitRepoUrl: prev.gitRepoUrl,
+                      gitBranch: prev.gitBranch.trim() ? prev.gitBranch : 'main',
+                    }
+                  : {
+                      // Switching away from mandatory types clears git fields by default.
+                      useGitRepo: (prev.type === 'WEB' || prev.type === 'API') ? prev.useGitRepo : false,
+                      gitRepoUrl: (prev.type === 'WEB' || prev.type === 'API') && prev.useGitRepo ? prev.gitRepoUrl : '',
+                      gitBranch: (prev.type === 'WEB' || prev.type === 'API') && prev.useGitRepo ? prev.gitBranch : '',
+                    }),
+                modulePath: value === 'UNIT' || value === 'INTEGRATION' ? prev.modulePath : '',
               }))
             }}
           >
@@ -1219,25 +1254,53 @@ export default function ProjectDetailsPage() {
           </Select>
         </div>
 
-        {suiteForm.type === 'UNIT' ? (
-          <>
-            <div className="space-y-2">
-              <Label htmlFor="suite-module-path">Chemin du module (relatif)</Label>
-              <Input
-                id="suite-module-path"
-                value={suiteForm.modulePath}
-                onChange={(event) =>
-                  setSuiteForm((prev) => ({ ...prev, modulePath: event.target.value }))
-                }
-                placeholder="backend/AuthenticationMicroservice"
-                required
-              />
+        {suiteForm.type === 'UNIT' || suiteForm.type === 'INTEGRATION' ? (
+          <div className="space-y-2">
+            <Label htmlFor="suite-module-path">Chemin du module (relatif)</Label>
+            <Input
+              id="suite-module-path"
+              value={suiteForm.modulePath}
+              onChange={(event) =>
+                setSuiteForm((prev) => ({ ...prev, modulePath: event.target.value }))
+              }
+              placeholder="backend/AuthenticationMicroservice"
+              required={suiteForm.type === 'UNIT' || suiteForm.type === 'INTEGRATION'}
+            />
+            <p className="text-xs text-muted-foreground">
+              Chemin relatif depuis la racine du dépôt cloné.
+            </p>
+          </div>
+        ) : null}
+
+        {isWebOrApiSuiteType(suiteForm.type) ? (
+          <div className="flex items-start justify-between gap-4 rounded-md border p-3">
+            <div className="space-y-1">
+              <Label>Attach Git repository (optional)</Label>
               <p className="text-xs text-muted-foreground">
-                Chemin relatif depuis la racine du dépôt cloné.
+                WEB/API suites can use a separate test repository.
               </p>
             </div>
+            <Switch
+              checked={suiteForm.useGitRepo}
+              onCheckedChange={(checked) => {
+                if (!checked) {
+                  setBranchState({ kind: 'idle', branches: [] })
+                }
+                setSuiteForm((prev) => ({
+                  ...prev,
+                  useGitRepo: checked,
+                  gitRepoUrl: checked ? prev.gitRepoUrl : '',
+                  gitBranch: checked ? prev.gitBranch : '',
+                }))
+              }}
+            />
+          </div>
+        ) : null}
+
+        {shouldShowGitRepoFields(suiteForm.type, suiteForm.useGitRepo) ? (
+          <>
             <div className="space-y-2">
-              <Label>Git Repository</Label>
+              <Label>Git Repository{isRepoMandatorySuiteType(suiteForm.type) ? ' *' : ''}</Label>
               <Select
                 value={suiteForm.gitRepoUrl}
                 onValueChange={(value) =>
@@ -1281,7 +1344,7 @@ export default function ProjectDetailsPage() {
               ) : null}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="suite-git-branch">Git Branch</Label>
+              <Label htmlFor="suite-git-branch">Git Branch{isRepoMandatorySuiteType(suiteForm.type) ? ' *' : ''}</Label>
               <Select
                 value={suiteForm.gitBranch}
                 onValueChange={(value) => {
@@ -1352,8 +1415,10 @@ export default function ProjectDetailsPage() {
         isSubmitting={isSuiteSubmitting}
         onSubmit={submitSuiteEdit}
         disableSubmit={
-          suiteForm.type === 'UNIT' &&
-          (!suiteForm.gitRepoUrl.trim() || !suiteForm.gitBranch.trim() || !suiteForm.modulePath.trim())
+          (isRepoMandatorySuiteType(suiteForm.type) &&
+            (!suiteForm.gitRepoUrl.trim() || !suiteForm.gitBranch.trim())) ||
+          ((suiteForm.type === 'UNIT' || suiteForm.type === 'INTEGRATION') &&
+            !suiteForm.modulePath.trim())
         }
       >
         <div className="space-y-2">
@@ -1383,9 +1448,18 @@ export default function ProjectDetailsPage() {
               setSuiteForm((prev) => ({
                 ...prev,
                 type: value as SuiteType,
-                gitRepoUrl: value === 'UNIT' ? prev.gitRepoUrl : '',
-                gitBranch: value === 'UNIT' ? (prev.gitBranch.trim() ? prev.gitBranch : 'main') : '',
-                modulePath: value === 'UNIT' ? prev.modulePath : '',
+                ...(value === 'UNIT' || value === 'INTEGRATION'
+                  ? {
+                      useGitRepo: true,
+                      gitRepoUrl: prev.gitRepoUrl,
+                      gitBranch: prev.gitBranch.trim() ? prev.gitBranch : 'main',
+                    }
+                  : {
+                      useGitRepo: (prev.type === 'WEB' || prev.type === 'API') ? prev.useGitRepo : false,
+                      gitRepoUrl: (prev.type === 'WEB' || prev.type === 'API') && prev.useGitRepo ? prev.gitRepoUrl : '',
+                      gitBranch: (prev.type === 'WEB' || prev.type === 'API') && prev.useGitRepo ? prev.gitBranch : '',
+                    }),
+                modulePath: value === 'UNIT' || value === 'INTEGRATION' ? prev.modulePath : '',
               }))
             }}
           >
@@ -1401,25 +1475,53 @@ export default function ProjectDetailsPage() {
           </Select>
         </div>
 
-        {suiteForm.type === 'UNIT' ? (
-          <>
-            <div className="space-y-2">
-              <Label htmlFor="suite-edit-module-path">Chemin du module (relatif)</Label>
-              <Input
-                id="suite-edit-module-path"
-                value={suiteForm.modulePath}
-                onChange={(event) =>
-                  setSuiteForm((prev) => ({ ...prev, modulePath: event.target.value }))
-                }
-                placeholder="backend/AuthenticationMicroservice"
-                required
-              />
+        {suiteForm.type === 'UNIT' || suiteForm.type === 'INTEGRATION' ? (
+          <div className="space-y-2">
+            <Label htmlFor="suite-edit-module-path">Chemin du module (relatif)</Label>
+            <Input
+              id="suite-edit-module-path"
+              value={suiteForm.modulePath}
+              onChange={(event) =>
+                setSuiteForm((prev) => ({ ...prev, modulePath: event.target.value }))
+              }
+              placeholder="backend/AuthenticationMicroservice"
+              required={suiteForm.type === 'UNIT' || suiteForm.type === 'INTEGRATION'}
+            />
+            <p className="text-xs text-muted-foreground">
+              Chemin relatif depuis la racine du dépôt cloné.
+            </p>
+          </div>
+        ) : null}
+
+        {isWebOrApiSuiteType(suiteForm.type) ? (
+          <div className="flex items-start justify-between gap-4 rounded-md border p-3">
+            <div className="space-y-1">
+              <Label>Attach Git repository (optional)</Label>
               <p className="text-xs text-muted-foreground">
-                Chemin relatif depuis la racine du dépôt cloné.
+                WEB/API suites can use a separate test repository.
               </p>
             </div>
+            <Switch
+              checked={suiteForm.useGitRepo}
+              onCheckedChange={(checked) => {
+                if (!checked) {
+                  setBranchState({ kind: 'idle', branches: [] })
+                }
+                setSuiteForm((prev) => ({
+                  ...prev,
+                  useGitRepo: checked,
+                  gitRepoUrl: checked ? prev.gitRepoUrl : '',
+                  gitBranch: checked ? prev.gitBranch : '',
+                }))
+              }}
+            />
+          </div>
+        ) : null}
+
+        {shouldShowGitRepoFields(suiteForm.type, suiteForm.useGitRepo) ? (
+          <>
             <div className="space-y-2">
-              <Label>Git Repository</Label>
+              <Label>Git Repository{isRepoMandatorySuiteType(suiteForm.type) ? ' *' : ''}</Label>
               <Select
                 value={suiteForm.gitRepoUrl}
                 onValueChange={(value) =>
@@ -1463,7 +1565,7 @@ export default function ProjectDetailsPage() {
               ) : null}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="suite-edit-git-branch">Git Branch</Label>
+              <Label htmlFor="suite-edit-git-branch">Git Branch{isRepoMandatorySuiteType(suiteForm.type) ? ' *' : ''}</Label>
               <Select
                 value={suiteForm.gitBranch}
                 onValueChange={(value) => {

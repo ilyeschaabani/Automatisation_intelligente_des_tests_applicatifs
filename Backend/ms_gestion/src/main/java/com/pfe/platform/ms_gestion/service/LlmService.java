@@ -42,24 +42,84 @@ public class LlmService {
     }
 
     private String buildPrompt(String type, String description) {
-        String base = """
-            Tu es un assistant spécialisé en automatisation de tests Java avec TestNG.
-            Génère **uniquement** le code Java complet (imports, classe, méthode), sans explications.
-            Le code doit être directement compilable et utilisable dans un projet Maven.
-            Your response must contain ONLY the Java code. Do NOT include any introductory or concluding text. Start directly with 'package' or 'import'.
-            
-            Type de test : %s
-            Description : %s
+        String normalizedType = type == null ? "" : type.trim().toUpperCase();
+        String normalizedDescription = description == null ? "" : description.trim();
+
+        String commonRules = """
+            Tu es un assistant spécialisé en automatisation de tests Java.
+
+            RÈGLES ABSOLUES (tu dois les respecter) :
+            - Réponds UNIQUEMENT avec du code Java compilable (un seul fichier) : pas de texte, pas de titre.
+            - Ne mets PAS de markdown, PAS de backticks, PAS de blocs ```.
+            - Commence directement par 'package' OU 'import'.
+            - Utilise TestNG (org.testng.annotations.*) : pas de JUnit.
+            - Le code doit contenir : imports, une classe publique, et des méthodes de test annotées @Test.
+            - Utilise des assertions TestNG (org.testng.Assert.*) et/ou des vérifications pertinentes.
             """;
 
-        String specifics = switch (type.toUpperCase()) {
-            case "UNIT"   -> "C'est un test unitaire. Utilise Mockito si nécessaire.";
-            case "INTEGRATION" -> "C'est un test d'intégration. Utilise JDBC et une base H2 en mémoire.";
-            case "WEB"    -> "C'est un test web avec HtmlUnitDriver (headless). Utilise Selenium.";
-            case "API"    -> "C'est un test d'API REST avec REST Assured.";
-            default       -> "Type de test inconnu.";
+        String header = """
+
+            CONTEXTE :
+            - Type de test : %s
+            - Description fonctionnelle : %s
+            """.formatted(normalizedType, normalizedDescription);
+
+        String specifics = switch (normalizedType) {
+            case "UNIT" -> """
+                CONSIGNES UNIT (test unitaire pur) :
+                - N'utilise PAS Spring (pas de @SpringBootTest, pas de contexte, pas d'@Autowired).
+                - Mocker TOUTES les dépendances (repositories, clients externes, autres services) avec Mockito.
+                - Utilise @Mock et MockitoAnnotations.openMocks(this) dans une méthode @BeforeMethod.
+                - Si possible, utilise @InjectMocks pour la classe sous test.
+                - N'utilise PAS de base de données.
+                - Chaque test doit vérifier un résultat (assertEquals/assertNotNull/...) ET les interactions (verify(...)).
+                - Imports autorisés : TestNG + Mockito + classes métier nécessaires (pas d'imports inutiles).
+                """;
+
+            case "INTEGRATION" -> """
+                CONSIGNES INTEGRATION (test d'intégration Spring) :
+                - Utilise Spring Test : @SpringBootTest (ou @DataJpaTest si c'est uniquement la couche JPA).
+                - Ne mocke PAS les repositories : utilise une vraie base H2 en mémoire.
+                - Active le profil 'test' via @ActiveProfiles("test").
+                - Configure H2 en mémoire directement dans le test (pour être autonome) avec @TestPropertySource(properties = { ... }).
+                  Propriétés attendues (exemple) :
+                  - spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+                  - spring.datasource.driverClassName=org.h2.Driver
+                  - spring.datasource.username=sa
+                  - spring.datasource.password=
+                  - spring.jpa.hibernate.ddl-auto=create-drop
+                  - spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
+                - Injecte les beans avec @Autowired.
+                - Utilise @Transactional pour isoler/rollback les tests.
+                - Assertions complètes (assertNotNull, assertEquals, etc.).
+                """;
+
+            case "WEB" -> """
+                CONSIGNES WEB (E2E Web) :
+                - Utilise Selenium avec HtmlUnitDriver (headless) : org.openqa.selenium.htmlunit.HtmlUnitDriver.
+                - N'utilise PAS ChromeDriver ni WebDriverManager (sauf demande explicite).
+                - Lis l'URL de base depuis System.getProperty("BASE_URL").
+                - Utilise By.id / By.name / By.cssSelector (pas de XPath sauf nécessité).
+                - Configure une attente implicite pour la fiabilité (driver.manage().timeouts().implicitlyWait(...)).
+                - Ferme le driver dans @AfterMethod.
+                - Assertions TestNG sur le contenu (titre, éléments, textes) et sur les navigations.
+                """;
+
+            case "API" -> """
+                CONSIGNES API (tests REST) :
+                - Utilise REST Assured (io.rest-assured.*).
+                - Lis l'URL de base depuis System.getProperty("BASE_URL").
+                - Envoie des requêtes JSON (contentType JSON) et vérifie : status code, headers, body.
+                - Utilise des assertions Hamcrest (org.hamcrest.Matchers.*) avec RestAssured (then().body(...)).
+                - Le test doit être robuste (valide au moins un champ du JSON et/ou un header pertinent).
+                """;
+
+            default -> """
+                CONSIGNES PAR DÉFAUT :
+                - Génère un test TestNG minimal, compilable, cohérent avec la description.
+                """;
         };
 
-        return String.format(base, specifics, description);
+        return commonRules + header + "\n" + specifics + "\n" + "Génère maintenant le code Java.";
     }
 }

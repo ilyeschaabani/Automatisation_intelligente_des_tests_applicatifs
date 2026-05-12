@@ -13,8 +13,10 @@ import com.pfe.platform.ms_gestion.repository.TestCaseRepository;
 import com.pfe.platform.ms_gestion.repository.TestSuiteRepository;
 import com.pfe.platform.ms_gestion.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -48,9 +50,36 @@ public class TestCaseService {
 
         // -------------------------------------------------------
         // Gestion du mode IA / manuel
-        // Si le projet parent est en mode IA (pas de gitRepoUrl), on force la génération IA
-        // Sinon, conserver le comportement précédent (useAI / generatedCode / scriptPath)
+        // Règle métier: pour les suites UNIT/INTEGRATION, on force toujours la génération IA.
+        // Sinon:
+        // - si le projet parent est en mode IA (pas de gitRepoUrl), on force la génération IA
+        // - sinon, conserver le comportement (useAI / generatedCode / scriptPath)
         // -------------------------------------------------------
+        boolean suiteForcesAi = suite.getType() == TestSuite.TestType.UNIT || suite.getType() == TestSuite.TestType.INTEGRATION;
+
+        if (suiteForcesAi) {
+            // If the user provides edited/generated code, persist it as-is.
+            if (request.getGeneratedCode() != null && !request.getGeneratedCode().trim().isEmpty()) {
+                tc.setGeneratedCode(request.getGeneratedCode());
+                tc.setGenerated(true);
+                tc.setScriptPath(null);
+            } else {
+                // Otherwise, require a prompt and generate via LLM.
+                if (request.getDescriptionAI() == null || request.getDescriptionAI().isBlank()) {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST,
+                            "descriptionAI is required when suite type is " + suite.getType()
+                    );
+                }
+                String generatedCode = llmService.generateTestCode(
+                        suite.getType().name(),
+                        request.getDescriptionAI().trim()
+                );
+                tc.setGeneratedCode(generatedCode);
+                tc.setGenerated(true);
+                tc.setScriptPath(null);
+            }
+        } else {
         boolean projectIsAi = false;
         if (suite.getProject() != null) {
             String repo = suite.getProject().getGitRepoUrl();
@@ -88,6 +117,7 @@ public class TestCaseService {
                 tc.setGenerated(false);
             }
         }
+        }
 
         tc = testCaseRepository.save(tc);
         return mapToResponse(tc);
@@ -111,6 +141,9 @@ public class TestCaseService {
         TestCase tc = getTestCaseOrThrow(caseId, suiteId);
         checkProjectRole(tc.getSuite().getProject(), ProjectMember.Role.ADMIN, ProjectMember.Role.TESTER);
 
+        boolean suiteForcesAi = tc.getSuite().getType() == TestSuite.TestType.UNIT
+            || tc.getSuite().getType() == TestSuite.TestType.INTEGRATION;
+
         tc.setTitle(request.getTitle());
         tc.setDescription(request.getDescription());
         tc.setType(TestCase.TestType.valueOf(request.getType().toUpperCase()));
@@ -121,24 +154,43 @@ public class TestCaseService {
         tc.setTags(request.getTags());
         tc.setMaxDurationSeconds(request.getMaxDurationSeconds());
 
-        // Handle AI mode updates (same three cases as add())
-        if (Boolean.TRUE.equals(request.getUseAI()) && request.getDescriptionAI() != null) {
-            // Cas 1 : régénérer depuis l'IA
+        // Handle code mode updates.
+        // Priority:
+        // 1) If generatedCode provided => persist it (user edited)
+        // 2) Else if useAI+descriptionAI => regenerate
+        // 3) Else if scriptPath provided => manual mode
+        // 4) Else => keep existing code/mode (metadata-only update)
+        if (request.getGeneratedCode() != null && !request.getGeneratedCode().trim().isEmpty()) {
+            tc.setGeneratedCode(request.getGeneratedCode());
+            tc.setGenerated(true);
+            tc.setScriptPath(null);
+        } else if (Boolean.TRUE.equals(request.getUseAI())
+                && request.getDescriptionAI() != null
+                && !request.getDescriptionAI().isBlank()) {
             String generatedCode = llmService.generateTestCode(
                     request.getType(),
                     request.getDescriptionAI()
             );
             tc.setGeneratedCode(generatedCode);
             tc.setGenerated(true);
-        } else if (request.getGeneratedCode() != null && !request.getGeneratedCode().trim().isEmpty()) {
-            // Cas 2 : code généré/édité par l'utilisateur
-            tc.setGeneratedCode(request.getGeneratedCode());
-            tc.setGenerated(true);
-        } else {
-            // Cas 3 : mode manuel
+            tc.setScriptPath(null);
+        } else if (request.getScriptPath() != null && !request.getScriptPath().isBlank()) {
             tc.setScriptPath(request.getScriptPath());
             tc.setGenerated(false);
             tc.setGeneratedCode(null);
+        } else {
+            // keep existing tc.generated/tc.generatedCode/tc.scriptPath
+        }
+
+        if (suiteForcesAi) {
+            // UNIT/INTEGRATION suites must always remain in generated mode.
+            tc.setScriptPath(null);
+            if (!Boolean.TRUE.equals(tc.getGenerated()) || tc.getGeneratedCode() == null || tc.getGeneratedCode().isBlank()) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "generatedCode or descriptionAI is required when suite type is " + tc.getSuite().getType()
+                );
+            }
         }
 
         return mapToResponse(testCaseRepository.save(tc));

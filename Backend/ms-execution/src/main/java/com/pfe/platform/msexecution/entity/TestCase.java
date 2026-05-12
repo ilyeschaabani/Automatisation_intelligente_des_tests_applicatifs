@@ -21,6 +21,9 @@ public class TestCase {
     
     @Enumerated(EnumType.STRING)
     private TestType type; // WEB, API
+
+    @Column(name = "spring_profile")
+    private String springProfile;
     private String scriptPath;
 
     @Column(columnDefinition = "TEXT")
@@ -67,6 +70,14 @@ public class TestCase {
 
     public void setType(TestType type) {
         this.type = type;
+    }
+
+    public String getSpringProfile() {
+        return springProfile;
+    }
+
+    public void setSpringProfile(String springProfile) {
+        this.springProfile = springProfile;
     }
 
     public String getScriptPath() {

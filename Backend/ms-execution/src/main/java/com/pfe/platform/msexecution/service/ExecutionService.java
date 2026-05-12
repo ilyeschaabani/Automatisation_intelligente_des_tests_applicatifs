@@ -19,9 +19,11 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -60,6 +62,13 @@ public class ExecutionService {
         private static final String DEP_MOCKITO_GROUP = "org.mockito";
         private static final String DEP_MOCKITO_ARTIFACT = "mockito-core";
         private static final String DEP_MOCKITO_VERSION = "5.7.0";
+
+        private static final String DEP_H2_GROUP = "com.h2database";
+        private static final String DEP_H2_ARTIFACT = "h2";
+        private static final String DEP_H2_VERSION = "2.2.224";
+
+        private static final String DEP_SPRING_BOOT_TEST_GROUP = "org.springframework.boot";
+        private static final String DEP_SPRING_BOOT_TEST_ARTIFACT = "spring-boot-starter-test";
 
     private final CampaignRepository campaignRepository;
     private final CampaignTestCaseRepository campaignTestCaseRepository;
@@ -129,9 +138,10 @@ public class ExecutionService {
             log.warn("No test cases found for campaign! Marking as finished successfully.");
         }
 
-        // Map to cache suite repositories (clone once per suite)
-        Map<Long, Path> suiteRepoMap = new HashMap<>();
-        log.info("[CAMPAIGN {}] Suite repo cache initialized", campaignId);
+        // Map to cache suite repositories (clone once per unique url#branch)
+        // Key format: <gitRepoUrl>#<branch>
+        Map<String, Path> suiteRepoMap = new HashMap<>();
+        log.info("[CAMPAIGN {}] Suite repo cache initialized (key=url#branch)", campaignId);
 
         boolean globalSuccess = true;
         int executedCount = 0;
@@ -175,21 +185,24 @@ public class ExecutionService {
                 if (suite != null && suite.getGitRepoUrl() != null && !suite.getGitRepoUrl().isBlank()) {
                     try {
                         TestSuite finalSuite = suite;
-                        workDir = suiteRepoMap.computeIfAbsent(suite.getId(), idKey -> {
-                            String branch = (finalSuite.getGitBranch() != null && !finalSuite.getGitBranch().isBlank())
-                                    ? finalSuite.getGitBranch()
-                                    : "main";
+                        String branch = (finalSuite.getGitBranch() != null && !finalSuite.getGitBranch().isBlank())
+                                ? finalSuite.getGitBranch().trim()
+                                : "main";
+                        String cacheKey = finalSuite.getGitRepoUrl().trim() + "#" + branch;
+
+                        workDir = suiteRepoMap.computeIfAbsent(cacheKey, key -> {
                             try {
                                 log.info(
-                                        "[CAMPAIGN {}] Cloning suite repo once: suiteId={}, url={}, branch={}",
+                                        "[CAMPAIGN {}] Cloning suite repo once: key={}, suiteId={}, url={}, branch={}",
                                         campaignId,
-                                        idKey,
+                                        key,
+                                        finalSuite.getId(),
                                         finalSuite.getGitRepoUrl(),
                                         branch
                                 );
                                 Path clonedPath = cloneRepository(finalSuite.getGitRepoUrl(), branch);
-                                log.info("Cloned suite repository ID {} from {} at {}",
-                                        idKey, finalSuite.getGitRepoUrl(), clonedPath);
+                                log.info("Cloned suite repository key {} from {} at {}",
+                                        key, finalSuite.getGitRepoUrl(), clonedPath);
                                 return clonedPath;
                             } catch (Exception e) {
                                 throw new RuntimeException(e);
@@ -424,9 +437,14 @@ public class ExecutionService {
                 log.warn("[TESTCASE {}] No pom.xml found at workDir={} (pom.xml={})", tc.getId(), workDir, pom);
             } else {
                 log.debug("[TESTCASE {}] pom.xml found: {} (size={} bytes)", tc.getId(), pom, safeFileSize(pom));
-                log.info("[TESTCASE {}] Ensuring required test dependencies in pom.xml...", tc.getId());
-                ensureTestDependencies(pom);
-                log.info("[TESTCASE {}] pom.xml dependency check completed", tc.getId());
+                TestCase.TestType pomType = tc.getType();
+                if (pomType == TestCase.TestType.UNIT || pomType == TestCase.TestType.INTEGRATION) {
+                    log.info("[TESTCASE {}] Ensuring required test dependencies in pom.xml...", tc.getId());
+                    ensureTestDependencies(pom, pomType);
+                    log.info("[TESTCASE {}] pom.xml dependency check completed", tc.getId());
+                } else {
+                    log.info("[TESTCASE {}] Skipping pom.xml dependency enforcement for type={} (WEB/API repos manage deps)", tc.getId(), pomType);
+                }
             }
 
             String className;
@@ -446,19 +464,24 @@ public class ExecutionService {
 
                 final String packageName;
                 final String subDir;
-                if (tc.getType() == TestCase.TestType.UNIT) {
+                if (tc.getType() == TestCase.TestType.UNIT || tc.getType() == TestCase.TestType.INTEGRATION) {
                     String rootPackage = findRootPackage(workDir);
                     packageName = rootPackage + ".testgen";
                     subDir = Paths.get("", packageName.split("\\.")).toString();
                     log.info(
-                            "[TESTCASE {}] UNIT root package='{}' => generated package='{}'",
+                            "[TESTCASE {}] {} root package='{}' => generated package='{}'",
                             tc.getId(),
+                            tc.getType(),
                             rootPackage,
                             packageName
                     );
                 } else {
-                    subDir = getTestPackageByType(tc.getType());
-                    packageName = subDir.replace('\\', '.').replace('/', '.');
+                    String resolvedSubDir = getTestPackageByType(tc.getType());
+                    if (resolvedSubDir == null || resolvedSubDir.isBlank()) {
+                        resolvedSubDir = "suites/generated";
+                    }
+                    subDir = resolvedSubDir;
+                    packageName = resolvedSubDir.replace('\\', '.').replace('/', '.');
                     log.info(
                             "[TESTCASE {}] Non-UNIT generated test => package='{}' (subDir='{}')",
                             tc.getId(),
@@ -521,6 +544,18 @@ public class ExecutionService {
             }
 
             log.info("[TESTCASE {}] Using Maven wrapper: {}", tc.getId(), wrapper);
+
+            // Ensure a default Spring Boot test profile exists for integration tests.
+            TestCase.TestType effectiveType = tc.getType() != null ? tc.getType() : TestCase.TestType.WEB;
+            if (effectiveType == TestCase.TestType.INTEGRATION) {
+                ensureTestProperties(workDir);
+                try {
+                    ensureH2DialectInPom(pom);
+                } catch (Exception e) {
+                    log.warn("[TESTCASE {}] Failed to ensure H2 dialect in pom.xml: {}", tc.getId(), e.getMessage());
+                }
+            }
+
             List<String> command = buildMavenCommand(tc, env, workDir, className, wrapper);
 
             log.info("Maven command: {}", String.join(" ", command));
@@ -620,6 +655,10 @@ public class ExecutionService {
     }
 
     private void ensureTestDependencies(Path pomXml) throws Exception {
+        ensureTestDependencies(pomXml, null);
+    }
+
+    private void ensureTestDependencies(Path pomXml, TestCase.TestType testType) throws Exception {
         if (pomXml == null) {
             throw new IllegalArgumentException("pomXml is null");
         }
@@ -650,6 +689,13 @@ public class ExecutionService {
                 DEP_TESTNG_GROUP, DEP_TESTNG_ARTIFACT, DEP_TESTNG_VERSION, "test");
         changed |= ensureDependency(doc, dependencies, ns, pomXml,
                 DEP_MOCKITO_GROUP, DEP_MOCKITO_ARTIFACT, DEP_MOCKITO_VERSION, "test");
+
+        if (testType == TestCase.TestType.INTEGRATION) {
+            changed |= ensureDependency(doc, dependencies, ns, pomXml,
+                DEP_SPRING_BOOT_TEST_GROUP, DEP_SPRING_BOOT_TEST_ARTIFACT, null, "test");
+            changed |= ensureDependency(doc, dependencies, ns, pomXml,
+                DEP_H2_GROUP, DEP_H2_ARTIFACT, DEP_H2_VERSION, "test");
+        }
 
         changed |= ensureSurefireTestNgPlugin(doc, project, ns, pomXml);
 
@@ -896,8 +942,12 @@ public class ExecutionService {
         Element dep = ns != null ? doc.createElementNS(ns, "dependency") : doc.createElement("dependency");
         dep.appendChild(textElement(doc, ns, "groupId", groupId));
         dep.appendChild(textElement(doc, ns, "artifactId", artifactId));
-        dep.appendChild(textElement(doc, ns, "version", version));
-        dep.appendChild(textElement(doc, ns, "scope", scope));
+        if (version != null && !version.isBlank()) {
+            dep.appendChild(textElement(doc, ns, "version", version));
+        }
+        if (scope != null && !scope.isBlank()) {
+            dep.appendChild(textElement(doc, ns, "scope", scope));
+        }
 
         dependencies.appendChild(dep);
         log.info("Added missing dependency to {}: {}:{}:{} (scope={})", pomXml, groupId, artifactId, version, scope);
@@ -984,13 +1034,21 @@ public class ExecutionService {
                 break;
             case INTEGRATION:
                 command.add("-Dtest.layer=integration");
-                command.add("-DBASE_URL=" + baseUrl);
+                command.add("-Dspring.jpa.database-platform=org.hibernate.dialect.H2Dialect");
+                if (tc.getSpringProfile() != null && !tc.getSpringProfile().isBlank()) {
+                    command.add("-Dspring.profiles.active=" + tc.getSpringProfile().trim());
+                }
+                if (baseUrl != null && !baseUrl.isBlank()) {
+                    command.add("-DBASE_URL=" + baseUrl);
+                }
                 break;
             case API:
             case WEB:
             default:
                 command.add("-Dtest.layer=e2e");
-                command.add("-DBASE_URL=" + baseUrl);
+                if (baseUrl != null && !baseUrl.isBlank()) {
+                    command.add("-DBASE_URL=" + baseUrl);
+                }
                 break;
         }
 
@@ -999,6 +1057,92 @@ public class ExecutionService {
         }
 
         return command;
+    }
+
+    private void ensureTestProperties(Path workDir) {
+        if (workDir == null) return;
+
+        Path propsFile = workDir.resolve("src/test/resources/application-test.properties");
+        if (Files.exists(propsFile)) {
+            return;
+        }
+
+        String content = """
+spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+spring.datasource.driverClassName=org.h2.Driver
+spring.datasource.username=sa
+spring.datasource.password=
+spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
+spring.jpa.hibernate.ddl-auto=create-drop
+""";
+
+        try {
+            Files.createDirectories(propsFile.getParent());
+            Files.writeString(propsFile, content, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
+            log.info("Created default application-test.properties at {}", propsFile);
+        } catch (FileAlreadyExistsException ignored) {
+            // Another thread/process created it in the meantime.
+        } catch (IOException e) {
+            log.warn("Failed to create application-test.properties at {}", propsFile, e);
+        }
+    }
+
+    private void ensureH2DialectInPom(Path pomXml) throws Exception {
+        if (pomXml == null || !Files.exists(pomXml)) {
+            return;
+        }
+
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setNamespaceAware(true);
+        DocumentBuilder builder = factory.newDocumentBuilder();
+        Document doc = builder.parse(pomXml.toFile());
+
+        Element project = doc.getDocumentElement();
+        if (project == null) {
+            return;
+        }
+
+        String ns = project.getNamespaceURI();
+        Element properties = findDirectChildByLocalName(project, "properties");
+        if (properties == null) {
+            properties = ns != null ? doc.createElementNS(ns, "properties") : doc.createElement("properties");
+            project.insertBefore(properties, project.getFirstChild());
+            log.info("Created <properties> section in {}", pomXml);
+        }
+
+        // Remove existing spring.jpa.database-platform property if present
+        NodeList propChildren = properties.getChildNodes();
+        for (int i = propChildren.getLength() - 1; i >= 0; i--) {
+            Node node = propChildren.item(i);
+            if (node.getNodeType() != Node.ELEMENT_NODE) continue;
+            Element el = (Element) node;
+            String ln = el.getLocalName();
+            String nn = el.getNodeName();
+            if ("spring.jpa.database-platform".equals(ln) || "spring.jpa.database-platform".equals(nn)) {
+                properties.removeChild(node);
+                log.debug("Removed existing spring.jpa.database-platform property from {}", pomXml);
+            }
+        }
+
+        // Add or replace spring.jpa.database-platform with H2Dialect
+        Element propElement = ns != null 
+            ? doc.createElementNS(ns, "spring.jpa.database-platform") 
+            : doc.createElement("spring.jpa.database-platform");
+        propElement.setTextContent("org.hibernate.dialect.H2Dialect");
+        properties.appendChild(propElement);
+
+        // Save the modified pom.xml
+        TransformerFactory tf = TransformerFactory.newInstance();
+        Transformer transformer = tf.newTransformer();
+        transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "no");
+        transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+        transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
+        try {
+            transformer.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "2");
+        } catch (Exception ignored) {
+        }
+        transformer.transform(new DOMSource(doc), new StreamResult(pomXml.toFile()));
+        log.info("Updated pom.xml: spring.jpa.database-platform set to org.hibernate.dialect.H2Dialect in {}", pomXml);
     }
 
     private Path findMavenWrapper(Path startDir) {

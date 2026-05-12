@@ -123,6 +123,9 @@ export default function SuiteTestCasesPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
+  const forceAiForSuite = suite?.type === 'UNIT' || suite?.type === 'INTEGRATION'
+  const showAiSection = Boolean(project?.aiProject) || forceAiForSuite
+
   const loadSuite = async () => {
     if (!hasIds) return
     setSuiteState('loading')
@@ -203,6 +206,10 @@ export default function SuiteTestCasesPage() {
       setFormError('Suite type is not loaded yet. Please retry.')
       return
     }
+    if (forceAiForSuite && !aiState.descriptionAI.trim()) {
+      setFormError('AI description is required for UNIT/INTEGRATION suites.')
+      return
+    }
     setGenerating(true)
     try {
       const payload = { type: suiteType, description: aiState.descriptionAI || formState.description }
@@ -237,7 +244,8 @@ export default function SuiteTestCasesPage() {
     setEditOpen(true)
     // if this case was generated, prefill AI state
     setAiState({
-      descriptionAI: '',
+      // best-effort prefill: we don't persist descriptionAI server-side yet
+      descriptionAI: String((testCase as any).descriptionAI ?? testCase.description ?? ''),
       generatedCode: String((testCase as any).generatedCode ?? ''),
       codeValidated: Boolean((testCase as any).generated),
     })
@@ -304,7 +312,30 @@ export default function SuiteTestCasesPage() {
     // 1. If generatedCode exists (and validated) -> send it
     // 2. If project.aiProject with description -> backend regenerates
     // 3. Otherwise -> manual mode with scriptPath
-    if (aiState.generatedCode && aiState.generatedCode.trim()) {
+    if (forceAiForSuite) {
+      // Forced AI for UNIT/INTEGRATION suites:
+      // - If user has code in the editor, persist it (allows post-generation edits).
+      // - Otherwise, require descriptionAI and let backend generate.
+      if (aiState.generatedCode && aiState.generatedCode.trim()) {
+        if (!aiState.codeValidated) {
+          setFormError('You must validate the generated script before saving.')
+          return null
+        }
+        payload.generatedCode = aiState.generatedCode
+        payload.useAI = false
+        delete (payload as any).scriptPath
+      } else {
+        const prompt = aiState.descriptionAI.trim()
+        if (!prompt) {
+          setFormError('AI description is required for UNIT/INTEGRATION suites.')
+          return null
+        }
+        payload.useAI = true
+        payload.descriptionAI = prompt
+        delete (payload as any).scriptPath
+        delete (payload as any).generatedCode
+      }
+    } else if (aiState.generatedCode && aiState.generatedCode.trim()) {
       // Case 1: User has generated/edited code and validated it
       if (!aiState.codeValidated) {
         setFormError('You must validate the generated script before saving.')
@@ -549,7 +580,7 @@ export default function SuiteTestCasesPage() {
             placeholder="Optional description"
           />
         </div>
-        {project?.aiProject ? (
+        {showAiSection ? (
           <>
             <div className="space-y-2">
               <Label htmlFor="case-description-ai">AI description <span className="text-destructive">*</span></Label>
@@ -558,7 +589,7 @@ export default function SuiteTestCasesPage() {
                 value={aiState.descriptionAI}
                 onChange={(e) => setAiState((prev) => ({ ...prev, descriptionAI: e.target.value }))}
                 placeholder="Describe what the test should do in natural language"
-                required
+                required={forceAiForSuite || Boolean(project?.aiProject)}
               />
             </div>
             <div className="flex gap-2">
@@ -645,7 +676,7 @@ export default function SuiteTestCasesPage() {
             />
           </div>
         </div>
-        {!(project?.aiProject || aiState.useAI) ? (
+        {!showAiSection ? (
           <div className="space-y-2">
             <Label htmlFor="case-script">Script path</Label>
             <Input
@@ -726,14 +757,15 @@ export default function SuiteTestCasesPage() {
             }
           />
         </div>
-        {project?.aiProject ? (
+        {showAiSection ? (
           <>
             <div className="space-y-2">
-              <Label>AI description</Label>
+              <Label>AI description{forceAiForSuite ? ' *' : ''}</Label>
               <Textarea
                 value={aiState.descriptionAI}
                 onChange={(e) => setAiState((prev) => ({ ...prev, descriptionAI: e.target.value }))}
                 placeholder="Describe what the test should do in natural language"
+                required={forceAiForSuite}
               />
             </div>
             <div className="flex gap-2 mb-2">
@@ -818,7 +850,7 @@ export default function SuiteTestCasesPage() {
             />
           </div>
         </div>
-        {!(project?.aiProject || aiState.useAI) ? (
+        {!showAiSection ? (
           <div className="space-y-2">
             <Label htmlFor="case-edit-script">Script path</Label>
             <Input

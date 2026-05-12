@@ -36,18 +36,8 @@ public class TestSuiteService {
             throw new RuntimeException("Une suite avec ce nom existe déjà dans ce projet");
         }
 
-        // Validate: if suite type is UNIT, gitRepoUrl and gitBranch are required
-        if (request.getType() != null && "UNIT".equalsIgnoreCase(request.getType())) {
-            if (request.getGitRepoUrl() == null || request.getGitRepoUrl().isBlank()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "gitRepoUrl is required when suite type is UNIT");
-            }
-            if (request.getGitBranch() == null || request.getGitBranch().isBlank()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "gitBranch is required when suite type is UNIT");
-            }
-            if (request.getModulePath() == null || request.getModulePath().isBlank()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "modulePath is required when suite type is UNIT");
-            }
-        }
+        TestSuite.TestType requestedType = resolveSuiteTypeOrNull(request.getType());
+        validateGitFieldsByType(requestedType, request);
 
         TestSuite suite = new TestSuite();
         suite.setProject(project);
@@ -89,18 +79,11 @@ public class TestSuiteService {
             throw new RuntimeException("Une suite avec ce nom existe déjà dans ce projet");
         }
 
-        // Validate: if suite type is UNIT, gitRepoUrl and gitBranch are required
-        if (request.getType() != null && "UNIT".equalsIgnoreCase(request.getType())) {
-            if (request.getGitRepoUrl() == null || request.getGitRepoUrl().isBlank()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "gitRepoUrl is required when suite type is UNIT");
-            }
-            if (request.getGitBranch() == null || request.getGitBranch().isBlank()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "gitBranch is required when suite type is UNIT");
-            }
-            if (request.getModulePath() == null || request.getModulePath().isBlank()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "modulePath is required when suite type is UNIT");
-            }
+        TestSuite.TestType effectiveType = resolveSuiteTypeOrNull(request.getType());
+        if (effectiveType == null) {
+            effectiveType = suite.getType();
         }
+        validateGitFieldsByType(effectiveType, request);
 
         suite.setName(request.getName());
         suite.setDescription(request.getDescription());
@@ -197,5 +180,35 @@ public class TestSuiteService {
 
         // Store a portable representation (forward slashes) so ms-execution can safely resolve it on Linux/Windows.
         return normalized.toString().replace('\\', '/');
+    }
+
+    private TestSuite.TestType resolveSuiteTypeOrNull(String type) {
+        if (type == null || type.isBlank()) return null;
+        try {
+            return TestSuite.TestType.valueOf(type.trim().toUpperCase());
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private void validateGitFieldsByType(TestSuite.TestType type, CreateTestSuiteRequest request) {
+        if (type == null) return;
+
+        boolean requiresRepo = type == TestSuite.TestType.UNIT || type == TestSuite.TestType.INTEGRATION;
+        if (!requiresRepo) return;
+
+        if (request.getGitRepoUrl() == null || request.getGitRepoUrl().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "gitRepoUrl is required when suite type is " + type);
+        }
+        if (request.getGitBranch() == null || request.getGitBranch().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "gitBranch is required when suite type is " + type);
+        }
+        if ((type == TestSuite.TestType.UNIT || type == TestSuite.TestType.INTEGRATION)
+                && (request.getModulePath() == null || request.getModulePath().isBlank())) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "modulePath is required when suite type is " + type
+            );
+        }
     }
 }
