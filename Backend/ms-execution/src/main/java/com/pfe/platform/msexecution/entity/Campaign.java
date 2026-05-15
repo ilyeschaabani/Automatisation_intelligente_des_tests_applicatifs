@@ -30,7 +30,7 @@ public class Campaign {
     private LocalDateTime startedAt;
     private LocalDateTime finishedAt;
 
-    public enum CampaignStatus { PENDING, RUNNING, FINISHED, FINISHED_WITH_ERRORS }
+    public enum CampaignStatus { PENDING, RUNNING, FINISHED, FINISHED_WITH_ERRORS, ABORTED }
     public enum TriggerMode { MANUAL, SCHEDULED, CI }
 
     public Campaign() {

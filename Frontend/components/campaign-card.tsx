@@ -1,10 +1,17 @@
 "use client"
 
 import { useRouter } from 'next/navigation'
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 
 import { Badge } from '@/components/ui/badge'
-import { MoreVertical, CheckCircle2, AlertCircle } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { MoreVertical, CheckCircle2, AlertCircle, Edit2, Trash2 } from 'lucide-react'
+import { deleteCampaign } from '@/lib/api-client'
 
 interface CampaignCardProps {
   id?: number | string
@@ -17,6 +24,7 @@ interface CampaignCardProps {
   passed: number
   failed: number
   lastRun: string
+  onDelete?: () => void
 }
 
 const statusConfig = {
@@ -51,18 +59,50 @@ export function CampaignCard({
   passed,
   failed,
   lastRun,
+  onDelete,
 }: CampaignCardProps) {
   const router = useRouter()
+  const [isDeleting, setIsDeleting] = useState(false)
   const config = statusConfig[status]
   const typeColor = typeColors[type]
   const baseHref = id !== undefined && id !== null && String(id).trim()
     ? `/campaigns/${encodeURIComponent(String(id))}`
     : `/campaigns/${slugify(name)}`
   const href = projectId ? `${baseHref}?projectId=${encodeURIComponent(String(projectId))}` : baseHref
+  const editHref = id !== undefined && id !== null && String(id).trim()
+    ? `/campaigns/${encodeURIComponent(String(id))}/edit${projectId ? `?projectId=${encodeURIComponent(String(projectId))}` : ''}`
+    : baseHref
 
   const navigate = useCallback(() => {
     router.push(href)
   }, [router, href])
+
+  const handleEdit = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    router.push(editHref)
+  }, [router, editHref])
+
+  const handleDelete = useCallback(async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    if (!id || isDeleting) return
+    
+    const confirmDelete = confirm(`Are you sure you want to delete the campaign "${name}"?`)
+    if (!confirmDelete) return
+
+    setIsDeleting(true)
+    try {
+      await deleteCampaign(Number(id))
+      onDelete?.()
+    } catch (error) {
+      console.error('Failed to delete campaign:', error)
+      alert('Failed to delete campaign. Please try again.')
+    } finally {
+      setIsDeleting(false)
+    }
+  }, [id, name, isDeleting, onDelete])
 
   return (
     <div
@@ -91,17 +131,35 @@ export function CampaignCard({
             </Badge>
           </div>
         </div>
-        <button
-          type="button"
-          className="p-2 hover:bg-secondary rounded-lg"
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-          }}
-          aria-label="Campaign actions"
-        >
-          <MoreVertical size={18} className="text-muted-foreground" />
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="p-2 hover:bg-secondary rounded-lg transition-colors"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+              }}
+              aria-label="Campaign actions"
+            >
+              <MoreVertical size={18} className="text-muted-foreground" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onClick={handleEdit} className="cursor-pointer">
+              <Edit2 size={16} className="mr-2" />
+              <span>Edit Campaign</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              onClick={handleDelete} 
+              disabled={isDeleting}
+              className="cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600 focus:dark:text-red-400"
+            >
+              <Trash2 size={16} className="mr-2" />
+              <span>{isDeleting ? 'Deleting...' : 'Delete Campaign'}</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Progress Bar */}

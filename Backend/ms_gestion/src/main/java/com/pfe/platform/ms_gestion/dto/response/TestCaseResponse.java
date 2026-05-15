@@ -25,4 +25,5 @@ public class TestCaseResponse {
     private LocalDateTime createdAt;
     private String generatedCode;
     private Boolean generated;
+    private String databaseType;
 }

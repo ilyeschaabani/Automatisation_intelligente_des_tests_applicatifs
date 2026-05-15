@@ -47,6 +47,7 @@ public class TestCaseService {
         tc.setTestData(ensureValidJson(request.getTestData()));
         tc.setTags(request.getTags());
         tc.setMaxDurationSeconds(request.getMaxDurationSeconds());
+        tc.setDatabaseType(request.getDatabaseType());
 
         // -------------------------------------------------------
         // Gestion du mode IA / manuel
@@ -56,6 +57,14 @@ public class TestCaseService {
         // - sinon, conserver le comportement (useAI / generatedCode / scriptPath)
         // -------------------------------------------------------
         boolean suiteForcesAi = suite.getType() == TestSuite.TestType.UNIT || suite.getType() == TestSuite.TestType.INTEGRATION;
+
+        // Validate databaseType for INTEGRATION suites
+        if (suite.getType() == TestSuite.TestType.INTEGRATION) {
+            String db = request.getDatabaseType();
+            if (db == null || db.isBlank() || !isValidDatabaseType(db)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "databaseType is required and must be one of POSTGRESQL, MYSQL, H2, MONGODB for INTEGRATION suites");
+            }
+        }
 
         if (suiteForcesAi) {
             // If the user provides edited/generated code, persist it as-is.
@@ -73,7 +82,8 @@ public class TestCaseService {
                 }
                 String generatedCode = llmService.generateTestCode(
                         suite.getType().name(),
-                        request.getDescriptionAI().trim()
+                    request.getDescriptionAI().trim(),
+                    request.getDatabaseType()
                 );
                 tc.setGeneratedCode(generatedCode);
                 tc.setGenerated(true);
@@ -93,7 +103,8 @@ public class TestCaseService {
                     : request.getDescription();
             String generatedCode = llmService.generateTestCode(
                     request.getType(),
-                    promptDesc
+                    promptDesc,
+                    request.getDatabaseType()
             );
             tc.setGeneratedCode(generatedCode);
             tc.setGenerated(true);
@@ -103,7 +114,8 @@ public class TestCaseService {
                 // Cas 1 : régénérer depuis l'IA
                 String generatedCode = llmService.generateTestCode(
                         request.getType(),
-                        request.getDescriptionAI()
+                    request.getDescriptionAI(),
+                    request.getDatabaseType()
                 );
                 tc.setGeneratedCode(generatedCode);
                 tc.setGenerated(true);
@@ -153,6 +165,7 @@ public class TestCaseService {
         tc.setTestData(ensureValidJson(request.getTestData()));
         tc.setTags(request.getTags());
         tc.setMaxDurationSeconds(request.getMaxDurationSeconds());
+        tc.setDatabaseType(request.getDatabaseType());
 
         // Handle code mode updates.
         // Priority:
@@ -169,7 +182,8 @@ public class TestCaseService {
                 && !request.getDescriptionAI().isBlank()) {
             String generatedCode = llmService.generateTestCode(
                     request.getType(),
-                    request.getDescriptionAI()
+                    request.getDescriptionAI(),
+                    request.getDatabaseType()
             );
             tc.setGeneratedCode(generatedCode);
             tc.setGenerated(true);
@@ -239,6 +253,19 @@ public class TestCaseService {
         if (!authorized) throw new RuntimeException("Action non autorisée");
     }
 
+    private boolean isValidDatabaseType(String db) {
+        if (db == null) return false;
+        switch (db.trim().toUpperCase()) {
+            case "POSTGRESQL":
+            case "MYSQL":
+            case "H2":
+            case "MONGODB":
+                return true;
+            default:
+                return false;
+        }
+    }
+
     private TestCaseResponse mapToResponse(TestCase tc) {
         return TestCaseResponse.builder()
                 .id(tc.getId())
@@ -258,6 +285,7 @@ public class TestCaseService {
                 .createdAt(tc.getCreatedAt())
                 .generatedCode(tc.getGeneratedCode())
                 .generated(tc.getGenerated())
+                .databaseType(tc.getDatabaseType())
                 .build();
     }
 

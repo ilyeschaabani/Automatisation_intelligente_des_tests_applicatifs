@@ -60,6 +60,7 @@ import {
   AlertCircle,
   Play,
   ShieldCheck,
+  Square,
 } from 'lucide-react'
 
 import {
@@ -74,6 +75,7 @@ import {
   listExecutions,
   startCampaignRun,
   continueCampaignRun,
+  stopCampaign,
   getTestCasesForCampaign,
   type CampaignRunContinueRequest,
   type CampaignRunResponse,
@@ -969,6 +971,38 @@ export default function CampaignDetailsPage() {
     }
   }
 
+  const handleStopCampaign = async () => {
+    if (!campaignNumericId || !campaign?.projectId) return
+
+    try {
+      await stopCampaign(campaign.projectId, campaignNumericId)
+      toast({
+        title: 'Campaign stopped',
+        description: 'The campaign has been aborted successfully.',
+        variant: 'default',
+      })
+      // Reload the campaign status after a short delay
+      setTimeout(() => {
+        if (!campaignNumericId || !campaign?.projectId) return
+        void (async () => {
+          try {
+            const dto = await getCampaign(campaign.projectId!, campaignNumericId)
+            const mapped = mapBackendCampaign(dto)
+            setRemoteCampaign(mapped)
+          } catch (error) {
+            console.warn('Failed to reload campaign status', error)
+          }
+        })()
+      }, 500)
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to stop campaign',
+        variant: 'destructive',
+      })
+    }
+  }
+
   const submitRunInputs = async () => {
     if (!campaignNumericId || !runSessionId) return
 
@@ -1172,16 +1206,29 @@ export default function CampaignDetailsPage() {
                         View executions
                       </Link>
                     </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="gap-2"
-                      onClick={() => void runCampaign()}
-                      disabled={runSubmitting}
-                    >
-                      <Play className="h-4 w-4" />
-                      {runButtonLabel}
-                    </Button>
+                    {isExecutionRunning || campaign.status === 'Running' ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        className="gap-2"
+                        onClick={() => void handleStopCampaign()}
+                      >
+                        <Square className="h-4 w-4" />
+                        Stop Campaign
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => void runCampaign()}
+                        disabled={runSubmitting}
+                      >
+                        <Play className="h-4 w-4" />
+                        {runButtonLabel}
+                      </Button>
+                    )}
                   </div>
 
                   {showExecutionPanel ? (

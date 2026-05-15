@@ -83,7 +83,7 @@ export type CampaignStatusBackendDto = {
   id: number
   projectId: number | null
   environmentId: number | null
-  status: string // PENDING, RUNNING, FINISHED, FINISHED_WITH_ERRORS
+  status: string // PENDING, RUNNING, FINISHED, FINISHED_WITH_ERRORS, ABORTED
   triggerMode: string | null // MANUAL, SCHEDULED, CI
   gitBranch: string | null
   startedAt: string | null
@@ -571,6 +571,22 @@ export async function createExecution(
   return createExecutionDto(campaignId, input)
 }
 
+export async function listExecutionResults(params?: {
+  campaignId?: number
+}): Promise<ExecutionResultBackendDto[]> {
+  const query = new URLSearchParams()
+  if (params?.campaignId !== undefined) query.set('campaignId', String(params.campaignId))
+  const suffix = query.toString() ? '?' + query.toString() : ''
+  
+  try {
+    const results = await requestJson<ExecutionResultBackendDto[]>('/api/executions' + suffix, { cache: 'no-store' })
+    return Array.isArray(results) ? results : []
+  } catch (error) {
+    console.warn('Failed to load execution results', error)
+    return []
+  }
+}
+
 export async function listExecutions(params?: {
   campaignId?: number
 }): Promise<TestExecutionDto[]> {
@@ -693,6 +709,12 @@ export async function createCampaign(input: TestCampaignCreateRequest): Promise<
   })
 }
 
+export async function deleteCampaign(campaignId: number): Promise<void> {
+  return requestVoid(`/api/campaigns/${encodeURIComponent(String(campaignId))}`, {
+    method: 'DELETE',
+  })
+}
+
 export async function listTestCases(): Promise<TestCaseDto[]> {
   return requestJson<TestCaseDto[]>(`/api/cases`, { cache: 'no-store' })
 }
@@ -779,6 +801,29 @@ export async function continueCampaignRun(
 
   // ms-execution doesn't support continuation flow
   return { status: 'error', message: 'Continuation not supported in ms-execution' } as CampaignRunResponse
+}
+
+export async function stopCampaign(projectId: number, campaignId: number): Promise<{ message: string }> {
+  const response = await fetch(
+    '/api/projects/' + encodeURIComponent(String(projectId)) + '/campaigns/' + encodeURIComponent(String(campaignId)) + '/stop',
+    {
+      method: 'PUT',
+      credentials: 'include',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+      },
+    },
+  )
+
+  const data = (await response.json().catch(() => null)) as { message: string } | null
+
+  if (!response.ok) {
+    const message = await readReadableError(response)
+    throw new Error(message)
+  }
+
+  return data ?? { message: 'Campaign stopped' }
 }
 // --------------------------------------------------
 

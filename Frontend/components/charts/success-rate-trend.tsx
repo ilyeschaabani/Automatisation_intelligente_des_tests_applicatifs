@@ -22,10 +22,10 @@ export function SuccessRateTrend({ data }: SuccessRateTrendProps) {
     <ResponsiveContainer width="100%" height={300}>
       <LineChart data={data}>
         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-        <XAxis stroke="hsl(var(--muted-foreground))" />
+        <XAxis dataKey="week" stroke="hsl(var(--muted-foreground))" />
         <YAxis
           stroke="hsl(var(--muted-foreground))"
-          domain={[90, 100]}
+          domain={[0, 100]}
         />
         <Tooltip
           contentStyle={{

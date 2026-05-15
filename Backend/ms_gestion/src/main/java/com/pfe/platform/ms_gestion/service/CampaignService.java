@@ -221,4 +221,27 @@ public class CampaignService {
                 .createdAt(c.getCreatedAt())
                 .build();
     }
+
+    public Map<String, String> stopCampaign(Long campaignId) {
+        try {
+            String url = msExecutionUrl + "/api/execution/stop/" + campaignId;
+            restTemplate.put(url, null);
+            return Map.of("message", "Campaign stopped successfully");
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to stop campaign: " + e.getMessage(), e);
+        }
+    }
+
+    @Transactional
+    public void delete(Long projectId, Long campaignId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        Campaign campaign = getCampaignOrThrow(campaignId, projectId);
+        checkProjectRole(campaign.getProject(), userId, ProjectMember.Role.ADMIN, ProjectMember.Role.TESTER);
+        
+        // Delete associated campaign test cases
+        campaignTestCaseRepository.deleteByCampaignId(campaignId);
+        
+        // Delete the campaign
+        campaignRepository.deleteById(campaignId);
+    }
 }

@@ -15,7 +15,11 @@ public class LlmService {
     private final RestTemplate restTemplate = new RestTemplate();
 
     public String generateTestCode(String type, String description) {
-        String prompt = buildPrompt(type, description);
+        return generateTestCode(type, description, null);
+    }
+
+    public String generateTestCode(String type, String description, String databaseType) {
+        String prompt = buildPrompt(type, description, databaseType);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -41,9 +45,10 @@ public class LlmService {
         throw new RuntimeException("Ollama n’a pas renvoyé de code.");
     }
 
-    private String buildPrompt(String type, String description) {
+    private String buildPrompt(String type, String description, String databaseType) {
         String normalizedType = type == null ? "" : type.trim().toUpperCase();
         String normalizedDescription = description == null ? "" : description.trim();
+        String normalizedDatabaseType = databaseType == null ? "" : databaseType.trim().toUpperCase();
 
         String commonRules = """
             Tu es un assistant spécialisé en automatisation de tests Java.
@@ -63,6 +68,54 @@ public class LlmService {
             - Type de test : %s
             - Description fonctionnelle : %s
             """.formatted(normalizedType, normalizedDescription);
+
+        String mongoIntegrationRules = "";
+        if ("INTEGRATION".equals(normalizedType) && "MONGODB".equals(normalizedDatabaseType)) {
+            mongoIntegrationRules = """
+
+                CONSIGNES SUPPLÉMENTAIRES (INTEGRATION + MONGODB) :
+                - La classe doit utiliser TestNG, étendre AbstractTestNGSpringContextTests, et être annotée @SpringBootTest et @ActiveProfiles("test").
+                - Le MongoDBContainer doit être démarré dans une méthode @BeforeSuite(alwaysRun = true).
+                - L'URI MongoDB doit être injectée via System.setProperty("spring.data.mongodb.uri", ...) avant le chargement du contexte Spring.
+                - Ne pas utiliser d'annotations JUnit.
+                - N'utilise PAS d'annotations Testcontainers/JUnit comme @Testcontainers, @Container, @DynamicPropertySource.
+                - Le code final doit être directement compilable, autonome, et inclure tous les imports nécessaires.
+
+                EXEMPLE DE STRUCTURE À SUIVRE (guide, adapte les noms métier) :
+                // import org.springframework.beans.factory.annotation.Autowired;
+                // import org.springframework.boot.test.context.SpringBootTest;
+                // import org.springframework.test.context.ActiveProfiles;
+                // import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
+                // import org.testng.Assert;
+                // import org.testng.annotations.BeforeSuite;
+                // import org.testng.annotations.Test;
+                // import org.testcontainers.containers.MongoDBContainer;
+                //
+                // @SpringBootTest
+                // @ActiveProfiles("test")
+                // public class UserRepositoryIntegrationTest extends AbstractTestNGSpringContextTests {
+                //
+                //     private static final MongoDBContainer mongo = new MongoDBContainer("mongo:7.0");
+                //
+                //     @BeforeSuite(alwaysRun = true)
+                //     public void beforeSuite() {
+                //         if (!mongo.isRunning()) {
+                //             mongo.start();
+                //         }
+                //         System.setProperty("spring.data.mongodb.uri", mongo.getReplicaSetUrl());
+                //     }
+                //
+                //     @Autowired
+                //     private UserRepository userRepository;
+                //
+                //     @Test
+                //     public void shouldSaveUser() {
+                //         UserEntity saved = userRepository.save(new UserEntity(null, "alice@example.com"));
+                //         Assert.assertNotNull(saved.getId());
+                //     }
+                // }
+                """;
+        }
 
         String specifics = switch (normalizedType) {
             case "UNIT" -> """
@@ -120,6 +173,6 @@ public class LlmService {
                 """;
         };
 
-        return commonRules + header + "\n" + specifics + "\n" + "Génère maintenant le code Java.";
+        return commonRules + mongoIntegrationRules + header + "\n" + specifics + "\n" + "Génère maintenant le code Java.";
     }
 }

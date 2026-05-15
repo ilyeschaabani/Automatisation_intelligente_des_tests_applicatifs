@@ -21,5 +21,6 @@ public class CreateTestCaseRequest {
     private Integer maxDurationSeconds;
     private String generatedCode;      // optionnel, rempli par l'IA
     private Boolean useAI = false;     // si true, on génère
+    private String databaseType;       // POSTGRESQL | MYSQL | H2 | MONGODB (required for INTEGRATION)
     private String descriptionAI;      // description en langage naturel
 }

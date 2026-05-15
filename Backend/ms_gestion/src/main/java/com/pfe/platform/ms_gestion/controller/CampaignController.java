@@ -41,4 +41,17 @@ public class CampaignController {
                                                                           @PathVariable Long campaignId) {
         return ResponseEntity.ok(campaignService.getTestCasesForCampaign(projectId, campaignId));
     }
+
+    @PutMapping("/{campaignId}/stop")
+    public ResponseEntity<?> stopCampaign(@PathVariable Long projectId,
+                                          @PathVariable Long campaignId) {
+        return ResponseEntity.ok(campaignService.stopCampaign(campaignId));
+    }
+
+    @DeleteMapping("/{campaignId}")
+    public ResponseEntity<?> delete(@PathVariable Long projectId,
+                                   @PathVariable Long campaignId) {
+        campaignService.delete(projectId, campaignId);
+        return ResponseEntity.noContent().build();
+    }
 }

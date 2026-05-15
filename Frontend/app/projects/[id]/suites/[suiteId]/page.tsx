@@ -52,6 +52,7 @@ type CaseFormState = {
   description: string
   type: TestType
   springProfile: string
+  databaseType: string
   priority: string
   riskLevel: RiskLevel | ''
   scriptPath: string
@@ -65,6 +66,7 @@ const emptyCaseForm: CaseFormState = {
   description: '',
   type: 'WEB',
   springProfile: '',
+  databaseType: '',
   priority: '',
   riskLevel: '',
   scriptPath: '',
@@ -233,6 +235,7 @@ export default function SuiteTestCasesPage() {
       description: testCase.description ?? '',
       type: suite?.type ?? testCase.type,
       springProfile: testCase.springProfile ?? '',
+      databaseType: (testCase as any).databaseType ?? '',
       priority: testCase.priority != null ? String(testCase.priority) : '',
       riskLevel: testCase.riskLevel ?? '',
       scriptPath: testCase.scriptPath ?? '',
@@ -293,6 +296,7 @@ export default function SuiteTestCasesPage() {
       description: formState.description.trim() || undefined,
       type: suiteType,
       springProfile: isIntegration ? (formState.springProfile.trim() || undefined) : undefined,
+      databaseType: isIntegration ? (formState.databaseType.trim() || undefined) : undefined,
       priority,
       riskLevel: formState.riskLevel ? (formState.riskLevel as RiskLevel) : undefined,
       scriptPath: formState.scriptPath.trim() || undefined,
@@ -306,6 +310,16 @@ export default function SuiteTestCasesPage() {
     }
     if (!showTestData) {
       delete (payload as any).testData
+    }
+
+    if (isIntegration) {
+      const dbt = formState.databaseType.trim()
+      if (!dbt) {
+        setFormError('databaseType is required for INTEGRATION suites')
+        return null
+      }
+      // ensure uppercase normalized value
+      payload.databaseType = dbt.toUpperCase()
     }
 
     // Three cases for code handling:
@@ -555,7 +569,10 @@ export default function SuiteTestCasesPage() {
         description="Define the test case details."
         submitLabel="Create test case"
         isSubmitting={isSubmitting}
-        disableSubmit={Boolean(aiState.generatedCode && aiState.generatedCode.trim()) && !aiState.codeValidated}
+        disableSubmit={
+          (Boolean(aiState.generatedCode && aiState.generatedCode.trim()) && !aiState.codeValidated) ||
+          (suite?.type === 'INTEGRATION' && !formState.databaseType)
+        }
         size="xl"
         onSubmit={submitCreate}
       >
@@ -704,6 +721,25 @@ export default function SuiteTestCasesPage() {
             />
           </div>
         ) : null}
+        {suite?.type === 'INTEGRATION' ? (
+          <div className="space-y-2">
+            <Label htmlFor="case-database-type">Database type</Label>
+            <Select
+              value={formState.databaseType || 'UNSET'}
+              onValueChange={(value) => setFormState((prev) => ({ ...prev, databaseType: value }))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select database" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="POSTGRESQL">POSTGRESQL</SelectItem>
+                <SelectItem value="MYSQL">MYSQL</SelectItem>
+                <SelectItem value="H2">H2</SelectItem>
+                <SelectItem value="MONGODB">MONGODB</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
         <div className="space-y-2">
           <Label htmlFor="case-tags">Tags</Label>
           <Input
@@ -734,7 +770,10 @@ export default function SuiteTestCasesPage() {
         description="Update the test case metadata."
         submitLabel="Save changes"
         isSubmitting={isSubmitting}
-        disableSubmit={Boolean(aiState.generatedCode && aiState.generatedCode.trim()) && !aiState.codeValidated}
+        disableSubmit={
+          (Boolean(aiState.generatedCode && aiState.generatedCode.trim()) && !aiState.codeValidated) ||
+          (suite?.type === 'INTEGRATION' && !formState.databaseType)
+        }
         size="xl"
         onSubmit={submitEdit}
       >
@@ -875,6 +914,25 @@ export default function SuiteTestCasesPage() {
               }
               placeholder="test"
             />
+          </div>
+        ) : null}
+        {suite?.type === 'INTEGRATION' ? (
+          <div className="space-y-2">
+            <Label htmlFor="case-edit-database-type">Database type</Label>
+            <Select
+              value={formState.databaseType || 'UNSET'}
+              onValueChange={(value) => setFormState((prev) => ({ ...prev, databaseType: value }))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select database" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="POSTGRESQL">POSTGRESQL</SelectItem>
+                <SelectItem value="MYSQL">MYSQL</SelectItem>
+                <SelectItem value="H2">H2</SelectItem>
+                <SelectItem value="MONGODB">MONGODB</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         ) : null}
         <div className="space-y-2">

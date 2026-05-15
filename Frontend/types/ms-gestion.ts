@@ -72,6 +72,7 @@ export interface TestCase {
   description?: string;
   type: TestType;
   springProfile?: string;
+  databaseType?: string;
   priority?: number;
   riskLevel?: RiskLevel;
   scriptPath?: string;
@@ -92,6 +93,7 @@ export interface CreateTestCaseRequest {
   description?: string;
   type: TestType;        // required
   springProfile?: string;
+  databaseType?: string; // POSTGRESQL | MYSQL | H2 | MONGODB
   priority?: number;
   riskLevel?: RiskLevel;
   scriptPath?: string;

@@ -24,6 +24,8 @@ public class TestCase {
 
     @Column(name = "spring_profile")
     private String springProfile;
+
+    private String databaseType;
     private String scriptPath;
 
     @Column(columnDefinition = "TEXT")
@@ -78,6 +80,14 @@ public class TestCase {
 
     public void setSpringProfile(String springProfile) {
         this.springProfile = springProfile;
+    }
+
+    public String getDatabaseType() {
+        return databaseType;
+    }
+
+    public void setDatabaseType(String databaseType) {
+        this.databaseType = databaseType;
     }
 
     public String getScriptPath() {

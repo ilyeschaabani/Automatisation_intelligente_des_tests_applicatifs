@@ -13,7 +13,6 @@ import {
   LogOut,
   Menu,
   X,
-  Zap,
   Brain,
   Shield,
 } from 'lucide-react'
@@ -39,11 +38,6 @@ export function Sidebar() {
       label: 'Test Campaigns',
       href: '/campaigns',
       icon: PlayCircle,
-    },
-    {
-      label: 'Test Executions',
-      href: '/executions',
-      icon: Zap,
     },
     {
       label: 'Test Results',

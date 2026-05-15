@@ -28,6 +28,9 @@ public class ExecutionResult {
     @Column(columnDefinition = "TEXT")
     private String logs;
 
+    @Column(name = "ai_analysis", columnDefinition = "TEXT")
+    private String aiAnalysis;
+
     private String screenshotUrl;
     private LocalDateTime executedAt = LocalDateTime.now();
 
@@ -37,7 +40,7 @@ public class ExecutionResult {
     }
 
     public ExecutionResult(Long id, Long campaignId, Long testCaseId, TestCase.TestType testType, ResultStatus status, Long durationMs,
-                           String errorMessage, String logs, String screenshotUrl, LocalDateTime executedAt) {
+                           String errorMessage, String logs, String aiAnalysis, String screenshotUrl, LocalDateTime executedAt) {
         this.id = id;
         this.campaignId = campaignId;
         this.testCaseId = testCaseId;
@@ -46,6 +49,7 @@ public class ExecutionResult {
         this.durationMs = durationMs;
         this.errorMessage = errorMessage;
         this.logs = logs;
+        this.aiAnalysis = aiAnalysis;
         this.screenshotUrl = screenshotUrl;
         this.executedAt = executedAt;
     }
@@ -112,6 +116,14 @@ public class ExecutionResult {
 
     public void setLogs(String logs) {
         this.logs = logs;
+    }
+
+    public String getAiAnalysis() {
+        return aiAnalysis;
+    }
+
+    public void setAiAnalysis(String aiAnalysis) {
+        this.aiAnalysis = aiAnalysis;
     }
 
     public String getScreenshotUrl() {

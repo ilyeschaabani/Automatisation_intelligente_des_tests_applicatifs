@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { Header } from '@/components/header'
 import { Sidebar } from '@/components/sidebar'
 import { Button } from '@/components/ui/button'
@@ -14,6 +15,15 @@ import {
   Download,
   Filter,
 } from 'lucide-react'
+import { KpiDashboard } from '@/components/kpi-dashboard'
+import { getProjects, type Project } from '@/lib/api-client'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 const recurringFailures = [
   {
@@ -98,6 +108,29 @@ const testPrioritization = [
 ]
 
 export default function IntelligencePage() {
+  const [projects, setProjects] = useState<Project[]>([])
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null)
+  const [projectsLoading, setProjectsLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<'failures' | 'prioritization' | 'kpi'>('failures')
+
+  useEffect(() => {
+    loadProjects()
+  }, [])
+
+  const loadProjects = async () => {
+    try {
+      const data = await getProjects()
+      setProjects(data)
+      if (data.length > 0) {
+        setSelectedProjectId(data[0].id)
+      }
+    } catch (err) {
+      console.error('Failed to load projects:', err)
+    } finally {
+      setProjectsLoading(false)
+    }
+  }
+
   return (
     <div className="flex h-screen bg-background">
       <Sidebar />
@@ -115,31 +148,90 @@ export default function IntelligencePage() {
                   </h1>
                 </div>
                 <p className="text-muted-foreground">
-                  AI-powered insights for test failure detection and scenario
-                  prioritization
+                  AI-powered insights for test failure detection, scenario prioritization, and KPIs
                 </p>
+              </div>
+
+              {/* Project Selector */}
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-muted-foreground">Project:</span>
+                <Select
+                  value={selectedProjectId?.toString() || ''}
+                  onValueChange={(value) => setSelectedProjectId(Number(value))}
+                >
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Select a project..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id.toString()}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Tabs */}
+              <div className="flex gap-2 mt-4 border-b border-border">
+                <button
+                  onClick={() => setActiveTab('kpi')}
+                  className={`px-4 py-2 font-medium border-b-2 transition-colors ${
+                    activeTab === 'kpi'
+                      ? 'border-primary text-primary'
+                      : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  KPI Dashboard
+                </button>
+                <button
+                  onClick={() => setActiveTab('failures')}
+                  className={`px-4 py-2 font-medium border-b-2 transition-colors ${
+                    activeTab === 'failures'
+                      ? 'border-primary text-primary'
+                      : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Recurring Failures
+                </button>
+                <button
+                  onClick={() => setActiveTab('prioritization')}
+                  className={`px-4 py-2 font-medium border-b-2 transition-colors ${
+                    activeTab === 'prioritization'
+                      ? 'border-primary text-primary'
+                      : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Test Prioritization
+                </button>
               </div>
             </div>
 
-            {/* Recurring Failures Section */}
-            <div className="mb-12">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-2xl font-bold text-foreground mb-2 flex items-center gap-2">
-                    <AlertTriangle className="w-6 h-6 text-destructive" />
-                    Recurring Failures Analysis
-                  </h2>
-                  <p className="text-muted-foreground">
-                    Detected patterns and root causes from test logs
-                  </p>
-                </div>
-                <Button variant="outline" size="sm">
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Refresh
-                </Button>
-              </div>
+            {/* KPI Tab */}
+            {activeTab === 'kpi' && selectedProjectId && (
+              <KpiDashboard projectId={selectedProjectId} />
+            )}
 
-              <div className="space-y-4">
+            {/* Recurring Failures Section */}
+            {activeTab === 'failures' && (
+              <div className="mb-12">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h2 className="text-2xl font-bold text-foreground mb-2 flex items-center gap-2">
+                      <AlertTriangle className="w-6 h-6 text-destructive" />
+                      Recurring Failures Analysis
+                    </h2>
+                    <p className="text-muted-foreground">
+                      Detected patterns and root causes from test logs
+                    </p>
+                  </div>
+                  <Button variant="outline" size="sm">
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Refresh
+                  </Button>
+                </div>
+
+                <div className="space-y-4">
                 {recurringFailures.map((failure) => (
                   <Card key={failure.id} className="p-6 hover:shadow-md transition-all">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -207,98 +299,101 @@ export default function IntelligencePage() {
                 ))}
               </div>
             </div>
+            )}
 
             {/* Test Prioritization Section */}
-            <div>
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-2xl font-bold text-foreground mb-2 flex items-center gap-2">
-                    <Zap className="w-6 h-6 text-accent" />
-                    Intelligent Test Prioritization
-                  </h2>
-                  <p className="text-muted-foreground">
-                    Risk-based prioritization recommendations using AI analysis
-                  </p>
+            {activeTab === 'prioritization' && (
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h2 className="text-2xl font-bold text-foreground mb-2 flex items-center gap-2">
+                      <Zap className="w-6 h-6 text-accent" />
+                      Intelligent Test Prioritization
+                    </h2>
+                    <p className="text-muted-foreground">
+                      Risk-based prioritization recommendations using AI analysis
+                    </p>
+                  </div>
+                  <Button variant="outline" size="sm">
+                    <Download className="w-4 h-4 mr-2" />
+                    Export
+                  </Button>
                 </div>
-                <Button variant="outline" size="sm">
-                  <Download className="w-4 h-4 mr-2" />
-                  Export
-                </Button>
-              </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left py-4 px-4 font-bold text-foreground">
-                        Test Suite
-                      </th>
-                      <th className="text-left py-4 px-4 font-bold text-foreground">
-                        Risk Level
-                      </th>
-                      <th className="text-left py-4 px-4 font-bold text-foreground">
-                        Risk Score
-                      </th>
-                      <th className="text-left py-4 px-4 font-bold text-foreground">
-                        Recommended Frequency
-                      </th>
-                      <th className="text-left py-4 px-4 font-bold text-foreground">
-                        AI Recommendation
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {testPrioritization.map((test, idx) => (
-                      <tr
-                        key={test.id}
-                        className={`border-b border-border ${
-                          idx % 2 === 0 ? 'bg-secondary/30' : ''
-                        } hover:bg-secondary transition-colors`}
-                      >
-                        <td className="py-4 px-4 text-foreground font-medium">
-                          {test.name}
-                        </td>
-                        <td className="py-4 px-4">
-                          <Badge
-                            variant="secondary"
-                            className={
-                              test.risk === 'Critical'
-                                ? 'bg-red-100 text-red-700'
-                                : test.risk === 'High'
-                                  ? 'bg-orange-100 text-orange-700'
-                                  : 'bg-yellow-100 text-yellow-700'
-                            }
-                          >
-                            {test.risk}
-                          </Badge>
-                        </td>
-                        <td className="py-4 px-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-16 bg-secondary rounded-full h-2">
-                              <div
-                                className="h-2 rounded-full bg-gradient-to-r from-accent to-primary"
-                                style={{ width: `${test.riskScore}%` }}
-                              />
-                            </div>
-                            <span className="font-bold text-foreground">
-                              {test.riskScore}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="py-4 px-4 text-foreground">
-                          {test.frequency}
-                        </td>
-                        <td className="py-4 px-4">
-                          <div className="text-sm text-foreground font-medium">
-                            {test.recommendation}
-                          </div>
-                        </td>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left py-4 px-4 font-bold text-foreground">
+                          Test Suite
+                        </th>
+                        <th className="text-left py-4 px-4 font-bold text-foreground">
+                          Risk Level
+                        </th>
+                        <th className="text-left py-4 px-4 font-bold text-foreground">
+                          Risk Score
+                        </th>
+                        <th className="text-left py-4 px-4 font-bold text-foreground">
+                          Recommended Frequency
+                        </th>
+                        <th className="text-left py-4 px-4 font-bold text-foreground">
+                          AI Recommendation
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {testPrioritization.map((test, idx) => (
+                        <tr
+                          key={test.id}
+                          className={`border-b border-border ${
+                            idx % 2 === 0 ? 'bg-secondary/30' : ''
+                          } hover:bg-secondary transition-colors`}
+                        >
+                          <td className="py-4 px-4 text-foreground font-medium">
+                            {test.name}
+                          </td>
+                          <td className="py-4 px-4">
+                            <Badge
+                              variant="secondary"
+                              className={
+                                test.risk === 'Critical'
+                                  ? 'bg-red-100 text-red-700'
+                                  : test.risk === 'High'
+                                    ? 'bg-orange-100 text-orange-700'
+                                    : 'bg-yellow-100 text-yellow-700'
+                              }
+                            >
+                              {test.risk}
+                            </Badge>
+                          </td>
+                          <td className="py-4 px-4">
+                            <div className="flex items-center gap-2">
+                              <div className="w-16 bg-secondary rounded-full h-2">
+                                <div
+                                  className="h-2 rounded-full bg-gradient-to-r from-accent to-primary"
+                                  style={{ width: `${test.riskScore}%` }}
+                                />
+                              </div>
+                              <span className="font-bold text-foreground">
+                                {test.riskScore}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4 text-foreground">
+                            {test.frequency}
+                          </td>
+                          <td className="py-4 px-4">
+                            <div className="text-sm text-foreground font-medium">
+                              {test.recommendation}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </main>
       </div>

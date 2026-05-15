@@ -25,7 +25,7 @@ export function TestResultsChart({ data }: TestResultsChartProps) {
     <ResponsiveContainer width="100%" height={300}>
       <BarChart data={data}>
         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-        <XAxis stroke="hsl(var(--muted-foreground))" />
+        <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" />
         <YAxis stroke="hsl(var(--muted-foreground))" />
         <Tooltip
           contentStyle={{

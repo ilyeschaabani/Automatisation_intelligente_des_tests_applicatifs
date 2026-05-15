@@ -35,6 +35,7 @@ public class TestCase {
     private TestType type;
 
     private String springProfile;
+    private String databaseType;
 
     private Integer priority;
 

@@ -13,6 +13,7 @@ public class ExecutionResultDto {
     private Long durationMs;
     private String errorMessage;
     private String logs;
+    private String aiAnalysis;
     private String screenshotUrl;
     private LocalDateTime executedAt;
 
@@ -20,7 +21,7 @@ public class ExecutionResultDto {
     }
 
     public ExecutionResultDto(Long id, Long campaignId, Long testCaseId, String testType, String status, Long durationMs,
-                              String errorMessage, String logs, String screenshotUrl, LocalDateTime executedAt) {
+                              String errorMessage, String logs, String aiAnalysis, String screenshotUrl, LocalDateTime executedAt) {
         this.id = id;
         this.campaignId = campaignId;
         this.testCaseId = testCaseId;
@@ -29,6 +30,7 @@ public class ExecutionResultDto {
         this.durationMs = durationMs;
         this.errorMessage = errorMessage;
         this.logs = logs;
+        this.aiAnalysis = aiAnalysis;
         this.screenshotUrl = screenshotUrl;
         this.executedAt = executedAt;
     }
@@ -97,6 +99,14 @@ public class ExecutionResultDto {
         this.logs = logs;
     }
 
+    public String getAiAnalysis() {
+        return aiAnalysis;
+    }
+
+    public void setAiAnalysis(String aiAnalysis) {
+        this.aiAnalysis = aiAnalysis;
+    }
+
     public String getScreenshotUrl() {
         return screenshotUrl;
     }
@@ -123,6 +133,7 @@ public class ExecutionResultDto {
                 entity.getDurationMs(),
                 entity.getErrorMessage(),
                 entity.getLogs(),
+                entity.getAiAnalysis(),
                 entity.getScreenshotUrl(),
                 entity.getExecutedAt()
         );

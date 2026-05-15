@@ -8,11 +8,17 @@ import com.pfe.platform.msexecution.repository.CampaignRepository;
 import com.pfe.platform.msexecution.repository.ExecutionResultRepository;
 import com.pfe.platform.msexecution.service.ExecutionService;
 import lombok.RequiredArgsConstructor;
+import lombok.Getter;
+import lombok.Setter;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/execution")
@@ -92,6 +98,57 @@ public class ExecutionController {
                 .map(ExecutionResultDto::fromEntity)
                 .toList();
         return ResponseEntity.ok(results);
+    }
+
+    @PutMapping("/stop/{campaignId}")
+    public ResponseEntity<?> stopCampaign(@PathVariable Long campaignId) {
+        try {
+            Campaign campaign = campaignRepository.findById(campaignId)
+                    .orElse(null);
+            
+            if (campaign == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(new ResponseDto("Campaign not found"));
+            }
+
+            if (campaign.getStatus() == Campaign.CampaignStatus.RUNNING) {
+                campaign.setStatus(Campaign.CampaignStatus.ABORTED);
+                campaign.setFinishedAt(LocalDateTime.now());
+                campaignRepository.save(campaign);
+                return ResponseEntity.ok(new ResponseDto("Campaign aborted successfully"));
+            } else {
+                return ResponseEntity.badRequest()
+                        .body(new ResponseDto("Campaign is not running (current status: " + campaign.getStatus() + ")"));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ResponseDto("Error: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/results/{resultId}/analysis")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Map<String, String>> getAnalysis(@PathVariable Long resultId) {
+        return executionResultRepository.findById(resultId)
+                .map(result -> {
+                    Map<String, String> payload = new HashMap<>();
+                    payload.put("analysis", result.getAiAnalysis() != null ? result.getAiAnalysis() : "");
+                    return ResponseEntity.ok(payload);
+                })
+                .orElseGet(() -> {
+                    Map<String, String> payload = new HashMap<>();
+                    payload.put("message", "Execution result not found");
+                    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(payload);
+                });
+    }
+
+    @Getter
+    @Setter
+    public static class ResponseDto {
+        private String message;
+        public ResponseDto(String message) {
+            this.message = message;
+        }
     }
 
 }

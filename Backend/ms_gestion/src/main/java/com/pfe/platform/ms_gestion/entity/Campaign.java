@@ -50,5 +50,5 @@ public class Campaign {
     private List<CampaignTestCase> campaignTestCases = new ArrayList<>();
 
     public enum TriggerMode { MANUAL, SCHEDULED, CI }
-    public enum CampaignStatus { PENDING, RUNNING, FINISHED, FINISHED_WITH_ERRORS }
+    public enum CampaignStatus { PENDING, RUNNING, FINISHED, FINISHED_WITH_ERRORS, ABORTED }
 }

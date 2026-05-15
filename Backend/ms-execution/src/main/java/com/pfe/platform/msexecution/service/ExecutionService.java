@@ -69,10 +69,18 @@ public class ExecutionService {
 
         private static final String DEP_SPRING_BOOT_TEST_GROUP = "org.springframework.boot";
         private static final String DEP_SPRING_BOOT_TEST_ARTIFACT = "spring-boot-starter-test";
+        
+        private static final String DEP_TESTCONTAINERS_GROUP = "org.testcontainers";
+        private static final String DEP_TESTCONTAINERS_VERSION = "1.19.0";
+        private static final String DEP_TESTCONTAINERS_ARTIFACT_POSTGRES = "postgresql";
+        private static final String DEP_TESTCONTAINERS_ARTIFACT_MYSQL = "mysql";
+        private static final String DEP_TESTCONTAINERS_ARTIFACT_MONGODB = "mongodb";
+        private static final String DEP_TESTCONTAINERS_ARTIFACT_JUNIT_JUPITER = "junit-jupiter";
 
     private final CampaignRepository campaignRepository;
     private final CampaignTestCaseRepository campaignTestCaseRepository;
     private final ExecutionResultRepository executionResultRepository;
+    private final LlmAnalysisService llmAnalysisService;
     private final ProjectRepository projectRepository;
     private final EnvironmentRepository environmentRepository;
     private final TestCaseRepository testCaseRepository;
@@ -146,162 +154,208 @@ public class ExecutionService {
         boolean globalSuccess = true;
         int executedCount = 0;
         int totalTests = Math.max(ctcList.size(), 1);
-        for (CampaignTestCase ctc : ctcList) {
-            log.info("Processing test case ID: {}", ctc.getTestCaseId());
-            TestCase tc = testCaseRepository.findById(ctc.getTestCaseId()).orElse(null);
-            if (tc == null) {
-                log.warn("Test case {} not found, skipping", ctc.getTestCaseId());
+
+        try {
+            for (CampaignTestCase ctc : ctcList) {
+                // Reload campaign and check if ABORTED
+                Campaign currentCampaign = campaignRepository.findById(campaignId).orElse(null);
+                if (currentCampaign != null && currentCampaign.getStatus() == Campaign.CampaignStatus.ABORTED) {
+                    log.warn("[CAMPAIGN {}] Campaign is ABORTED, stopping execution", campaignId);
+                    break;
+                }
+
+                log.info("Processing test case ID: {}", ctc.getTestCaseId());
+                TestCase tc = testCaseRepository.findById(ctc.getTestCaseId()).orElse(null);
+                if (tc == null) {
+                    log.warn("Test case {} not found, skipping", ctc.getTestCaseId());
+                    continue;
+                }
+
+                log.info(
+                        "[CAMPAIGN {}] TestCase {} => type={}, generated={}",
+                        campaignId,
+                        tc.getId(),
+                        tc.getType(),
+                        Boolean.TRUE.equals(tc.getGenerated())
+                );
+
+                // Determine working directory: suite repo if available, else project repo
+                Path workDir = repoDir;
+                Long suiteId = tc.getSuiteId();
+                TestSuite suiteForWorkDir = null;
+                if (suiteId == null) {
+                    // Best-effort fallback (may be detached / lazy) but keeps backward compatibility
+                    try {
+                        if (tc.getSuite() != null) suiteId = tc.getSuite().getId();
+                    } catch (Exception ignored) {
+                    }
+                }
+
+                log.debug("[CAMPAIGN {}] TestCase {} suiteId={}", campaignId, tc.getId(), suiteId);
+
+                if (suiteId != null) {
+                    TestSuite suite = testSuiteRepository.findById(suiteId).orElse(null);
+                    if (suite == null) {
+                        log.warn("[CAMPAIGN {}] Suite {} not found (TestCase {}), using base repo", campaignId, suiteId, tc.getId());
+                    }
+                    suiteForWorkDir = suite;
+                    if (suite != null && suite.getGitRepoUrl() != null && !suite.getGitRepoUrl().isBlank()) {
+                        try {
+                            TestSuite finalSuite = suite;
+                            String branch = (finalSuite.getGitBranch() != null && !finalSuite.getGitBranch().isBlank())
+                                    ? finalSuite.getGitBranch().trim()
+                                    : "main";
+                            String cacheKey = finalSuite.getGitRepoUrl().trim() + "#" + branch;
+
+                            workDir = suiteRepoMap.computeIfAbsent(cacheKey, key -> {
+                                try {
+                                    log.info(
+                                            "[CAMPAIGN {}] Cloning suite repo once: key={}, suiteId={}, url={}, branch={}",
+                                            campaignId,
+                                            key,
+                                            finalSuite.getId(),
+                                            finalSuite.getGitRepoUrl(),
+                                            branch
+                                    );
+                                    Path clonedPath = cloneRepository(finalSuite.getGitRepoUrl(), branch);
+                                    log.info("Cloned suite repository key {} from {} at {}",
+                                            key, finalSuite.getGitRepoUrl(), clonedPath);
+                                    return clonedPath;
+                                } catch (Exception e) {
+                                    throw new RuntimeException(e);
+                                }
+                            });
+                        } catch (RuntimeException e) {
+                            log.error("Failed to clone suite {} repository, falling back to project repo", suiteId, e);
+                            workDir = repoDir;
+                        }
+                    }
+                }
+
+                // If the suite specifies a modulePath (relative), run Maven and inject tests in that module.
+                if (suiteForWorkDir != null
+                        && suiteForWorkDir.getModulePath() != null
+                        && !suiteForWorkDir.getModulePath().isBlank()) {
+                    String modulePathRaw = suiteForWorkDir.getModulePath().trim();
+                    try {
+                        Path modulePath = Paths.get(modulePathRaw);
+                        Path resolved = workDir.resolve(modulePath);
+                        log.info(
+                                "[CAMPAIGN {}] Applying suite modulePath: suiteId={}, modulePath='{}' => workDir='{}'",
+                                campaignId,
+                                suiteForWorkDir.getId(),
+                                modulePathRaw,
+                                resolved
+                        );
+                        workDir = resolved;
+                        if (!Files.isDirectory(workDir)) {
+                            log.warn(
+                                    "[CAMPAIGN {}] Resolved workDir is not a directory: {} (modulePath='{}')",
+                                    campaignId,
+                                    workDir,
+                                    modulePathRaw
+                            );
+                        }
+                    } catch (Exception ex) {
+                        log.error(
+                                "[CAMPAIGN {}] Invalid modulePath '{}' for suiteId={} (keeping workDir={})",
+                                campaignId,
+                                modulePathRaw,
+                                suiteForWorkDir.getId(),
+                                workDir,
+                                ex
+                        );
+                    }
+                }
+
+                log.info("[CAMPAIGN {}] TestCase {} workDir={}", campaignId, tc.getId(), workDir);
+
+                log.info("Executing test: {} ({})", tc.getId(),
+                        tc.getGenerated() ? "GENERATED-" + tc.getId() : tc.getScriptPath());
+                ExecutionResult result = executeRealTest(tc, env, workDir, campaignId);
+                result.setCampaignId(campaignId);
+                result.setTestCaseId(tc.getId());
+
+                log.info("Test result for {}: status={}, error={}",
+                        tc.getId(), result.getStatus(), result.getErrorMessage());
+
+                executionResultRepository.save(result);
+                executedCount++;
+                log.info("Saved execution result for test case {}", tc.getId());
+
+                int computedProgress = 20 + Math.min(70, Math.round((executedCount * 70.0f) / totalTests));
+                campaign.setProgress(Math.min(95, computedProgress));
+                campaign.setCurrentStep("Running Maven tests");
+                campaignRepository.save(campaign);
+
+                if (result.getStatus() == ExecutionResult.ResultStatus.FAILURE ||
+                        result.getStatus() == ExecutionResult.ResultStatus.ERROR) {
+                    globalSuccess = false;
+                }
+            }
+
+            log.info("Execution complete. Executed: {}, Global success: {}", executedCount, globalSuccess);
+            enrichFailureAnalyses(campaignId);
+
+            Campaign refreshedCampaign = campaignRepository.findById(campaignId).orElse(campaign);
+            if (refreshedCampaign != null && refreshedCampaign.getStatus() == Campaign.CampaignStatus.ABORTED) {
+                log.info("[CAMPAIGN {}] Campaign remains ABORTED after execution loop, skipping finalization", campaignId);
+                return;
+            }
+
+            if (globalSuccess) {
+                campaign.setStatus(Campaign.CampaignStatus.FINISHED);
+                log.info("Campaign marked as FINISHED");
+            } else {
+                campaign.setStatus(Campaign.CampaignStatus.FINISHED_WITH_ERRORS);
+                log.info("Campaign marked as FINISHED_WITH_ERRORS");
+            }
+            campaign.setProgress(100);
+            campaign.setCurrentStep("Saving execution result");
+            campaign.setFinishedAt(LocalDateTime.now());
+            campaignRepository.save(campaign);
+            log.info("=== CAMPAIGN EXECUTION COMPLETED FOR ID: {} ===", campaignId);
+        } catch (Exception e) {
+            log.error("FATAL: Campaign execution failed", e);
+            finishWithError(campaign, "Erreur lors de l'exécution : " + e.getMessage());
+        } finally {
+            // Clean up cloned suite repositories
+            log.info("[CAMPAIGN {}] Cleaning up suite repositories (count={})", campaignId, suiteRepoMap.size());
+            suiteRepoMap.values().forEach(this::deleteDirectory);
+            log.info("Cleaned up {} cloned suite repositories", suiteRepoMap.size());
+
+            // Clean up project repository
+            if (repoDir != null) {
+                log.info("[CAMPAIGN {}] Cleaning up base repository at {}", campaignId, repoDir);
+                deleteDirectory(repoDir);
+                log.info("Cleaned up project repository at: {}", repoDir);
+            }
+        }
+    }
+
+    private void enrichFailureAnalyses(Long campaignId) {
+        List<ExecutionResult> results = executionResultRepository.findByCampaignId(campaignId);
+        for (ExecutionResult result : results) {
+            if (result.getStatus() != ExecutionResult.ResultStatus.FAILURE
+                    && result.getStatus() != ExecutionResult.ResultStatus.ERROR) {
                 continue;
             }
 
-            log.info(
-                    "[CAMPAIGN {}] TestCase {} => type={}, generated={}",
-                    campaignId,
-                    tc.getId(),
-                    tc.getType(),
-                    Boolean.TRUE.equals(tc.getGenerated())
-            );
-
-            // Determine working directory: suite repo if available, else project repo
-            Path workDir = repoDir;
-            Long suiteId = tc.getSuiteId();
-            TestSuite suiteForWorkDir = null;
-            if (suiteId == null) {
-                // Best-effort fallback (may be detached / lazy) but keeps backward compatibility
-                try {
-                    if (tc.getSuite() != null) suiteId = tc.getSuite().getId();
-                } catch (Exception ignored) {
-                }
+            if (result.getAiAnalysis() != null && !result.getAiAnalysis().isBlank()) {
+                continue;
             }
 
-            log.debug("[CAMPAIGN {}] TestCase {} suiteId={}", campaignId, tc.getId(), suiteId);
-
-            if (suiteId != null) {
-                TestSuite suite = testSuiteRepository.findById(suiteId).orElse(null);
-                if (suite == null) {
-                    log.warn("[CAMPAIGN {}] Suite {} not found (TestCase {}), using base repo", campaignId, suiteId, tc.getId());
-                }
-                suiteForWorkDir = suite;
-                if (suite != null && suite.getGitRepoUrl() != null && !suite.getGitRepoUrl().isBlank()) {
-                    try {
-                        TestSuite finalSuite = suite;
-                        String branch = (finalSuite.getGitBranch() != null && !finalSuite.getGitBranch().isBlank())
-                                ? finalSuite.getGitBranch().trim()
-                                : "main";
-                        String cacheKey = finalSuite.getGitRepoUrl().trim() + "#" + branch;
-
-                        workDir = suiteRepoMap.computeIfAbsent(cacheKey, key -> {
-                            try {
-                                log.info(
-                                        "[CAMPAIGN {}] Cloning suite repo once: key={}, suiteId={}, url={}, branch={}",
-                                        campaignId,
-                                        key,
-                                        finalSuite.getId(),
-                                        finalSuite.getGitRepoUrl(),
-                                        branch
-                                );
-                                Path clonedPath = cloneRepository(finalSuite.getGitRepoUrl(), branch);
-                                log.info("Cloned suite repository key {} from {} at {}",
-                                        key, finalSuite.getGitRepoUrl(), clonedPath);
-                                return clonedPath;
-                            } catch (Exception e) {
-                                throw new RuntimeException(e);
-                            }
-                        });
-                    } catch (RuntimeException e) {
-                        log.error("Failed to clone suite {} repository, falling back to project repo", suiteId, e);
-                        workDir = repoDir;
-                    }
-                }
+            log.info("[CAMPAIGN {}] Requesting AI analysis for execution result {}", campaignId, result.getId());
+            String analysis = llmAnalysisService.analyzeFailure(result.getLogs());
+            if (analysis == null || analysis.isBlank()) {
+                log.warn("[CAMPAIGN {}] AI analysis unavailable for execution result {}", campaignId, result.getId());
+                continue;
             }
 
-            // If the suite specifies a modulePath (relative), run Maven and inject tests in that module.
-            if (suiteForWorkDir != null
-                    && suiteForWorkDir.getModulePath() != null
-                    && !suiteForWorkDir.getModulePath().isBlank()) {
-                String modulePathRaw = suiteForWorkDir.getModulePath().trim();
-                try {
-                    Path modulePath = Paths.get(modulePathRaw);
-                    Path resolved = workDir.resolve(modulePath);
-                    log.info(
-                            "[CAMPAIGN {}] Applying suite modulePath: suiteId={}, modulePath='{}' => workDir='{}'",
-                            campaignId,
-                            suiteForWorkDir.getId(),
-                            modulePathRaw,
-                            resolved
-                    );
-                    workDir = resolved;
-                    if (!Files.isDirectory(workDir)) {
-                        log.warn(
-                                "[CAMPAIGN {}] Resolved workDir is not a directory: {} (modulePath='{}')",
-                                campaignId,
-                                workDir,
-                                modulePathRaw
-                        );
-                    }
-                } catch (Exception ex) {
-                    log.error(
-                            "[CAMPAIGN {}] Invalid modulePath '{}' for suiteId={} (keeping workDir={})",
-                            campaignId,
-                            modulePathRaw,
-                            suiteForWorkDir.getId(),
-                            workDir,
-                            ex
-                    );
-                }
-            }
-
-            log.info("[CAMPAIGN {}] TestCase {} workDir={}", campaignId, tc.getId(), workDir);
-
-            log.info("Executing test: {} ({})", tc.getId(),
-                    tc.getGenerated() ? "GENERATED-" + tc.getId() : tc.getScriptPath());
-            ExecutionResult result = executeRealTest(tc, env, workDir);
-            result.setCampaignId(campaignId);
-            result.setTestCaseId(tc.getId());
-
-            log.info("Test result for {}: status={}, error={}",
-                    tc.getId(), result.getStatus(), result.getErrorMessage());
-
+            result.setAiAnalysis(analysis);
             executionResultRepository.save(result);
-            executedCount++;
-            log.info("Saved execution result for test case {}", tc.getId());
-
-            int computedProgress = 20 + Math.min(70, Math.round((executedCount * 70.0f) / totalTests));
-            campaign.setProgress(Math.min(95, computedProgress));
-            campaign.setCurrentStep("Running Maven tests");
-            campaignRepository.save(campaign);
-
-            if (result.getStatus() == ExecutionResult.ResultStatus.FAILURE ||
-                    result.getStatus() == ExecutionResult.ResultStatus.ERROR) {
-                globalSuccess = false;
-            }
+            log.info("[CAMPAIGN {}] AI analysis persisted for execution result {}", campaignId, result.getId());
         }
-
-        // Clean up cloned suite repositories
-        log.info("[CAMPAIGN {}] Cleaning up suite repositories (count={})", campaignId, suiteRepoMap.size());
-        suiteRepoMap.values().forEach(this::deleteDirectory);
-        log.info("Cleaned up {} cloned suite repositories", suiteRepoMap.size());
-
-        // Clean up project repository
-        if (repoDir != null) {
-            log.info("[CAMPAIGN {}] Cleaning up base repository at {}", campaignId, repoDir);
-            deleteDirectory(repoDir);
-            log.info("Cleaned up project repository at: {}", repoDir);
-        }
-
-        log.info("Execution complete. Executed: {}, Global success: {}", executedCount, globalSuccess);
-        if (globalSuccess) {
-            campaign.setStatus(Campaign.CampaignStatus.FINISHED);
-            log.info("Campaign marked as FINISHED");
-        } else {
-            campaign.setStatus(Campaign.CampaignStatus.FINISHED_WITH_ERRORS);
-            log.info("Campaign marked as FINISHED_WITH_ERRORS");
-        }
-        campaign.setProgress(100);
-        campaign.setCurrentStep("Saving execution result");
-        campaign.setFinishedAt(LocalDateTime.now());
-        campaignRepository.save(campaign);
-        log.info("=== CAMPAIGN EXECUTION COMPLETED FOR ID: {} ===", campaignId);
     }
 
     private void finishWithError(Campaign campaign, String errorMessage) {
@@ -403,7 +457,7 @@ public class ExecutionService {
         }
     }
 
-    private ExecutionResult executeRealTest(TestCase tc, Environment env, Path workDir) {
+    private ExecutionResult executeRealTest(TestCase tc, Environment env, Path workDir, Long campaignId) {
         long start = System.currentTimeMillis();
         ExecutionResult result = new ExecutionResult();
         result.setStatus(ExecutionResult.ResultStatus.SUCCESS);
@@ -418,6 +472,18 @@ public class ExecutionService {
         );
 
         try {
+            // Vérifier si la campagne est ABORTED
+            if (campaignId != null) {
+                Campaign campaign = campaignRepository.findById(campaignId).orElse(null);
+                if (campaign != null && campaign.getStatus() == Campaign.CampaignStatus.ABORTED) {
+                    log.warn("[TESTCASE {}] Campaign {} is ABORTED, skipping test execution", tc.getId(), campaignId);
+                    result.setStatus(ExecutionResult.ResultStatus.ERROR);
+                    result.setErrorMessage("Campaign aborted");
+                    result.setDurationMs(0L);
+                    return result;
+                }
+            }
+
             // Workdir sanity + snapshot (helps detect wrong modulePath / wrong repo root)
             if (workDir == null) {
                 throw new IllegalStateException("workDir is null");
@@ -440,7 +506,7 @@ public class ExecutionService {
                 TestCase.TestType pomType = tc.getType();
                 if (pomType == TestCase.TestType.UNIT || pomType == TestCase.TestType.INTEGRATION) {
                     log.info("[TESTCASE {}] Ensuring required test dependencies in pom.xml...", tc.getId());
-                    ensureTestDependencies(pom, pomType);
+                        ensureTestDependencies(pom, pomType, tc.getDatabaseType());
                     log.info("[TESTCASE {}] pom.xml dependency check completed", tc.getId());
                 } else {
                     log.info("[TESTCASE {}] Skipping pom.xml dependency enforcement for type={} (WEB/API repos manage deps)", tc.getId(), pomType);
@@ -452,77 +518,58 @@ public class ExecutionService {
             if (Boolean.TRUE.equals(tc.getGenerated()) && tc.getGeneratedCode() != null) {
                 log.info("[TESTCASE {}] AI-generated test detected; preparing source file", tc.getId());
                 log.debug("[TESTCASE {}] Raw generated code length={}", tc.getId(), tc.getGeneratedCode().length());
+                
+                // Clean code: remove only markdown backticks
                 String cleanCode = tc.getGeneratedCode()
                         .replaceAll("(?i)```java\\s*", "")
                         .replaceAll("```", "")
                         .trim();
-                log.debug("[TESTCASE {}] Cleaned code length={} (backticks removed)", tc.getId(), cleanCode.length());
+                log.debug("[TESTCASE {}] Cleaned code length={} (markdown backticks removed)", tc.getId(), cleanCode.length());
 
                 if (cleanCode.isBlank()) {
-                    throw new IllegalArgumentException("Generated code is empty after backtick cleanup");
+                    throw new IllegalArgumentException("Generated code is empty after cleanup");
                 }
 
-                final String packageName;
-                final String subDir;
-                if (tc.getType() == TestCase.TestType.UNIT || tc.getType() == TestCase.TestType.INTEGRATION) {
-                    String rootPackage = findRootPackage(workDir);
-                    packageName = rootPackage + ".testgen";
-                    subDir = Paths.get("", packageName.split("\\.")).toString();
-                    log.info(
-                            "[TESTCASE {}] {} root package='{}' => generated package='{}'",
-                            tc.getId(),
-                            tc.getType(),
-                            rootPackage,
-                            packageName
-                    );
+                // Extract class name from generated code using regex: "\bclass\s+(\w+)"
+                String extractedClassName = null;
+                var classNameMatcher = Pattern.compile("\\bclass\\s+(\\w+)").matcher(cleanCode);
+                if (classNameMatcher.find()) {
+                    extractedClassName = classNameMatcher.group(1);
+                    log.info("[TESTCASE {}] Extracted class name: {}", tc.getId(), extractedClassName);
                 } else {
-                    String resolvedSubDir = getTestPackageByType(tc.getType());
-                    if (resolvedSubDir == null || resolvedSubDir.isBlank()) {
-                        resolvedSubDir = "suites/generated";
-                    }
-                    subDir = resolvedSubDir;
-                    packageName = resolvedSubDir.replace('\\', '.').replace('/', '.');
-                    log.info(
-                            "[TESTCASE {}] Non-UNIT generated test => package='{}' (subDir='{}')",
-                            tc.getId(),
-                            packageName,
-                            subDir
-                    );
+                    throw new IllegalArgumentException("Generated code does not contain a valid class declaration");
                 }
 
+                // Determine subdirectory based on test type
+                String subDir = getTestPackageByType(tc.getType());
+                if (subDir == null || subDir.isBlank()) {
+                    subDir = "suites/generated";
+                }
+                log.info("[TESTCASE {}] Test file will be written to subDir='{}' with class name='{}'", 
+                        tc.getId(), subDir, extractedClassName);
+
+                // Create directory and write file
                 Path genDir = workDir.resolve("src/test/java").resolve(subDir);
                 Files.createDirectories(genDir);
                 log.debug("[TESTCASE {}] Ensured directory exists: {}", tc.getId(), genDir);
 
-                String shortClassName = "Generated_" + tc.getId();
-                Path testFile = genDir.resolve(shortClassName + ".java");
+                Path testFile = genDir.resolve(extractedClassName + ".java");
+                Files.writeString(testFile, cleanCode);
+                log.info("[TESTCASE {}] Generated test written to: {}", tc.getId(), testFile);
 
-                String finalCode = cleanCode.replaceFirst(
-                        "\\bclass\\s+\\w+",
-                        "class " + shortClassName
-                );
-
-                // Do not add/replace/modify the package declaration.
-                // The tester validates the generated code, including its package.
-
-                Files.writeString(testFile, finalCode);
-                log.info("Generated test written to: {}", testFile);
-
+                // Extract declared package from generated code
                 String declaredPackage = null;
-                var pkgMatcher = PACKAGE_DECLARATION.matcher(finalCode);
+                var pkgMatcher = PACKAGE_DECLARATION.matcher(cleanCode);
                 if (pkgMatcher.find()) {
                     declaredPackage = pkgMatcher.group(1);
+                    log.info("[TESTCASE {}] Declared package: {}", tc.getId(), declaredPackage);
                 }
 
+                // Build Maven test selector
                 className = (declaredPackage != null && !declaredPackage.isBlank())
-                    ? (declaredPackage + "." + shortClassName)
-                    : shortClassName;
-                log.info(
-                    "[TESTCASE {}] Maven test selector: -Dtest={} (declaredPackage={})",
-                    tc.getId(),
-                    className,
-                    declaredPackage
-                );
+                    ? (declaredPackage + "." + extractedClassName)
+                    : extractedClassName;
+                log.info("[TESTCASE {}] Maven test selector: -Dtest={}", tc.getId(), className);
             } else {
                 log.info("[TESTCASE {}] Manual test (scriptPath={})", tc.getId(), tc.getScriptPath());
                 className = tc.getScriptPath()
@@ -548,11 +595,31 @@ public class ExecutionService {
             // Ensure a default Spring Boot test profile exists for integration tests.
             TestCase.TestType effectiveType = tc.getType() != null ? tc.getType() : TestCase.TestType.WEB;
             if (effectiveType == TestCase.TestType.INTEGRATION) {
-                ensureTestProperties(workDir);
-                try {
-                    ensureH2DialectInPom(pom);
-                } catch (Exception e) {
-                    log.warn("[TESTCASE {}] Failed to ensure H2 dialect in pom.xml: {}", tc.getId(), e.getMessage());
+                // databaseType must be provided for integration tests
+                String dbType = tc.getDatabaseType();
+                if (dbType == null || dbType.isBlank()) {
+                    String message = "databaseType is required for INTEGRATION tests";
+                    log.error("[TESTCASE {}] {}", tc.getId(), message);
+                    result.setDurationMs(System.currentTimeMillis() - start);
+                    result.setStatus(ExecutionResult.ResultStatus.ERROR);
+                    result.setErrorMessage(message);
+                    result.setLogs(message);
+                    return result;
+                }
+
+                // Ensure dependencies for integration tests (DB-specific additions included)
+                ensureTestDependencies(pom, effectiveType, dbType);
+
+                // Apply DB-specific test properties
+                ensureTestProperties(workDir, dbType);
+
+                // Only ensure H2-specific pom dialect when databaseType is H2
+                if ("H2".equalsIgnoreCase(dbType)) {
+                    try {
+                        ensureH2DialectInPom(pom);
+                    } catch (Exception e) {
+                        log.warn("[TESTCASE {}] Failed to ensure H2 dialect in pom.xml: {}", tc.getId(), e.getMessage());
+                    }
                 }
             }
 
@@ -655,10 +722,10 @@ public class ExecutionService {
     }
 
     private void ensureTestDependencies(Path pomXml) throws Exception {
-        ensureTestDependencies(pomXml, null);
+        ensureTestDependencies(pomXml, null, null);
     }
 
-    private void ensureTestDependencies(Path pomXml, TestCase.TestType testType) throws Exception {
+    private void ensureTestDependencies(Path pomXml, TestCase.TestType testType, String databaseType) throws Exception {
         if (pomXml == null) {
             throw new IllegalArgumentException("pomXml is null");
         }
@@ -693,8 +760,36 @@ public class ExecutionService {
         if (testType == TestCase.TestType.INTEGRATION) {
             changed |= ensureDependency(doc, dependencies, ns, pomXml,
                 DEP_SPRING_BOOT_TEST_GROUP, DEP_SPRING_BOOT_TEST_ARTIFACT, null, "test");
-            changed |= ensureDependency(doc, dependencies, ns, pomXml,
-                DEP_H2_GROUP, DEP_H2_ARTIFACT, DEP_H2_VERSION, "test");
+
+            if (databaseType != null) {
+                String db = databaseType.trim().toUpperCase();
+                switch (db) {
+                    case "H2":
+                        changed |= ensureDependency(doc, dependencies, ns, pomXml,
+                            DEP_H2_GROUP, DEP_H2_ARTIFACT, DEP_H2_VERSION, "test");
+                        break;
+                    case "POSTGRESQL":
+                        changed |= ensureDependency(doc, dependencies, ns, pomXml,
+                            DEP_TESTCONTAINERS_GROUP, DEP_TESTCONTAINERS_ARTIFACT_POSTGRES, DEP_TESTCONTAINERS_VERSION, "test");
+                        changed |= ensureDependency(doc, dependencies, ns, pomXml,
+                            DEP_TESTCONTAINERS_GROUP, "testcontainers", DEP_TESTCONTAINERS_VERSION, "test");
+                        break;
+                    case "MYSQL":
+                        changed |= ensureDependency(doc, dependencies, ns, pomXml,
+                            DEP_TESTCONTAINERS_GROUP, DEP_TESTCONTAINERS_ARTIFACT_MYSQL, DEP_TESTCONTAINERS_VERSION, "test");
+                        changed |= ensureDependency(doc, dependencies, ns, pomXml,
+                            DEP_TESTCONTAINERS_GROUP, "testcontainers", DEP_TESTCONTAINERS_VERSION, "test");
+                        break;
+                    case "MONGODB":
+                        changed |= ensureDependency(doc, dependencies, ns, pomXml,
+                            DEP_TESTCONTAINERS_GROUP, DEP_TESTCONTAINERS_ARTIFACT_MONGODB, "1.19.3", "test");
+                        changed |= ensureDependency(doc, dependencies, ns, pomXml,
+                            DEP_TESTCONTAINERS_GROUP, DEP_TESTCONTAINERS_ARTIFACT_JUNIT_JUPITER, "1.19.3", "test");
+                        break;
+                    default:
+                        // unknown DB type: do nothing here (validation elsewhere)
+                }
+            }
         }
 
         changed |= ensureSurefireTestNgPlugin(doc, project, ns, pomXml);
@@ -1034,13 +1129,13 @@ public class ExecutionService {
                 break;
             case INTEGRATION:
                 command.add("-Dtest.layer=integration");
-                command.add("-Dspring.jpa.database-platform=org.hibernate.dialect.H2Dialect");
-                if (tc.getSpringProfile() != null && !tc.getSpringProfile().isBlank()) {
-                    command.add("-Dspring.profiles.active=" + tc.getSpringProfile().trim());
+                if (tc.getDatabaseType() != null && tc.getDatabaseType().trim().equalsIgnoreCase("H2")) {
+                    command.add("-Dspring.jpa.database-platform=org.hibernate.dialect.H2Dialect");
                 }
                 if (baseUrl != null && !baseUrl.isBlank()) {
                     command.add("-DBASE_URL=" + baseUrl);
                 }
+                command.add("-Dspring.profiles.active=test");
                 break;
             case API:
             case WEB:
@@ -1059,7 +1154,97 @@ public class ExecutionService {
         return command;
     }
 
-    private void ensureTestProperties(Path workDir) {
+    private String adaptMongoGeneratedTestCode(String code, String className) {
+        String adapted = code;
+
+        // Ensure required imports exist for Spring + Testcontainers MongoDB integration tests.
+        adapted = ensureImport(adapted, "org.springframework.boot.test.context.SpringBootTest");
+        adapted = ensureImport(adapted, "org.springframework.test.context.ActiveProfiles");
+        adapted = ensureImport(adapted, "org.springframework.test.context.DynamicPropertyRegistry");
+        adapted = ensureImport(adapted, "org.springframework.test.context.DynamicPropertySource");
+        adapted = ensureImport(adapted, "org.springframework.test.context.testng.AbstractTestNGSpringContextTests");
+        adapted = ensureImport(adapted, "org.testcontainers.containers.MongoDBContainer");
+        adapted = ensureImport(adapted, "org.testcontainers.junit.jupiter.Container");
+        adapted = ensureImport(adapted, "org.testcontainers.junit.jupiter.Testcontainers");
+
+        // Insert annotations AFTER package declaration but BEFORE class declaration
+        // Extract package line (if present)
+        String packageLine = "";
+        String codeWithoutPackage = adapted;
+        var pkgMatcher = Pattern.compile("(?m)^\\s*package\\s+[^;]+;").matcher(adapted);
+        if (pkgMatcher.find()) {
+            packageLine = pkgMatcher.group(0) + "\n";
+            codeWithoutPackage = adapted.substring(pkgMatcher.end());
+        }
+
+        // Build annotations block
+        String annotations = "";
+        if (!codeWithoutPackage.contains("@SpringBootTest")) {
+            annotations += "@SpringBootTest\n";
+        }
+        if (!codeWithoutPackage.contains("@ActiveProfiles(\"test\")")) {
+            annotations += "@ActiveProfiles(\"test\")\n";
+        }
+        if (!codeWithoutPackage.contains("@Testcontainers")) {
+            annotations += "@Testcontainers\n";
+        }
+
+        // Rebuild: package + imports + annotations + class
+        String importsAndClass = codeWithoutPackage.replaceFirst(
+                "(?m)^\\s*public\\s+class\\s+" + Pattern.quote(className),
+                annotations + "public class " + className
+        );
+
+        // Ensure class extends AbstractTestNGSpringContextTests
+        if (!importsAndClass.contains("extends AbstractTestNGSpringContextTests")) {
+            importsAndClass = importsAndClass.replaceFirst(
+                    "(?m)^\\s*public\\s+class\\s+" + Pattern.quote(className) + "\\s*\\{",
+                    "public class " + className + " extends AbstractTestNGSpringContextTests {"
+            );
+        }
+
+        // Add container and dynamic property source if missing
+        boolean hasContainer = importsAndClass.contains("MongoDBContainer") && importsAndClass.contains("@Container");
+        boolean hasDynamicProperty = importsAndClass.contains("@DynamicPropertySource") && importsAndClass.contains("spring.data.mongodb.uri");
+        if (!hasContainer || !hasDynamicProperty) {
+            String injection = """
+
+    @Container
+    static MongoDBContainer mongoDBContainer = new MongoDBContainer("mongo:6.0");
+
+    @DynamicPropertySource
+    static void mongoProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.data.mongodb.uri", mongoDBContainer::getReplicaSetUrl);
+    }
+""";
+            importsAndClass = importsAndClass.replaceFirst(
+                    "(?m)^\\s*public\\s+class\\s+" + Pattern.quote(className) + ".*?\\{",
+                    "$0" + injection
+            );
+        }
+
+        adapted = packageLine + importsAndClass;
+        return adapted;
+    }
+
+    private String ensureImport(String code, String fqcn) {
+        String simple = fqcn.substring(fqcn.lastIndexOf('.') + 1);
+        String importLine = "import " + fqcn + ";";
+
+        if (code.contains(importLine)) {
+            return code;
+        }
+        if (code.matches("(?s).*\\b" + Pattern.quote(simple) + "\\b.*") && code.contains("import ")) {
+            // Type already referenced and import section exists: still add explicit import if missing.
+        }
+
+        if (code.contains("package ")) {
+            return code.replaceFirst("(?m)^\\s*package\\s+[^;]+;\\s*", "$0\\n" + importLine + "\\n");
+        }
+        return importLine + "\\n" + code;
+    }
+
+    private void ensureTestProperties(Path workDir, String databaseType) {
         if (workDir == null) return;
 
         Path propsFile = workDir.resolve("src/test/resources/application-test.properties");
@@ -1067,7 +1252,29 @@ public class ExecutionService {
             return;
         }
 
-        String content = """
+        String content;
+        String db = databaseType != null ? databaseType.trim().toUpperCase() : "";
+        switch (db) {
+            case "POSTGRESQL":
+                content = """
+spring.datasource.url=jdbc:tc:postgresql:14:///testdb
+spring.datasource.driverClassName=org.testcontainers.jdbc.ContainerDatabaseDriver
+spring.datasource.username=sa
+spring.datasource.password=
+spring.jpa.hibernate.ddl-auto=create-drop
+""";
+                break;
+            case "MYSQL":
+                content = """
+spring.datasource.url=jdbc:tc:mysql:8.0.33:///testdb
+spring.datasource.driverClassName=org.testcontainers.jdbc.ContainerDatabaseDriver
+spring.datasource.username=sa
+spring.datasource.password=
+spring.jpa.hibernate.ddl-auto=create-drop
+""";
+                break;
+            case "H2":
+                content = """
 spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
 spring.datasource.driverClassName=org.h2.Driver
 spring.datasource.username=sa
@@ -1075,11 +1282,25 @@ spring.datasource.password=
 spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
 spring.jpa.hibernate.ddl-auto=create-drop
 """;
+                break;
+            case "MONGODB":
+                return;
+            default:
+                // Default to H2 if unknown
+                content = """
+spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+spring.datasource.driverClassName=org.h2.Driver
+spring.datasource.username=sa
+spring.datasource.password=
+spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
+spring.jpa.hibernate.ddl-auto=create-drop
+""";
+        }
 
         try {
             Files.createDirectories(propsFile.getParent());
             Files.writeString(propsFile, content, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
-            log.info("Created default application-test.properties at {}", propsFile);
+            log.info("Created default application-test.properties at {} (db={})", propsFile, db);
         } catch (FileAlreadyExistsException ignored) {
             // Another thread/process created it in the meantime.
         } catch (IOException e) {
