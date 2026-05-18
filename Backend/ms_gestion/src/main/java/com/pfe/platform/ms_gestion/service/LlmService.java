@@ -148,14 +148,23 @@ public class LlmService {
                 """;
 
             case "WEB" -> """
-                CONSIGNES WEB (E2E Web) :
-                - Utilise Selenium avec HtmlUnitDriver (headless) : org.openqa.selenium.htmlunit.HtmlUnitDriver.
-                - N'utilise PAS ChromeDriver ni WebDriverManager (sauf demande explicite).
-                - Lis l'URL de base depuis System.getProperty("BASE_URL").
-                - Utilise By.id / By.name / By.cssSelector (pas de XPath sauf nécessité).
-                - Configure une attente implicite pour la fiabilité (driver.manage().timeouts().implicitlyWait(...)).
-                - Ferme le driver dans @AfterMethod.
-                - Assertions TestNG sur le contenu (titre, éléments, textes) et sur les navigations.
+                                CONSIGNES WEB (E2E Web) :
+                                Tu es un expert en automatisation de tests web avec Selenium et TestNG.
+
+                                RÈGLES STRICTES (tu dois les respecter) :
+                                - Utilise ChromeDriver en mode headless avec WebDriverManager.
+                                - Lis l'URL de base avec System.getProperty("BASE_URL").
+                                - Inclus @BeforeMethod (créer le driver) et @AfterMethod (driver.quit()).
+                                - Utilise des sélecteurs By.id, By.name, By.cssSelector.
+                                - Inclus TOUS les imports nécessaires.
+                                - Encadre les assertions dans un try/catch.
+                                    En cas d'échec (AssertionError), appelle takeScreenshot(driver, "NomDuTest") puis relance l'erreur.
+                                - Implémente une méthode takeScreenshot(WebDriver driver, String testName) qui :
+                                    - Vérifie (driver instanceof TakesScreenshot)
+                                    - Récupère les bytes (OutputType.BYTES)
+                                    - Sauvegarde un PNG dans un dossier relatif "screenshots" (à créer si absent)
+                                    - Retourne le chemin absolu du fichier
+                                - Réponds UNIQUEMENT avec le code Java (un seul fichier), sans aucune explication.
                 """;
 
             case "API" -> """

@@ -5,6 +5,16 @@ import { useCallback, useState } from 'react'
 
 import { Badge } from '@/components/ui/badge'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -12,6 +22,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { MoreVertical, CheckCircle2, AlertCircle, Edit2, Trash2 } from 'lucide-react'
 import { deleteCampaign } from '@/lib/api-client'
+import { toast } from '@/hooks/use-toast'
 
 interface CampaignCardProps {
   id?: number | string
@@ -63,6 +74,7 @@ export function CampaignCard({
 }: CampaignCardProps) {
   const router = useRouter()
   const [isDeleting, setIsDeleting] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const config = statusConfig[status]
   const typeColor = typeColors[type]
   const baseHref = id !== undefined && id !== null && String(id).trim()
@@ -86,23 +98,57 @@ export function CampaignCard({
   const handleDelete = useCallback(async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    
-    if (!id || isDeleting) return
-    
-    const confirmDelete = confirm(`Are you sure you want to delete the campaign "${name}"?`)
-    if (!confirmDelete) return
+
+    if (!id || !projectId || isDeleting) return
+
+    const parsedCampaignId = Number(id)
+    const parsedProjectId = Number(projectId)
+    if (!Number.isFinite(parsedCampaignId) || parsedCampaignId <= 0) {
+      toast({
+        title: 'Delete failed',
+        description: 'Cannot delete this campaign: invalid campaign id.',
+        variant: 'destructive',
+      })
+      setConfirmOpen(false)
+      return
+    }
+    if (!Number.isFinite(parsedProjectId) || parsedProjectId <= 0) {
+      toast({
+        title: 'Delete failed',
+        description: 'Cannot delete this campaign: invalid project id.',
+        variant: 'destructive',
+      })
+      setConfirmOpen(false)
+      return
+    }
 
     setIsDeleting(true)
     try {
-      await deleteCampaign(Number(id))
+      await deleteCampaign(parsedProjectId, parsedCampaignId)
       onDelete?.()
+      toast({
+        title: 'Campaign deleted',
+        description: `"${name}" was deleted.`,
+      })
+      setConfirmOpen(false)
     } catch (error) {
       console.error('Failed to delete campaign:', error)
-      alert('Failed to delete campaign. Please try again.')
+      toast({
+        title: 'Delete failed',
+        description: error instanceof Error ? error.message : 'Failed to delete campaign. Please try again.',
+        variant: 'destructive',
+      })
     } finally {
       setIsDeleting(false)
     }
-  }, [id, name, isDeleting, onDelete])
+  }, [id, projectId, name, isDeleting, onDelete])
+
+  const requestDelete = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (isDeleting) return
+    setConfirmOpen(true)
+  }, [isDeleting])
 
   return (
     <div
@@ -151,7 +197,7 @@ export function CampaignCard({
               <span>Edit Campaign</span>
             </DropdownMenuItem>
             <DropdownMenuItem 
-              onClick={handleDelete} 
+              onClick={requestDelete}
               disabled={isDeleting}
               className="cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600 focus:dark:text-red-400"
             >
@@ -161,6 +207,34 @@ export function CampaignCard({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent
+          onPointerDownOutside={(event) => {
+            if (isDeleting) event.preventDefault()
+          }}
+          onEscapeKeyDown={(event) => {
+            if (isDeleting) event.preventDefault()
+          }}
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete campaign?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. The campaign "{name}" and its linked test cases will be removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => handleDelete(e as unknown as React.MouseEvent)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isDeleting}
+            >
+              {isDeleting ? 'Deleting…' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Progress Bar */}
       <div className="mb-4">

@@ -236,7 +236,7 @@ public class CampaignService {
     public void delete(Long projectId, Long campaignId) {
         Long userId = SecurityUtils.getCurrentUserId();
         Campaign campaign = getCampaignOrThrow(campaignId, projectId);
-        checkProjectRole(campaign.getProject(), userId, ProjectMember.Role.ADMIN, ProjectMember.Role.TESTER);
+        checkProjectRole(campaign.getProject(), userId, ProjectMember.Role.ADMIN, ProjectMember.Role.TESTER, ProjectMember.Role.DEVOPS);
         
         // Delete associated campaign test cases
         campaignTestCaseRepository.deleteByCampaignId(campaignId);

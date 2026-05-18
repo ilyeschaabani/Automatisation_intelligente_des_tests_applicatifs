@@ -5,6 +5,9 @@ import com.pfe.platform.msexecution.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
+import org.openqa.selenium.OutputType;
+import org.openqa.selenium.TakesScreenshot;
+import org.openqa.selenium.WebDriver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -53,6 +56,8 @@ public class ExecutionService {
 
     private static final Logger log = LoggerFactory.getLogger(ExecutionService.class);
 
+    private static final ThreadLocal<Path> CURRENT_EXECUTION_DIR = new ThreadLocal<>();
+
         private static final Pattern PACKAGE_DECLARATION = Pattern.compile("(?m)^\\s*package\\s+([a-zA-Z_][\\w]*(?:\\.[a-zA-Z_][\\w]*)*)\\s*;\\s*$");
 
         private static final String DEP_TESTNG_GROUP = "org.testng";
@@ -73,9 +78,27 @@ public class ExecutionService {
         private static final String DEP_TESTCONTAINERS_GROUP = "org.testcontainers";
         private static final String DEP_TESTCONTAINERS_VERSION = "1.19.0";
         private static final String DEP_TESTCONTAINERS_ARTIFACT_POSTGRES = "postgresql";
+
+        @Value("${execution.screenshots-dir:screenshots}")
+        private String screenshotsDir;
         private static final String DEP_TESTCONTAINERS_ARTIFACT_MYSQL = "mysql";
         private static final String DEP_TESTCONTAINERS_ARTIFACT_MONGODB = "mongodb";
         private static final String DEP_TESTCONTAINERS_ARTIFACT_JUNIT_JUPITER = "junit-jupiter";
+
+        private static final String DEP_SELENIUM_GROUP = "org.seleniumhq.selenium";
+        private static final String DEP_SELENIUM_ARTIFACT = "selenium-java";
+        private static final String DEP_SELENIUM_VERSION = "4.18.1";
+
+        private static final String DEP_HTMLUNIT_ARTIFACT = "htmlunit-driver";
+        private static final String DEP_HTMLUNIT_VERSION = "4.13.0";
+
+        private static final String DEP_WDM_GROUP = "io.github.bonigarcia";
+        private static final String DEP_WDM_ARTIFACT = "webdrivermanager";
+        private static final String DEP_WDM_VERSION = "5.8.0";
+
+        private static final String DEP_REST_ASSURED_GROUP = "io.rest-assured";
+        private static final String DEP_REST_ASSURED_ARTIFACT = "rest-assured";
+        private static final String DEP_REST_ASSURED_VERSION = "5.4.0";
 
     private final CampaignRepository campaignRepository;
     private final CampaignTestCaseRepository campaignTestCaseRepository;
@@ -85,6 +108,7 @@ public class ExecutionService {
     private final EnvironmentRepository environmentRepository;
     private final TestCaseRepository testCaseRepository;
     private final TestSuiteRepository testSuiteRepository;
+    private final com.pfe.platform.msexecution.service.ReportStorageService reportStorageService;
 
     @Value("${execution.temp-dir:}")
     private String tempDirConfig;
@@ -151,6 +175,10 @@ public class ExecutionService {
         Map<String, Path> suiteRepoMap = new HashMap<>();
         log.info("[CAMPAIGN {}] Suite repo cache initialized (key=url#branch)", campaignId);
 
+        // Cache built-in template extractions for WEB/API suites without gitRepoUrl
+        Map<Long, Path> suiteTemplateMap = new HashMap<>();
+        log.info("[CAMPAIGN {}] Suite template cache initialized (key=suiteId)", campaignId);
+
         boolean globalSuccess = true;
         int executedCount = 0;
         int totalTests = Math.max(ctcList.size(), 1);
@@ -178,6 +206,8 @@ public class ExecutionService {
                         tc.getType(),
                         Boolean.TRUE.equals(tc.getGenerated())
                 );
+
+                TestCase.TestType testType = tc.getType() != null ? tc.getType() : TestCase.TestType.WEB;
 
                 // Determine working directory: suite repo if available, else project repo
                 Path workDir = repoDir;
@@ -227,6 +257,28 @@ public class ExecutionService {
                             });
                         } catch (RuntimeException e) {
                             log.error("Failed to clone suite {} repository, falling back to project repo", suiteId, e);
+                            workDir = repoDir;
+                        }
+                    } else if (suite != null && (testType == TestCase.TestType.WEB || testType == TestCase.TestType.API)) {
+                        // E2E suites without gitRepoUrl must use the built-in AI template as working directory.
+                        try {
+                            Long suiteKey = suite.getId();
+                            workDir = suiteTemplateMap.computeIfAbsent(suiteKey, key -> {
+                                try {
+                                    log.info(
+                                            "[CAMPAIGN {}] Preparing built-in template for suiteId={} (no gitRepoUrl)",
+                                            campaignId,
+                                            suiteKey
+                                    );
+                                    Path prepared = prepareBuiltInTemplate();
+                                    log.info("Built-in template prepared for suiteId={} at {}", suiteKey, prepared);
+                                    return prepared;
+                                } catch (Exception e) {
+                                    throw new RuntimeException(e);
+                                }
+                            });
+                        } catch (RuntimeException e) {
+                            log.error("Failed to prepare built-in template for suite {}, falling back to project repo", suiteId, e);
                             workDir = repoDir;
                         }
                     }
@@ -280,6 +332,27 @@ public class ExecutionService {
                         tc.getId(), result.getStatus(), result.getErrorMessage());
 
                 executionResultRepository.save(result);
+                // If test failed/errored, try to persist the latest screenshot to the permanent folder
+                if (result.getStatus() == ExecutionResult.ResultStatus.FAILURE || result.getStatus() == ExecutionResult.ResultStatus.ERROR) {
+                    try {
+                        Path latest = findLatestScreenshot(workDir);
+                        if (latest != null) {
+                            copyScreenshotToPermanent(latest, result);
+                            executionResultRepository.save(result);
+                        }
+                    } catch (Exception e) {
+                        log.warn("Unable to persist screenshot for test {}: {}", tc.getId(), e.getMessage());
+                    }
+                }
+                String scriptCode = resolveScriptCode(tc, workDir);
+                String analysis = llmAnalysisService.analyze(
+                    scriptCode != null ? scriptCode : "Script non disponible",
+                    result.getLogs() != null ? result.getLogs() : "Logs non disponibles",
+                    result.getStatus() != null ? result.getStatus().name() : "UNKNOWN",
+                    result.getErrorMessage() != null ? result.getErrorMessage() : ""
+                );
+                result.setAiAnalysis(analysis);
+                executionResultRepository.save(result);
                 executedCount++;
                 log.info("Saved execution result for test case {}", tc.getId());
 
@@ -295,7 +368,6 @@ public class ExecutionService {
             }
 
             log.info("Execution complete. Executed: {}, Global success: {}", executedCount, globalSuccess);
-            enrichFailureAnalyses(campaignId);
 
             Campaign refreshedCampaign = campaignRepository.findById(campaignId).orElse(campaign);
             if (refreshedCampaign != null && refreshedCampaign.getStatus() == Campaign.CampaignStatus.ABORTED) {
@@ -314,6 +386,12 @@ public class ExecutionService {
             campaign.setCurrentStep("Saving execution result");
             campaign.setFinishedAt(LocalDateTime.now());
             campaignRepository.save(campaign);
+            // Trigger asynchronous generation and storage of campaign report
+            try {
+                reportStorageService.generateAndStoreAsync(campaignId, null);
+            } catch (Exception e) {
+                log.warn("Failed to trigger async report generation for campaign {}: {}", campaignId, e.getMessage());
+            }
             log.info("=== CAMPAIGN EXECUTION COMPLETED FOR ID: {} ===", campaignId);
         } catch (Exception e) {
             log.error("FATAL: Campaign execution failed", e);
@@ -324,6 +402,11 @@ public class ExecutionService {
             suiteRepoMap.values().forEach(this::deleteDirectory);
             log.info("Cleaned up {} cloned suite repositories", suiteRepoMap.size());
 
+            // Clean up extracted suite templates
+            log.info("[CAMPAIGN {}] Cleaning up suite templates (count={})", campaignId, suiteTemplateMap.size());
+            suiteTemplateMap.values().forEach(this::deleteDirectory);
+            log.info("Cleaned up {} extracted suite templates", suiteTemplateMap.size());
+
             // Clean up project repository
             if (repoDir != null) {
                 log.info("[CAMPAIGN {}] Cleaning up base repository at {}", campaignId, repoDir);
@@ -333,37 +416,39 @@ public class ExecutionService {
         }
     }
 
-    private void enrichFailureAnalyses(Long campaignId) {
-        List<ExecutionResult> results = executionResultRepository.findByCampaignId(campaignId);
-        for (ExecutionResult result : results) {
-            if (result.getStatus() != ExecutionResult.ResultStatus.FAILURE
-                    && result.getStatus() != ExecutionResult.ResultStatus.ERROR) {
-                continue;
-            }
-
-            if (result.getAiAnalysis() != null && !result.getAiAnalysis().isBlank()) {
-                continue;
-            }
-
-            log.info("[CAMPAIGN {}] Requesting AI analysis for execution result {}", campaignId, result.getId());
-            String analysis = llmAnalysisService.analyzeFailure(result.getLogs());
-            if (analysis == null || analysis.isBlank()) {
-                log.warn("[CAMPAIGN {}] AI analysis unavailable for execution result {}", campaignId, result.getId());
-                continue;
-            }
-
-            result.setAiAnalysis(analysis);
-            executionResultRepository.save(result);
-            log.info("[CAMPAIGN {}] AI analysis persisted for execution result {}", campaignId, result.getId());
-        }
-    }
-
     private void finishWithError(Campaign campaign, String errorMessage) {
         campaign.setStatus(Campaign.CampaignStatus.FINISHED_WITH_ERRORS);
         campaign.setProgress(100);
         campaign.setCurrentStep(errorMessage);
         campaign.setFinishedAt(LocalDateTime.now());
         campaignRepository.save(campaign);
+    }
+
+    private String resolveScriptCode(TestCase tc, Path workDir) {
+        if (tc == null) {
+            return null;
+        }
+
+        String generatedCode = tc.getGeneratedCode();
+        if (generatedCode != null && !generatedCode.isBlank()) {
+            return generatedCode;
+        }
+
+        String scriptPath = tc.getScriptPath();
+        if (scriptPath == null || scriptPath.isBlank() || workDir == null) {
+            return null;
+        }
+
+        try {
+            Path scriptFile = workDir.resolve("src/test/java").resolve(scriptPath).normalize();
+            if (Files.exists(scriptFile) && Files.isRegularFile(scriptFile)) {
+                return Files.readString(scriptFile, StandardCharsets.UTF_8);
+            }
+        } catch (IOException ex) {
+            log.warn("Unable to read script source for test {}: {}", tc.getId(), ex.getMessage());
+        }
+
+        return null;
     }
 
     // --- Préparation du dépôt d'exécution (Git externe ou template IA intégré) ---
@@ -381,33 +466,148 @@ public class ExecutionService {
     }
 
     private Path prepareBuiltInTemplate() throws IOException {
-        // 1. Charger le template compressé depuis les ressources
-        Resource resource = new ClassPathResource("ai-test-template.zip");
-        if (!resource.exists()) {
-            throw new RuntimeException("Template IA introuvable (ai-test-template.zip)");
-        }
-
-        // 2. Créer un répertoire temporaire
+        // 1) Créer un répertoire temporaire
         Path execDir = createTempDir("exec-");
         log.info("Preparing built-in AI template into temp dir: {}", execDir);
 
-        // 3. Décompresser le ZIP
-        try (ZipInputStream zis = new ZipInputStream(resource.getInputStream())) {
+        // 2) Dev-friendly mode: if the directory resource exists on disk (exploded classes), copy it directly.
+        Resource dirResource = new ClassPathResource("ai-test-template");
+        if (dirResource.exists()) {
+            try {
+                Path sourceDir = dirResource.getFile().toPath();
+                if (Files.isDirectory(sourceDir)) {
+                    log.info("Copying built-in AI template from classpath directory: {}", sourceDir);
+                    copyDirectory(sourceDir, execDir);
+                    Path resolvedRoot = resolveTemplateRoot(execDir);
+                    log.info("AI template prepared at: {}", resolvedRoot);
+                    return resolvedRoot;
+                }
+            } catch (Exception ignored) {
+                // When packaged as a jar, getFile() typically fails; fall back to zip extraction.
+            }
+        }
+
+        // 3) Default mode: unzip from the embedded zip resource (works in a packaged jar)
+        Resource zipResource = new ClassPathResource("ai-test-template.zip");
+        if (!zipResource.exists()) {
+            throw new RuntimeException("Template IA introuvable (ai-test-template.zip / ai-test-template)");
+        }
+
+        unzipTemplate(zipResource, execDir);
+
+        Path resolvedRoot = resolveTemplateRoot(execDir);
+        log.info("AI template prepared at: {}", resolvedRoot);
+        return resolvedRoot;
+    }
+
+    private void copyDirectory(Path sourceDir, Path targetDir) throws IOException {
+        try (var stream = Files.walk(sourceDir)) {
+            for (Path sourcePath : (Iterable<Path>) stream::iterator) {
+                Path relative = sourceDir.relativize(sourcePath);
+                if (relative.toString().isEmpty()) continue;
+                Path targetPath = targetDir.resolve(relative);
+
+                if (Files.isDirectory(sourcePath)) {
+                    ensureDirectory(targetPath);
+                } else {
+                    ensureDirectory(targetPath.getParent());
+                    Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+        }
+    }
+
+    private void unzipTemplate(Resource zipResource, Path execDir) throws IOException {
+        try (ZipInputStream zis = new ZipInputStream(zipResource.getInputStream())) {
             ZipEntry entry;
             while ((entry = zis.getNextEntry()) != null) {
-                Path entryPath = execDir.resolve(entry.getName());
-                if (entry.isDirectory()) {
-                    Files.createDirectories(entryPath);
+                String rawName = entry.getName();
+                if (rawName == null || rawName.isBlank()) {
+                    zis.closeEntry();
+                    continue;
+                }
+
+                // Normalize separators: ZIPs should use '/', but be defensive.
+                String entryName = rawName.replace('\\', '/');
+                while (entryName.startsWith("/")) {
+                    entryName = entryName.substring(1);
+                }
+                if (entryName.isBlank()) {
+                    zis.closeEntry();
+                    continue;
+                }
+
+                Path entryPath = execDir.resolve(entryName).normalize();
+                Path execRoot = execDir.normalize();
+                if (!entryPath.startsWith(execRoot)) {
+                    // Prevent Zip Slip
+                    throw new IOException("Invalid ZIP entry path: " + rawName);
+                }
+
+                boolean isDirectory = entry.isDirectory() || entryName.endsWith("/");
+                if (isDirectory) {
+                    ensureDirectory(entryPath);
                 } else {
-                    Files.createDirectories(entryPath.getParent());
+                    // If parent path exists as a file (can happen with malformed zips like src/test as a file), fix it.
+                    ensureDirectory(entryPath.getParent());
+
+                    // If a directory is expected later but a placeholder file already exists, we'll overwrite safely here.
                     Files.copy(zis, entryPath, StandardCopyOption.REPLACE_EXISTING);
                 }
                 zis.closeEntry();
             }
         }
+    }
 
-        log.info("AI template prepared at: {}", execDir);
-        return execDir;
+    private void ensureDirectory(Path dir) throws IOException {
+        if (dir == null) return;
+
+        // Fix file-vs-directory collisions (including parent components).
+        // Example: a malformed ZIP may create a file at 'src/test', then later we need to create 'src/test/java'.
+        for (int attempt = 0; attempt < 2; attempt++) {
+            if (Files.exists(dir) && !Files.isDirectory(dir)) {
+                Files.delete(dir);
+            }
+
+            try {
+                Files.createDirectories(dir);
+                return;
+            } catch (java.nio.file.FileAlreadyExistsException e) {
+                // Find the first ancestor that exists as a file and delete it, then retry.
+                Path cursor = dir;
+                while (cursor != null) {
+                    if (Files.exists(cursor) && !Files.isDirectory(cursor)) {
+                        Files.delete(cursor);
+                        break;
+                    }
+                    cursor = cursor.getParent();
+                }
+                if (attempt == 1) {
+                    throw e;
+                }
+            }
+        }
+    }
+
+    private Path resolveTemplateRoot(Path extractedDir) {
+        if (extractedDir == null) return null;
+        if (Files.exists(extractedDir.resolve("pom.xml"))) {
+            return extractedDir;
+        }
+        try (var stream = Files.list(extractedDir)) {
+            List<Path> children = stream
+                    .filter(Files::isDirectory)
+                    .sorted()
+                    .collect(Collectors.toList());
+            if (children.size() == 1) {
+                Path candidate = children.get(0);
+                if (Files.exists(candidate.resolve("pom.xml"))) {
+                    return candidate;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return extractedDir;
     }
 
     private Path createTempDir(String prefix) throws IOException {
@@ -498,19 +698,24 @@ public class ExecutionService {
             log.debug("[TESTCASE {}] workDir absolutePath={}", tc.getId(), workDir.toAbsolutePath());
             logWorkDirSnapshot(tc.getId(), workDir, 10);
 
+            CURRENT_EXECUTION_DIR.set(workDir);
+
+            // Ensure screenshots folder exists (tests write PNGs here on failure).
+            try {
+                Files.createDirectories(workDir.resolve("screenshots"));
+            } catch (Exception e) {
+                log.debug("[TESTCASE {}] Unable to pre-create screenshots dir under {}: {}", tc.getId(), workDir, e.toString());
+            }
+
             Path pom = workDir.resolve("pom.xml");
             if (!Files.exists(pom)) {
                 log.warn("[TESTCASE {}] No pom.xml found at workDir={} (pom.xml={})", tc.getId(), workDir, pom);
             } else {
                 log.debug("[TESTCASE {}] pom.xml found: {} (size={} bytes)", tc.getId(), pom, safeFileSize(pom));
                 TestCase.TestType pomType = tc.getType();
-                if (pomType == TestCase.TestType.UNIT || pomType == TestCase.TestType.INTEGRATION) {
-                    log.info("[TESTCASE {}] Ensuring required test dependencies in pom.xml...", tc.getId());
-                        ensureTestDependencies(pom, pomType, tc.getDatabaseType());
-                    log.info("[TESTCASE {}] pom.xml dependency check completed", tc.getId());
-                } else {
-                    log.info("[TESTCASE {}] Skipping pom.xml dependency enforcement for type={} (WEB/API repos manage deps)", tc.getId(), pomType);
-                }
+                log.info("[TESTCASE {}] Ensuring required test dependencies in pom.xml for type={}...", tc.getId(), pomType);
+                ensureTestDependencies(pom, pomType, tc.getDatabaseType());
+                log.info("[TESTCASE {}] pom.xml dependency check completed", tc.getId());
             }
 
             String className;
@@ -709,6 +914,12 @@ public class ExecutionService {
             if (result.getDurationMs() == null || result.getDurationMs() <= 0) {
                 result.setDurationMs(System.currentTimeMillis() - start);
             }
+
+            // Attach screenshot for failed E2E runs (WEB) when present.
+            attachLatestScreenshotIfPresent(result, workDir, start);
+
+            CURRENT_EXECUTION_DIR.remove();
+
             log.info(
                     "[TESTCASE {}] === END executeRealTest === status={}, durationMs={}, errorMessage={}",
                     tc.getId(),
@@ -753,9 +964,30 @@ public class ExecutionService {
 
         boolean changed = false;
         changed |= ensureDependency(doc, dependencies, ns, pomXml,
-                DEP_TESTNG_GROUP, DEP_TESTNG_ARTIFACT, DEP_TESTNG_VERSION, "test");
-        changed |= ensureDependency(doc, dependencies, ns, pomXml,
+            DEP_TESTNG_GROUP, DEP_TESTNG_ARTIFACT, DEP_TESTNG_VERSION, "test");
+
+        if (testType == null) {
+            testType = TestCase.TestType.WEB;
+        }
+
+        if (testType == TestCase.TestType.UNIT || testType == TestCase.TestType.INTEGRATION) {
+            changed |= ensureDependency(doc, dependencies, ns, pomXml,
                 DEP_MOCKITO_GROUP, DEP_MOCKITO_ARTIFACT, DEP_MOCKITO_VERSION, "test");
+        }
+
+        if (testType == TestCase.TestType.WEB) {
+            changed |= ensureDependency(doc, dependencies, ns, pomXml,
+                DEP_SELENIUM_GROUP, DEP_SELENIUM_ARTIFACT, DEP_SELENIUM_VERSION, "test");
+            changed |= ensureDependency(doc, dependencies, ns, pomXml,
+                DEP_SELENIUM_GROUP, DEP_HTMLUNIT_ARTIFACT, DEP_HTMLUNIT_VERSION, "test");
+            changed |= ensureDependency(doc, dependencies, ns, pomXml,
+                DEP_WDM_GROUP, DEP_WDM_ARTIFACT, DEP_WDM_VERSION, "test");
+        }
+
+        if (testType == TestCase.TestType.API) {
+            changed |= ensureDependency(doc, dependencies, ns, pomXml,
+                DEP_REST_ASSURED_GROUP, DEP_REST_ASSURED_ARTIFACT, DEP_REST_ASSURED_VERSION, "test");
+        }
 
         if (testType == TestCase.TestType.INTEGRATION) {
             changed |= ensureDependency(doc, dependencies, ns, pomXml,
@@ -1500,8 +1732,142 @@ spring.jpa.hibernate.ddl-auto=create-drop
         return switch (type) {
             case UNIT -> "suites/unit";
             case INTEGRATION -> "suites/integration";
-            case WEB, API -> "suites/herapp";
+            case WEB -> "suites/herapp";
+            case API -> "suites/api";
         };
+    }
+
+    public String takeScreenshot(WebDriver driver, String testName) {
+        if (driver == null) return null;
+        if (!(driver instanceof TakesScreenshot takesScreenshot)) {
+            return null;
+        }
+
+        try {
+            byte[] bytes = takesScreenshot.getScreenshotAs(OutputType.BYTES);
+            if (bytes == null || bytes.length == 0) return null;
+
+            Path baseDir = CURRENT_EXECUTION_DIR.get();
+            if (baseDir == null) {
+                baseDir = Paths.get(System.getProperty("java.io.tmpdir"), "ms-execution");
+            }
+            Path screenshotsDir = baseDir.resolve("screenshots");
+            Files.createDirectories(screenshotsDir);
+
+            String safeName = (testName == null ? "test" : testName)
+                    .replaceAll("[^a-zA-Z0-9._-]+", "_")
+                    .replaceAll("_+", "_")
+                    .replaceAll("^_+|_+$", "");
+            if (safeName.isBlank()) safeName = "test";
+            if (safeName.length() > 80) safeName = safeName.substring(0, 80);
+
+            Path out = screenshotsDir.resolve(safeName + "-" + System.currentTimeMillis() + ".png");
+            Files.write(out, bytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            return out.toAbsolutePath().toString();
+        } catch (Exception e) {
+            log.debug("takeScreenshot failed: {}", e.toString());
+            return null;
+        }
+    }
+
+    private void attachLatestScreenshotIfPresent(ExecutionResult result, Path workDir, long testStartEpochMs) {
+        if (result == null || workDir == null) return;
+        if (result.getStatus() != ExecutionResult.ResultStatus.FAILURE && result.getStatus() != ExecutionResult.ResultStatus.ERROR) {
+            return;
+        }
+        if (result.getScreenshotUrl() != null && !result.getScreenshotUrl().isBlank()) {
+            return;
+        }
+
+        Path screenshotsDir = findScreenshotsDir(workDir);
+        if (screenshotsDir == null) return;
+
+        try (var stream = Files.list(screenshotsDir)) {
+            Path latest = stream
+                    .filter(Files::isRegularFile)
+                    .filter(p -> {
+                        String name = p.getFileName() != null ? p.getFileName().toString().toLowerCase() : "";
+                        return name.endsWith(".png");
+                    })
+                    .filter(p -> {
+                        try {
+                            return Files.getLastModifiedTime(p).toMillis() >= (testStartEpochMs - 1_000);
+                        } catch (Exception ignored) {
+                            return true;
+                        }
+                    })
+                    .max(Comparator.comparingLong(p -> {
+                        try {
+                            return Files.getLastModifiedTime(p).toMillis();
+                        } catch (Exception ignored) {
+                            return 0L;
+                        }
+                    }))
+                    .orElse(null);
+
+            if (latest != null) {
+                result.setScreenshotUrl(latest.toAbsolutePath().toString());
+                log.info("Attached screenshot to ExecutionResult: {}", latest);
+            }
+        } catch (Exception e) {
+            log.debug("Unable to scan screenshots directory {}: {}", screenshotsDir, e.toString());
+        }
+    }
+
+    private Path findScreenshotsDir(Path startDir) {
+        Path current = startDir;
+        while (current != null) {
+            Path candidate = current.resolve("screenshots");
+            if (Files.isDirectory(candidate)) {
+                return candidate;
+            }
+            current = current.getParent();
+        }
+        return null;
+    }
+
+    /**
+     * Find the most recently modified PNG file under the workDir's screenshots folder (no time filtering).
+     */
+    private Path findLatestScreenshot(Path workDir) {
+        if (workDir == null) return null;
+        Path screenshots = findScreenshotsDir(workDir);
+        if (screenshots == null || !Files.isDirectory(screenshots)) return null;
+
+        try (var stream = Files.list(screenshots)) {
+            return stream
+                    .filter(Files::isRegularFile)
+                    .filter(p -> p.getFileName() != null && p.getFileName().toString().toLowerCase().endsWith(".png"))
+                    .max(Comparator.comparingLong(p -> {
+                        try { return Files.getLastModifiedTime(p).toMillis(); } catch (Exception e) { return 0L; }
+                    }))
+                    .orElse(null);
+        } catch (Exception e) {
+            log.debug("Error while searching for latest screenshot under {}: {}", screenshots, e.toString());
+            return null;
+        }
+    }
+
+    /**
+     * Copy screenshot file to a permanent configured directory and update result.screenshotUrl.
+     */
+    private void copyScreenshotToPermanent(Path src, ExecutionResult result) throws IOException {
+        if (src == null || result == null) return;
+
+        Path base = Paths.get(screenshotsDir == null ? "screenshots" : screenshotsDir);
+        if (!base.isAbsolute()) {
+            base = Paths.get(System.getProperty("user.dir")).resolve(base);
+        }
+        Files.createDirectories(base);
+
+        String orig = src.getFileName() != null ? src.getFileName().toString() : ("screenshot-" + System.currentTimeMillis() + ".png");
+        String prefix = (result.getTestCaseId() != null) ? ("tc-" + result.getTestCaseId() + "-") : "";
+        String outName = prefix + System.currentTimeMillis() + "-" + orig;
+        Path out = base.resolve(outName);
+
+        Files.copy(src, out, StandardCopyOption.REPLACE_EXISTING);
+        result.setScreenshotUrl(out.toAbsolutePath().toString());
+        log.info("Copied screenshot {} -> {}", src, out);
     }
 
     private String findRootPackage(Path repoDir) {

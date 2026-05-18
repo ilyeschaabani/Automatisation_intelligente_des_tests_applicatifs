@@ -44,7 +44,7 @@ export async function GET(
   const response = new NextResponse(upstream.body, {
     status: upstream.status,
     headers: {
-      'content-type': upstream.headers.get('content-type') ?? 'application/json',
+      'content-type': upstream.headers.get('content-type') ?? 'text/plain; charset=utf-8',
       'cache-control': 'no-store',
     },
   })
@@ -85,9 +85,10 @@ export async function DELETE(
     },
   )
 
-  const response = new NextResponse(null, {
+  const response = new NextResponse(upstream.body, {
     status: upstream.status,
     headers: {
+      'content-type': upstream.headers.get('content-type') ?? 'application/json',
       'cache-control': 'no-store',
     },
   })

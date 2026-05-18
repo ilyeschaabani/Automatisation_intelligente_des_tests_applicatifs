@@ -1,3 +1,5 @@
+import { getAccessToken } from '@/lib/auth-storage'
+
 export type ProjectType = 'WEB' | 'MOBILE' | 'API' | 'DESKTOP' | 'OTHER'
 export type SourceType = 'GIT' | 'LOCAL'
 
@@ -306,6 +308,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 async function readReadableError(response: Response): Promise<string> {
+  const responseCopy = response.clone()
   const contentType = response.headers.get('content-type') ?? ''
   const isJson = contentType.includes('application/json')
 
@@ -337,8 +340,16 @@ async function readReadableError(response: Response): Promise<string> {
     }
 
     const status = `${response.status} ${response.statusText}`.trim()
-    const fallback = data ? JSON.stringify(data).slice(0, 2000) : 'Unknown error'
-    return `${status}: ${fallback}`
+    if (data) {
+      return `${status}: ${JSON.stringify(data).slice(0, 2000)}`
+    }
+
+    const rawText = await responseCopy.text().catch(() => '')
+    if (rawText.trim()) {
+      return `${status}: ${rawText.trim()}`
+    }
+
+    return `${status}: Unknown error`
   }
 
   const text = await response.text().catch(() => '')
@@ -351,13 +362,13 @@ async function requestJson<T>(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<T> {
+  const headers = withAuthHeaders(init?.headers)
+  if (!headers.has('accept')) headers.set('accept', 'application/json')
+
   const response = await fetch(input, {
     credentials: 'include',
     ...init,
-    headers: {
-      accept: 'application/json',
-      ...(init?.headers ?? {}),
-    },
+    headers,
   })
 
   if (!response.ok) {
@@ -372,13 +383,13 @@ async function requestVoid(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<void> {
+  const headers = withAuthHeaders(init?.headers)
+  if (!headers.has('accept')) headers.set('accept', 'application/json')
+
   const response = await fetch(input, {
     credentials: 'include',
     ...init,
-    headers: {
-      accept: 'application/json',
-      ...(init?.headers ?? {}),
-    },
+    headers,
   })
 
   if (!response.ok) {
@@ -709,8 +720,16 @@ export async function createCampaign(input: TestCampaignCreateRequest): Promise<
   })
 }
 
-export async function deleteCampaign(campaignId: number): Promise<void> {
-  return requestVoid(`/api/campaigns/${encodeURIComponent(String(campaignId))}`, {
+export async function deleteCampaign(projectId: number, campaignId: number): Promise<void> {
+  if (!Number.isFinite(projectId) || projectId <= 0) {
+    throw new Error('Invalid projectId for campaign deletion')
+  }
+  if (!Number.isFinite(campaignId) || campaignId <= 0) {
+    throw new Error('Invalid campaignId for campaign deletion')
+  }
+
+  const query = new URLSearchParams({ projectId: String(projectId) })
+  return requestVoid(`/api/campaigns/${encodeURIComponent(String(campaignId))}?${query.toString()}`, {
     method: 'DELETE',
   })
 }
@@ -803,6 +822,83 @@ export async function continueCampaignRun(
   return { status: 'error', message: 'Continuation not supported in ms-execution' } as CampaignRunResponse
 }
 
+// Reports API helpers
+export type ReportMetadata = {
+  id: number
+  campaignId: number
+  filename: string
+  generatedAt: string
+}
+
+export async function listReportsForCampaign(campaignId: number): Promise<ReportMetadata[]> {
+  try {
+    return await requestJson<ReportMetadata[]>(`/api/reports/campaign/${encodeURIComponent(String(campaignId))}`, {
+      cache: 'no-store',
+    })
+  } catch (error) {
+    // If backend doesn't support listing yet, return empty list and let UI fall back to on-demand generation
+    console.warn('Failed to list reports for campaign', error)
+    return []
+  }
+}
+
+export async function downloadCampaignReport(campaignId: number): Promise<Blob> {
+  const headers = withAuthHeaders({ accept: 'application/pdf' })
+  const response = await fetch(`/api/reports/campaign/${encodeURIComponent(String(campaignId))}/pdf`, {
+    method: 'GET',
+    credentials: 'include',
+    headers,
+  })
+
+  if (!response.ok) {
+    const message = await readReadableError(response)
+    throw new Error(message)
+  }
+
+  return await response.blob()
+}
+
+export async function downloadReportById(reportId: number): Promise<Blob> {
+  const headers = withAuthHeaders({ accept: 'application/pdf' })
+  const response = await fetch(`/api/reports/${encodeURIComponent(String(reportId))}/pdf`, {
+    method: 'GET',
+    credentials: 'include',
+    headers,
+  })
+
+  if (!response.ok) {
+    const message = await readReadableError(response)
+    throw new Error(message)
+  }
+
+  return await response.blob()
+}
+
+export async function generateAndStoreReport(campaignId: number): Promise<ReportMetadata> {
+  const headers = withAuthHeaders({ accept: 'application/json' })
+  const response = await fetch(`/api/reports/campaign/${encodeURIComponent(String(campaignId))}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers,
+  })
+
+  if (!response.ok) {
+    const message = await readReadableError(response)
+    throw new Error(message)
+  }
+
+  return (await response.json()) as ReportMetadata
+}
+
+export async function listAllReports(): Promise<ReportMetadata[]> {
+  try {
+    return await requestJson<ReportMetadata[]>(`/api/reports`, { cache: 'no-store' })
+  } catch (error) {
+    console.warn('Failed to list all reports', error)
+    return []
+  }
+}
+
 export async function stopCampaign(projectId: number, campaignId: number): Promise<{ message: string }> {
   const response = await fetch(
     '/api/projects/' + encodeURIComponent(String(projectId)) + '/campaigns/' + encodeURIComponent(String(campaignId)) + '/stop',
@@ -824,6 +920,15 @@ export async function stopCampaign(projectId: number, campaignId: number): Promi
   }
 
   return data ?? { message: 'Campaign stopped' }
+}
+
+function withAuthHeaders(initHeaders?: HeadersInit): Headers {
+  const headers = new Headers(initHeaders ?? {})
+  const token = getAccessToken()
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`)
+  }
+  return headers
 }
 // --------------------------------------------------
 

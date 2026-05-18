@@ -16,9 +16,11 @@ import lombok.Setter;
 
 public class CampaignTestCase {
     @Id
+    @Column(name = "campaign_id", insertable = false, updatable = false)
     private Long campaignId;
 
     @Id
+    @Column(name = "test_case_id", insertable = false, updatable = false)
     private Long testCaseId;
 
     @ManyToOne

@@ -17,10 +17,17 @@ import { Plus, Search } from 'lucide-react'
 
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from '@/hooks/use-toast'
-import { getProjects, listCampaigns, type Project, type TestCampaignDto } from '@/lib/api-client'
+import { getProjects, listCampaigns, listExecutionResults, type Project, type TestCampaignDto } from '@/lib/api-client'
 
 type CardStatus = 'Running' | 'Completed' | 'Failed' | 'Scheduled'
 type CardType = 'Functional' | 'API' | 'Regression'
+
+type CampaignStats = {
+  tests: number
+  passed: number
+  failed: number
+  lastRun: string
+}
 
 const demoCampaignCard = {
   name: 'Payment Gateway API Tests',
@@ -46,6 +53,12 @@ function mapType(_campaign: TestCampaignDto): CardType {
   return 'Functional'
 }
 
+function formatLastRun(value: string | null | undefined): string {
+  if (!value) return '—'
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString()
+}
+
 export default function CampaignsPage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [projectsLoading, setProjectsLoading] = useState(true)
@@ -54,6 +67,8 @@ export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<TestCampaignDto[]>([])
   const [campaignsLoading, setCampaignsLoading] = useState(false)
   const [search, setSearch] = useState('')
+  const [campaignStats, setCampaignStats] = useState<Record<number, CampaignStats>>({})
+  const [statsLoading, setStatsLoading] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -108,6 +123,55 @@ export default function CampaignsPage() {
       cancelled = true
     }
   }, [])  // Empty dependency array - load all campaigns on mount
+
+  useEffect(() => {
+    let cancelled = false
+
+    const run = async () => {
+      if (campaigns.length === 0) {
+        setCampaignStats({})
+        return
+      }
+
+      setStatsLoading(true)
+      try {
+        const entries = await Promise.all(
+          campaigns.map(async (campaign) => {
+            const results = await listExecutionResults({ campaignId: campaign.id })
+            const tests = results.length
+            const passed = results.filter((result) => String(result.status).toUpperCase() === 'SUCCESS').length
+            const failed = results.filter((result) => String(result.status).toUpperCase() === 'FAILURE' || String(result.status).toUpperCase() === 'ERROR').length
+            const lastRun = results
+              .map((result) => result.executedAt)
+              .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0]
+
+            return [campaign.id, {
+              tests,
+              passed,
+              failed,
+              lastRun: formatLastRun(lastRun ?? campaign.finishedAt ?? campaign.startedAt ?? campaign.createdAt ?? '—'),
+            }] as const
+          }),
+        )
+
+        if (!cancelled) {
+          setCampaignStats(Object.fromEntries(entries))
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.warn('Failed to load campaign execution stats', error)
+          setCampaignStats({})
+        }
+      } finally {
+        if (!cancelled) setStatsLoading(false)
+      }
+    }
+
+    void run()
+    return () => {
+      cancelled = true
+    }
+  }, [campaigns])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -187,6 +251,9 @@ export default function CampaignsPage() {
               <p className="text-sm text-muted-foreground">Loading campaigns…</p>
             ) : (
               filtered.map((campaign) => (
+                (() => {
+                  const stats = campaignStats[campaign.id]
+                  return (
                 <CampaignCard
                   key={campaign.id}
                   id={campaign.id}
@@ -195,11 +262,13 @@ export default function CampaignsPage() {
                   status={mapStatus(campaign.status)}
                   progress={0}
                   projectId={campaign.projectId}
-                  tests={0}
-                  passed={0}
-                  failed={0}
-                  lastRun={campaign.finishedAt ?? campaign.startedAt ?? campaign.createdAt ?? '—'}
+                  tests={stats?.tests ?? 0}
+                  passed={stats?.passed ?? 0}
+                  failed={stats?.failed ?? 0}
+                  lastRun={stats?.lastRun ?? formatLastRun(campaign.finishedAt ?? campaign.startedAt ?? campaign.createdAt)}
                 />
+                  )
+                })()
               ))
             )}
           </div>

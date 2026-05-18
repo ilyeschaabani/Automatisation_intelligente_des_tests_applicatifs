@@ -77,6 +77,10 @@ import {
   continueCampaignRun,
   stopCampaign,
   getTestCasesForCampaign,
+  listReportsForCampaign,
+  downloadCampaignReport,
+  downloadReportById,
+  generateAndStoreReport,
   type CampaignRunContinueRequest,
   type CampaignRunResponse,
   type EditableFileDto,
@@ -710,6 +714,15 @@ export default function CampaignDetailsPage() {
   }, [campaign, remoteCampaign])
 
   const [testCasesFromApi, setTestCasesFromApi] = useState<TestCaseWithStatusDto[]>([])
+  const [reports, setReports] = useState<{
+    id: number
+    campaignId: number
+    filename: string
+    generatedAt: string
+  }[]>([])
+  const [reportsLoading, setReportsLoading] = useState(false)
+  const [selectedReportId, setSelectedReportId] = useState<number | null>(null)
+  const [autoDownloadedExecutionId, setAutoDownloadedExecutionId] = useState<number | null>(null)
   const [testCasesLoading, setTestCasesLoading] = useState(false)
   const [selectedTestIds, setSelectedTestIds] = useState<string[]>([])
   const [storedRuns, setStoredRuns] = useState<CampaignExecution[]>([])
@@ -757,6 +770,8 @@ export default function CampaignDetailsPage() {
       setExecutionUiRunning(false)
       setStoredRuns([])
       setSelectedTestIds([])
+      setReports([])
+      setSelectedReportId(null)
       return
     }
 
@@ -792,6 +807,64 @@ export default function CampaignDetailsPage() {
       cancelled = true
     }
   }, [campaignNumericId, isExecutionRunning])
+
+  // Load reports for this campaign if the backend supports listing them.
+  useEffect(() => {
+    if (!campaignNumericId) return
+    let cancelled = false
+    const load = async () => {
+      setReportsLoading(true)
+      try {
+        const list = await listReportsForCampaign(campaignNumericId)
+        if (!cancelled) {
+          setReports(list ?? [])
+          if ((list ?? []).length > 0) setSelectedReportId(list[0].id)
+        }
+      } catch (e) {
+        if (!cancelled) setReports([])
+      } finally {
+        if (!cancelled) setReportsLoading(false)
+      }
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [campaignNumericId])
+
+  // Auto-download report when a backend execution finishes (generates PDF on demand).
+  useEffect(() => {
+    if (!campaignNumericId) return
+    if (!latestExecution) return
+    if (latestExecution.status !== 'FINISHED') return
+    // Avoid re-downloading for the same execution
+    if (autoDownloadedExecutionId === latestExecution.id) return
+
+    let cancelled = false
+    const download = async () => {
+      try {
+        const blob = await downloadCampaignReport(campaignNumericId)
+        if (cancelled) return
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `campaign-${campaignNumericId}-report.pdf`
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        window.URL.revokeObjectURL(url)
+        setAutoDownloadedExecutionId(latestExecution.id)
+        toast({ title: 'Report downloaded', description: 'Campaign report downloaded automatically.' })
+      } catch (e) {
+        console.warn('Failed to auto-download report', e)
+      }
+    }
+
+    void download()
+    return () => {
+      cancelled = true
+    }
+  }, [latestExecution, campaignNumericId, autoDownloadedExecutionId])
 
   useEffect(() => {
     return () => {}
@@ -1177,6 +1250,52 @@ export default function CampaignDetailsPage() {
                           </Badge>
                         ) : null}
                       </div>
+
+                      {showExecutionPanel ? (
+                        <div className="rounded-2xl border border-border/70 bg-card/80 p-4 backdrop-blur">
+                          <div className="space-y-4">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                              <div>
+                                <p className="text-sm font-semibold text-foreground">
+                                  {isExecutionRunning ? 'ms-execution is running the campaign' : 'ms-execution finished the campaign'}
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  {isExecutionRunning
+                                    ? `${campaign.name} is being cloned, executed, and persisted in the backend.`
+                                    : `${campaign.name} finished successfully and the final progress is preserved.`}
+                                </p>
+                              </div>
+                              <Badge variant="secondary" className="w-fit rounded-full">
+                                {isExecutionRunning ? executionSteps[runStepIndex] : 'Completed'}
+                              </Badge>
+                            </div>
+
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                <span>Loading progress</span>
+                                <span>{formatPercent(isExecutionRunning ? runProgressValue : 100)}</span>
+                              </div>
+                              <Progress value={isExecutionRunning ? runProgressValue : 100} className="h-2.5" />
+                            </div>
+
+                            <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
+                              {executionSteps.map((step, index) => (
+                                <div
+                                  key={step}
+                                  className={
+                                    'rounded-lg border px-3 py-2 ' +
+                                    (index <= runStepIndex
+                                      ? 'border-primary/20 bg-background text-foreground'
+                                      : 'border-border bg-background/60')
+                                  }
+                                >
+                                  {index + 1}. {step}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="grid gap-3 sm:grid-cols-2 lg:w-[360px]">
@@ -1196,6 +1315,83 @@ export default function CampaignDetailsPage() {
                         <p className="text-xs uppercase tracking-wide text-muted-foreground">Version</p>
                         <p className="mt-2 text-sm font-medium text-foreground truncate">{campaign.appVersion}</p>
                       </div>
+                      <div className="rounded-2xl border border-border/70 bg-white p-4">
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Report</p>
+                        {reportsLoading ? (
+                          <p className="mt-2 text-sm text-muted-foreground">Loading reports…</p>
+                        ) : reports.length > 0 ? (
+                          <div className="mt-2 flex flex-col gap-2">
+                            <Select
+                              value={String(selectedReportId ?? '')}
+                              onValueChange={(v) => setSelectedReportId(v ? Number(v) : null)}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Select report" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {reports.map((r) => (
+                                  <SelectItem key={r.id} value={String(r.id)}>
+                                    {r.filename} — {new Date(r.generatedAt).toLocaleString()}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              size="sm"
+                              onClick={async () => {
+                                if (!campaignNumericId) return
+                                try {
+                                  const blob = selectedReportId
+                                    ? await downloadReportById(selectedReportId)
+                                    : await downloadCampaignReport(campaignNumericId)
+                                  const url = window.URL.createObjectURL(blob)
+                                  const a = document.createElement('a')
+                                  a.href = url
+                                  a.download = selectedReportId
+                                    ? reports.find(r => r.id === selectedReportId)?.filename ?? `campaign-${campaignNumericId}-report.pdf`
+                                    : `campaign-${campaignNumericId}-report.pdf`
+                                  document.body.appendChild(a)
+                                  a.click()
+                                  a.remove()
+                                  window.URL.revokeObjectURL(url)
+                                  toast({ title: 'Report downloaded', description: 'Report downloaded.' })
+                                } catch (e) {
+                                  toast({ title: 'Error', description: (e as Error).message ?? String(e), variant: 'destructive' })
+                                }
+                              }}
+                            >
+                              Download
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="mt-2 flex flex-col gap-2">
+                            <p className="text-sm text-muted-foreground">No stored reports. You can download the latest report.</p>
+                            <Button
+                              size="sm"
+                              onClick={async () => {
+                                if (!campaignNumericId) return
+                                try {
+                                  const blob = await downloadCampaignReport(campaignNumericId)
+                                  const url = window.URL.createObjectURL(blob)
+                                  const a = document.createElement('a')
+                                  a.href = url
+                                  a.download = `campaign-${campaignNumericId}-report.pdf`
+                                  document.body.appendChild(a)
+                                  a.click()
+                                  a.remove()
+                                  window.URL.revokeObjectURL(url)
+                                  toast({ title: 'Report downloaded', description: 'Report downloaded.' })
+                                } catch (e) {
+                                  toast({ title: 'Error', description: (e as Error).message ?? String(e), variant: 'destructive' })
+                                }
+                              }}
+                            >
+                              Download
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+
                     </div>
                   </div>
 
@@ -1230,52 +1426,6 @@ export default function CampaignDetailsPage() {
                       </Button>
                     )}
                   </div>
-
-                  {showExecutionPanel ? (
-                    <Card className="mt-6 border-primary/20 bg-primary/5">
-                      <CardContent className="space-y-4 p-4 sm:p-5">
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                          <div>
-                            <p className="text-sm font-semibold text-foreground">
-                              {isExecutionRunning ? 'ms-execution is running the campaign' : 'ms-execution finished the campaign'}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              {isExecutionRunning
-                                ? `${campaign.name} is being cloned, executed, and persisted in the backend.`
-                                : `${campaign.name} finished successfully and the final progress is preserved.`}
-                            </p>
-                          </div>
-                          <Badge variant="secondary" className="w-fit rounded-full">
-                            {isExecutionRunning ? executionSteps[runStepIndex] : 'Completed'}
-                          </Badge>
-                        </div>
-
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span>Loading progress</span>
-                            <span>{formatPercent(isExecutionRunning ? runProgressValue : 100)}</span>
-                          </div>
-                          <Progress value={isExecutionRunning ? runProgressValue : 100} className="h-2.5" />
-                        </div>
-
-                        <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
-                          {executionSteps.map((step, index) => (
-                            <div
-                              key={step}
-                              className={
-                                'rounded-lg border px-3 py-2 ' +
-                                (index <= runStepIndex
-                                  ? 'border-primary/20 bg-background text-foreground'
-                                  : 'border-border bg-background/60')
-                              }
-                            >
-                              {index + 1}. {step}
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ) : null}
 
                   <Dialog open={runDialogOpen} onOpenChange={setRunDialogOpen}>
           <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
