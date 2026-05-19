@@ -702,7 +702,15 @@ public class ReportService {
     private void addExecutiveSummary(Document document, PdfDocument pdfDocument, ReportData data, PdfFont regularFont, PdfFont boldFont) {
         document.add(new Paragraph("Resume executif").setFont(boldFont).setFontSize(18).setMarginBottom(8));
 
-        drawGauge(pdfDocument, data.successRate());
+        PdfPage page = pdfDocument.getLastPage();
+        Rectangle pageSize = page.getPageSize();
+        float leftMargin = document.getLeftMargin();
+        float rightMargin = document.getRightMargin();
+        float usableWidth = pageSize.getWidth() - leftMargin - rightMargin;
+        float gaugeColumnWidth = usableWidth * 0.28f;
+        float centerX = pageSize.getLeft() + leftMargin + (gaugeColumnWidth / 2f);
+        float centerY = pageSize.getTop() - document.getTopMargin() - 120f;
+        drawGauge(pdfDocument, data.successRate(), centerX, centerY, 48f);
 
         Table metrics = new Table(new float[]{2, 2, 2, 2, 2});
         metrics.setWidth(UnitValue.createPercentValue(100));
@@ -716,7 +724,16 @@ public class ReportService {
         metrics.addCell(metricValue(String.valueOf(data.failureCount()), boldFont, FAILURE));
         metrics.addCell(metricValue(String.valueOf(data.errorCount()), boldFont, WARNING));
         metrics.addCell(metricValue(formatDuration(data.campaign().durationMs()), boldFont, NAVY));
-        document.add(metrics.setMarginTop(6));
+
+        Table summaryRow = new Table(new float[]{1.4f, 3.6f});
+        summaryRow.setWidth(UnitValue.createPercentValue(100));
+        summaryRow.addCell(new Cell()
+            .setBorder(Border.NO_BORDER)
+            .add(new Paragraph("Taux de reussite").setFont(boldFont).setFontSize(10))
+            .add(new Paragraph(" ").setFont(regularFont).setFontSize(10).setMarginTop(64))
+        );
+        summaryRow.addCell(new Cell().setBorder(Border.NO_BORDER).add(metrics));
+        document.add(summaryRow.setMarginTop(6));
 
         document.add(new Paragraph("Evolution vs campagne precedente: " + safeValue(data.previousComparisonText()))
                 .setFont(regularFont).setFontSize(11).setMarginTop(10));
@@ -930,13 +947,9 @@ public class ReportService {
         }
     }
 
-    private void drawGauge(PdfDocument pdfDocument, double successRate) {
+    private void drawGauge(PdfDocument pdfDocument, double successRate, float centerX, float centerY, float radius) {
         PdfPage page = pdfDocument.getLastPage();
         Rectangle pageSize = page.getPageSize();
-        float centerX = pageSize.getLeft() + 110;
-        float centerY = pageSize.getTop() - 170;
-        float radius = 40;
-
         PdfCanvas canvas = new PdfCanvas(page);
         canvas.saveState();
         canvas.setLineWidth(6f);
@@ -952,11 +965,11 @@ public class ReportService {
 
         Canvas textCanvas = new Canvas(canvas, pageSize);
         textCanvas.showTextAligned(new Paragraph(String.format(Locale.US, "%.0f%%", successRate))
-                        .setFontSize(12).setFontColor(NAVY),
+                .setFontSize(12).setFontColor(NAVY),
                 centerX, centerY - 5, TextAlignment.CENTER);
         textCanvas.showTextAligned(new Paragraph("Taux de reussite")
-                        .setFontSize(9).setFontColor(ColorConstants.GRAY),
-                centerX, centerY - 20, TextAlignment.CENTER);
+                .setFontSize(9).setFontColor(ColorConstants.GRAY),
+            centerX, centerY - 20, TextAlignment.CENTER);
         textCanvas.close();
     }
 

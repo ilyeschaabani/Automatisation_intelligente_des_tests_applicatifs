@@ -6,23 +6,38 @@ import { Header } from '@/components/header'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { listAllReports } from '@/lib/api-client'
+import { downloadCampaignReport, downloadReportById, listAllReports, listCampaigns, type TestCampaignDto } from '@/lib/api-client'
 import { toast } from '@/hooks/use-toast'
 
 export default function ReportsPage() {
   const [reports, setReports] = useState<{ id: number; campaignId: number; filename: string; generatedAt: string }[]>([])
   const [loading, setLoading] = useState(false)
+  const [campaignNames, setCampaignNames] = useState<Record<number, string>>({})
 
   useEffect(() => {
     let cancelled = false
     const load = async () => {
       setLoading(true)
       try {
-        const list = await listAllReports()
-        if (!cancelled) setReports(list ?? [])
+        const [list, campaigns] = await Promise.all([listAllReports(), listCampaigns({})])
+        if (cancelled) return
+        setReports(list ?? [])
+        const nameMap = (campaigns ?? []).reduce<Record<number, string>>((acc, campaign: TestCampaignDto) => {
+          if (campaign?.id) acc[campaign.id] = String(campaign.name ?? `Campaign #${campaign.id}`)
+          return acc
+        }, {})
+        setCampaignNames(nameMap)
       } catch (e) {
         console.warn('Failed to list reports', e)
-        if (!cancelled) setReports([])
+        if (!cancelled) {
+          setReports([])
+          setCampaignNames({})
+          toast({
+            title: 'Failed to load reports',
+            description: e instanceof Error ? e.message : 'Unable to load reports from the backend.',
+            variant: 'destructive',
+          })
+        }
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -33,22 +48,20 @@ export default function ReportsPage() {
     }
   }, [])
 
-  const downloadReport = async (r: { id: number; campaignId: number }) => {
+  const downloadReport = async (r: { id: number; campaignId: number; filename?: string }) => {
     try {
-      // Try stored report endpoint first
-      let response = await fetch(`/api/reports/${encodeURIComponent(String(r.id))}/pdf`, { credentials: 'include' })
-      if (!response.ok) {
-        // Fallback to campaign-level PDF generator
-        response = await fetch(`/api/reports/campaign/${encodeURIComponent(String(r.campaignId))}/pdf`, { credentials: 'include' })
+      let blob: Blob
+      try {
+        blob = await downloadReportById(r.id)
+      } catch (error) {
+        console.warn('Report file missing, falling back to campaign PDF', error)
+        blob = await downloadCampaignReport(r.campaignId)
       }
 
-      if (!response.ok) throw new Error(`Failed to download report: ${response.status} ${response.statusText}`)
-
-      const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `report-${r.id}.pdf`
+      a.download = r.filename ?? `campaign-${r.campaignId}-report.pdf`
       document.body.appendChild(a)
       a.click()
       a.remove()
@@ -97,7 +110,7 @@ export default function ReportsPage() {
                       reports.map((r) => (
                         <TableRow key={r.id}>
                           <TableCell className="font-medium">{r.id}</TableCell>
-                          <TableCell>{r.campaignId}</TableCell>
+                          <TableCell>{campaignNames[r.campaignId] ?? `Campaign #${r.campaignId}`}</TableCell>
                           <TableCell>{r.filename}</TableCell>
                           <TableCell className="text-right text-muted-foreground">{new Date(r.generatedAt).toLocaleString()}</TableCell>
                           <TableCell className="text-right">
