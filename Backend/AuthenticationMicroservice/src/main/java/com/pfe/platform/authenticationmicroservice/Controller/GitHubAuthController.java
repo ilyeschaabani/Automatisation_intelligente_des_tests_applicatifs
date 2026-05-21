@@ -14,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
 
 import java.security.SecureRandom;
 
@@ -67,9 +68,15 @@ public class GitHubAuthController {
 
         User currentUser = userService.getUserByEmail(userDetails.getUsername());
 
-        String accessToken = gitHubService.exchangeCodeForAccessToken(code);
-        var githubUser = gitHubClient.getUser(accessToken);
-        gitHubService.linkGitHubAccount(currentUser, accessToken, githubUser);
+        try {
+            String accessToken = gitHubService.exchangeCodeForAccessToken(code);
+            var githubUser = gitHubClient.getUser(accessToken);
+            gitHubService.linkGitHubAccount(currentUser, accessToken, githubUser);
+        } catch (WebClientRequestException ex) {
+            // GitHub unavailable or DNS resolution failed: redirect back to the frontend instead of crashing the callback.
+            String redirect = frontendBaseUrl + "/profile?github=error&reason=unavailable";
+            return ResponseEntity.status(302).header(HttpHeaders.LOCATION, redirect).build();
+        }
 
         // Redirect back to frontend profile page
         String redirect = frontendBaseUrl + "/profile?github=connected";

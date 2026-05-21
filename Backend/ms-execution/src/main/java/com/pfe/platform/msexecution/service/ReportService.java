@@ -144,6 +144,9 @@ public class ReportService {
             addAiAnalysis(document, reportData, boldFont, monoFont);
             document.add(new AreaBreak(AreaBreakType.NEXT_PAGE));
 
+            addUxEvaluationSection(document, reportData, boldFont, monoFont);
+            document.add(new AreaBreak(AreaBreakType.NEXT_PAGE));
+
             addMetricsSection(document, reportData, boldFont, regularFont);
             document.add(new AreaBreak(AreaBreakType.NEXT_PAGE));
 
@@ -526,6 +529,7 @@ public class ReportService {
                 executionResult != null ? executionResult.getErrorMessage() : null,
                 executionResult != null ? executionResult.getLogs() : null,
                 executionResult != null ? executionResult.getAiAnalysis() : null,
+                executionResult != null ? executionResult.getUxAnalysis() : null,
                 executionResult != null ? executionResult.getScreenshotUrl() : null,
                 Boolean.TRUE.equals(flaky),
                 Boolean.TRUE.equals(generated),
@@ -864,6 +868,76 @@ public class ReportService {
         }
     }
 
+    private void addUxEvaluationSection(Document document, ReportData data, PdfFont boldFont, PdfFont monoFont) {
+        document.add(new Paragraph("Evaluation UX").setFont(boldFont).setFontSize(18).setMarginBottom(10));
+
+        List<TestResultSummary> uxResults = data.allResults().stream()
+                .filter(this::isUxResult)
+                .collect(Collectors.toList());
+
+        if (uxResults.isEmpty()) {
+            document.add(messageBox("Aucun test UX execute pour cette campagne", boldFont));
+            return;
+        }
+
+        Table table = new Table(new float[]{2.6f, 1.2f, 1.2f, 3.0f});
+        table.setWidth(UnitValue.createPercentValue(100));
+        table.addHeaderCell(contextHeader("Test", boldFont));
+        table.addHeaderCell(contextHeader("Plateforme", boldFont));
+        table.addHeaderCell(contextHeader("Statut", boldFont));
+        table.addHeaderCell(contextHeader("Analyse UX", boldFont));
+
+        for (TestResultSummary summary : uxResults) {
+            table.addCell(contextValue(safeValue(summary.testName()), monoFont));
+            table.addCell(contextValue(resolveUxPlatform(summary.type()), monoFont));
+            table.addCell(statusBadgeCell(summary.status(), boldFont));
+            String analysis = summary.uxAnalysis() != null && !summary.uxAnalysis().isBlank()
+                    ? summary.uxAnalysis()
+                    : "Analyse UX non disponible";
+            table.addCell(new Cell().setBorder(new SolidBorder(ColorConstants.WHITE, 1))
+                    .add(new Paragraph(truncate(analysis, 500)).setFont(monoFont).setFontSize(9)));
+        }
+
+        document.add(table);
+
+        for (TestResultSummary summary : uxResults) {
+            if (summary.screenshotUrl() != null && !summary.screenshotUrl().isBlank()) {
+                addUxScreenshot(document, summary.screenshotUrl(), boldFont);
+            }
+        }
+    }
+
+    private void addUxScreenshot(Document document, String screenshotUrl, PdfFont boldFont) {
+        if (screenshotUrl == null || screenshotUrl.isBlank()) {
+            return;
+        }
+
+        try {
+            Path screenshotPath = Paths.get(screenshotUrl);
+            if (!Files.exists(screenshotPath) || !Files.isRegularFile(screenshotPath)) {
+                return;
+            }
+
+            byte[] bytes = Files.readAllBytes(screenshotPath);
+            if (bytes.length == 0) {
+                return;
+            }
+
+            document.add(new Paragraph("Capture d'écran de l'application évaluée")
+                    .setFont(boldFont)
+                    .setFontSize(11)
+                    .setMarginTop(8)
+                    .setMarginBottom(4));
+
+            Image image = new Image(ImageDataFactory.create(bytes));
+            image.scaleToFit(500f, 1000f);
+            image.setAutoScale(false);
+            document.add(image);
+        } catch (Exception ex) {
+            log.debug("Unable to add UX screenshot to PDF: {}", ex.getMessage());
+        }
+    }
+
     private void addMetricsSection(Document document, ReportData data, PdfFont boldFont, PdfFont regularFont) {
         document.add(new Paragraph("Metriques").setFont(boldFont).setFontSize(18).setMarginBottom(10));
 
@@ -1078,6 +1152,26 @@ public class ReportService {
         return text.substring(text.length() - maxChars);
     }
 
+    private boolean isUxResult(TestResultSummary summary) {
+        if (summary == null || summary.type() == null) {
+            return false;
+        }
+        return "FUNCTIONAL_WEB".equalsIgnoreCase(summary.type()) || "FUNCTIONAL_MOBILE".equalsIgnoreCase(summary.type());
+    }
+
+    private String resolveUxPlatform(String type) {
+        if (type == null) {
+            return "—";
+        }
+        if ("FUNCTIONAL_WEB".equalsIgnoreCase(type)) {
+            return "Web";
+        }
+        if ("FUNCTIONAL_MOBILE".equalsIgnoreCase(type)) {
+            return "Mobile";
+        }
+        return type;
+    }
+
     private String safeValue(String value) {
         return value == null || value.isBlank() ? "N/A" : value;
     }
@@ -1154,6 +1248,7 @@ public class ReportService {
             String errorMessage,
             String logs,
             String aiAnalysis,
+                String uxAnalysis,
             String screenshotUrl,
             boolean flaky,
             boolean generated,

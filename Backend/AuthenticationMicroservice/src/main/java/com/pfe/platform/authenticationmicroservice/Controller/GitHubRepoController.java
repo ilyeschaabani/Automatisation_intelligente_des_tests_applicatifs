@@ -17,6 +17,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.web.reactive.function.client.WebClientRequestException;
+
 @RestController
 @RequestMapping("/api/github")
 @RequiredArgsConstructor
@@ -75,6 +77,8 @@ public class GitHubRepoController {
                     .toList();
 
             return ResponseEntity.ok(payload);
+        } catch (WebClientRequestException ex) {
+            return ResponseEntity.status(503).body("GitHub is temporarily unreachable. Please try again later.");
         } catch (org.springframework.web.reactive.function.client.WebClientResponseException.Forbidden e) {
             return ResponseEntity.status(403).body("GitHub token lacks repo scope or access is forbidden");
         } catch (org.springframework.web.reactive.function.client.WebClientResponseException.Unauthorized e) {

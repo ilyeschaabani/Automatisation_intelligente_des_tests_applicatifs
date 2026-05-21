@@ -125,7 +125,8 @@ export default function SuiteTestCasesPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
-  const forceAiForSuite = suite?.type === 'UNIT' || suite?.type === 'INTEGRATION'
+  const isUxSuiteType = suite?.type === 'FUNCTIONAL_WEB' || suite?.type === 'FUNCTIONAL_MOBILE'
+  const forceAiForSuite = suite?.type === 'UNIT' || suite?.type === 'INTEGRATION' || isUxSuiteType
   const showAiSection = Boolean(project?.aiProject) || forceAiForSuite
 
   const loadSuite = async () => {
@@ -209,7 +210,7 @@ export default function SuiteTestCasesPage() {
       return
     }
     if (forceAiForSuite && !aiState.descriptionAI.trim()) {
-      setFormError('AI description is required for UNIT/INTEGRATION suites.')
+      setFormError('AI description is required for UNIT/INTEGRATION/UX suites.')
       return
     }
     setGenerating(true)
@@ -327,7 +328,7 @@ export default function SuiteTestCasesPage() {
     // 2. If project.aiProject with description -> backend regenerates
     // 3. Otherwise -> manual mode with scriptPath
     if (forceAiForSuite) {
-      // Forced AI for UNIT/INTEGRATION suites:
+      // Forced AI for UNIT/INTEGRATION/UX suites:
       // - If user has code in the editor, persist it (allows post-generation edits).
       // - Otherwise, require descriptionAI and let backend generate.
       if (aiState.generatedCode && aiState.generatedCode.trim()) {
@@ -341,7 +342,7 @@ export default function SuiteTestCasesPage() {
       } else {
         const prompt = aiState.descriptionAI.trim()
         if (!prompt) {
-          setFormError('AI description is required for UNIT/INTEGRATION suites.')
+          setFormError('AI description is required for UNIT/INTEGRATION/UX suites.')
           return null
         }
         payload.useAI = true
@@ -703,7 +704,7 @@ export default function SuiteTestCasesPage() {
                 setFormState((prev) => ({ ...prev, scriptPath: event.target.value }))
               }
               placeholder="tests/login.spec.ts"
-              required={suite?.type === 'WEB' || suite?.type === 'API'}
+              required={suite?.type === 'WEB' || suite?.type === 'API' || suite?.type === 'FUNCTIONAL_WEB' || suite?.type === 'FUNCTIONAL_MOBILE'}
             />
           </div>
         ) : null}

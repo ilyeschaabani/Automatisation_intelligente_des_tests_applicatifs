@@ -1,6 +1,7 @@
 package com.pfe.platform.msexecution.repository;
 
 import com.pfe.platform.msexecution.entity.ExecutionResult;
+import com.pfe.platform.msexecution.entity.TestCase;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Collection;
@@ -10,4 +11,6 @@ public interface ExecutionResultRepository extends JpaRepository<ExecutionResult
     List<ExecutionResult> findByCampaignId(Long campaignId);
 
     List<ExecutionResult> findByCampaignIdIn(Collection<Long> campaignIds);
+
+    List<ExecutionResult> findByTestTypeIn(Collection<TestCase.TestType> types);
 }

@@ -14,6 +14,7 @@ public class ExecutionResultDto {
     private String errorMessage;
     private String logs;
     private String aiAnalysis;
+    private String uxAnalysis;
     private String screenshotUrl;
     private LocalDateTime executedAt;
 
@@ -21,7 +22,7 @@ public class ExecutionResultDto {
     }
 
     public ExecutionResultDto(Long id, Long campaignId, Long testCaseId, String testType, String status, Long durationMs,
-                              String errorMessage, String logs, String aiAnalysis, String screenshotUrl, LocalDateTime executedAt) {
+                              String errorMessage, String logs, String aiAnalysis, String uxAnalysis, String screenshotUrl, LocalDateTime executedAt) {
         this.id = id;
         this.campaignId = campaignId;
         this.testCaseId = testCaseId;
@@ -31,6 +32,7 @@ public class ExecutionResultDto {
         this.errorMessage = errorMessage;
         this.logs = logs;
         this.aiAnalysis = aiAnalysis;
+        this.uxAnalysis = uxAnalysis;
         this.screenshotUrl = screenshotUrl;
         this.executedAt = executedAt;
     }
@@ -107,6 +109,14 @@ public class ExecutionResultDto {
         this.aiAnalysis = aiAnalysis;
     }
 
+    public String getUxAnalysis() {
+        return uxAnalysis;
+    }
+
+    public void setUxAnalysis(String uxAnalysis) {
+        this.uxAnalysis = uxAnalysis;
+    }
+
     public String getScreenshotUrl() {
         return screenshotUrl;
     }
@@ -133,7 +143,8 @@ public class ExecutionResultDto {
                 entity.getDurationMs(),
                 entity.getErrorMessage(),
                 entity.getLogs(),
-                entity.getAiAnalysis(),
+            entity.getAiAnalysis(),
+            entity.getUxAnalysis(),
                 entity.getScreenshotUrl(),
                 entity.getExecutedAt()
         );

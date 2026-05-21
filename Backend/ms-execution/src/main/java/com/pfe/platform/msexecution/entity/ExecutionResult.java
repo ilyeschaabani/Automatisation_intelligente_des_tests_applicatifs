@@ -31,6 +31,9 @@ public class ExecutionResult {
     @Column(name = "ai_analysis", columnDefinition = "TEXT")
     private String aiAnalysis;
 
+    @Column(name = "ux_analysis", columnDefinition = "TEXT")
+    private String uxAnalysis;
+
     private String screenshotUrl;
     private LocalDateTime executedAt = LocalDateTime.now();
 
@@ -124,6 +127,14 @@ public class ExecutionResult {
 
     public void setAiAnalysis(String aiAnalysis) {
         this.aiAnalysis = aiAnalysis;
+    }
+
+    public String getUxAnalysis() {
+        return uxAnalysis;
+    }
+
+    public void setUxAnalysis(String uxAnalysis) {
+        this.uxAnalysis = uxAnalysis;
     }
 
     public String getScreenshotUrl() {

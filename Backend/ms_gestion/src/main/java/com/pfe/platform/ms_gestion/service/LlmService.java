@@ -176,6 +176,68 @@ public class LlmService {
                 - Le test doit être robuste (valide au moins un champ du JSON et/ou un header pertinent).
                 """;
 
+            case "UX_WEB" -> """
+                Tu es un expert senior en automatisation UX web. Tu dois générer UN SEUL fichier Java compilable, en français, sans explication.
+
+                CONTRAINTES ABSOLUES :
+                - Utilise EXCLUSIVEMENT HtmlUnitDriver. Interdiction de ChromeDriver, FirefoxDriver, EdgeDriver ou tout autre driver.
+                - Utilise EXCLUSIVEMENT TestNG. Interdiction de JUnit.
+                - Utilise WebDriverWait pour toutes les attentes. Interdiction de Thread.sleep().
+                - Utilise uniquement les imports nécessaires et commençant directement par package ou import.
+                - N'écris aucun backtick markdown, aucun bloc ``` et aucun texte hors code.
+                - Le code doit être immédiatement compilable.
+
+                EXIGENCES FONCTIONNELLES :
+                - Lire l'URL cible depuis System.getProperty("UX_URL").
+                - Naviguer sur l'application et mesurer précisément le temps de chargement des pages et des composants visibles.
+                - Vérifier la présence des éléments clés : boutons, champs, liens, messages, libellés et indicateurs d'état.
+                - Évaluer la clarté des messages d'erreur, de validation et de succès.
+                - Capturer une capture d'écran avec TakesScreenshot après chaque étape importante.
+                - Sauvegarder les captures dans le répertoire temporaire de System.getProperty("java.io.tmpdir").
+                - Construire une variable String uxSummary contenant des métriques détaillées et lisibles.
+
+                FORMAT EXACT DE LA SORTIE UX_SUMMARY :
+                UX_SUMMARY: TempsChargement=...; ElementsPrésents=...; Messages=...; Clarté=...; Screenshots=...
+
+                RÈGLES DE QUALITÉ :
+                - Le test doit être structuré avec @BeforeMethod et @AfterMethod.
+                - Le test doit gérer les erreurs avec des assertions TestNG.
+                - Le test doit rester simple, directif, et sans logique inutile.
+                - Le premier caractère utile du fichier doit être package ou import.
+                """;
+
+            case "UX_MOBILE" -> """
+                Tu es un expert senior en automatisation UX mobile. Tu dois générer UN SEUL fichier Java compilable, en français, sans explication.
+
+                CONTRAINTES ABSOLUES :
+                - Utilise EXCLUSIVEMENT AppiumDriver. Interdiction de ChromeDriver, FirefoxDriver, Selenium pur sans Appium, ou tout autre driver.
+                - Utilise EXCLUSIVEMENT TestNG. Interdiction de JUnit.
+                - Utilise WebDriverWait pour les attentes. Interdiction de Thread.sleep().
+                - Utilise uniquement les imports nécessaires et commençant directement par package ou import.
+                - N'écris aucun backtick markdown, aucun bloc ``` et aucun texte hors code.
+                - Le code doit être immédiatement compilable.
+
+                EXIGENCES FONCTIONNELLES :
+                - Lire le package via System.getProperty("UX_PACKAGE").
+                - Lire l'activité via System.getProperty("UX_ACTIVITY").
+                - Se connecter à l'application cible et mesurer précisément le temps de chargement des écrans.
+                - Vérifier la présence des éléments clés : boutons, champs, icônes, zones tactiles et messages.
+                - Vérifier la clarté des messages d'erreur, d'information et de succès.
+                - Vérifier que les zones tactiles ont une taille minimale de 48dp quand c'est applicable.
+                - Capturer une capture d'écran avec TakesScreenshot après chaque étape importante.
+                - Sauvegarder les captures dans le répertoire temporaire de System.getProperty("java.io.tmpdir").
+                - Construire une variable String uxSummary contenant des métriques détaillées et lisibles.
+
+                FORMAT EXACT DE LA SORTIE UX_SUMMARY :
+                UX_SUMMARY: TempsChargement=...; ElementsPrésents=...; Messages=...; Clarté=...; Screenshots=...
+
+                RÈGLES DE QUALITÉ :
+                - Le test doit être structuré avec @BeforeMethod et @AfterMethod.
+                - Le test doit gérer les erreurs avec des assertions TestNG.
+                - Le test doit rester simple, directif, et sans logique inutile.
+                - Le premier caractère utile du fichier doit être package ou import.
+                """;
+
             default -> """
                 CONSIGNES PAR DÉFAUT :
                 - Génère un test TestNG minimal, compilable, cohérent avec la description.

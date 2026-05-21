@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { buildMsGestionHeaders } from '../../../_ms-gestion-auth'
 
-const EXECUTION_SERVICE_URL =
-  process.env.EXECUTION_SERVICE_URL ??
-  process.env.MS_EXECUTION_SERVICE_URL ??
-  'http://localhost:8083'
+const TEST_MANAGEMENT_SERVICE_URL =
+  process.env.TEST_MANAGEMENT_SERVICE_URL ??
+  process.env.PROJECTS_SERVICE_URL ??
+  'http://localhost:8082'
 
 function forwardSetCookie(upstream: Response, response: NextResponse) {
   const setCookies = (upstream.headers as any).getSetCookie?.() as string[] | undefined
@@ -29,7 +29,11 @@ export async function POST(
   const body = await request.text().catch(() => '')
 
   const upstream = await fetch(
-    EXECUTION_SERVICE_URL + '/api/execution/run/' + encodeURIComponent(id) + url.search,
+    TEST_MANAGEMENT_SERVICE_URL +
+      '/api/campaigns/' +
+      encodeURIComponent(id) +
+      '/run' +
+      url.search,
     {
       method: 'POST',
       headers: {

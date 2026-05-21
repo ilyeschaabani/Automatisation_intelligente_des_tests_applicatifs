@@ -1,4 +1,4 @@
-import { getAccessToken } from '@/lib/auth-storage'
+import { getAccessToken as getStoredAccessToken } from '@/lib/auth-storage'
 
 export type ProjectType = 'WEB' | 'MOBILE' | 'API' | 'DESKTOP' | 'OTHER'
 export type SourceType = 'GIT' | 'LOCAL'
@@ -77,8 +77,29 @@ export type ExecutionResultBackendDto = {
   durationMs: number | null
   errorMessage: string | null
   logs: string | null
+  aiAnalysis?: string | null
+  uxAnalysis?: string | null
   screenshotUrl: string | null
   executedAt: string
+}
+
+export type UxEvaluationDto = {
+  id: number
+  projectId: number | null
+  platform: 'WEB' | 'MOBILE'
+  url?: string | null
+  description?: string | null
+  status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED'
+  testSummary?: string | null
+  aiAnalysis?: string | null
+  pageContent?: string | null
+  logs?: string | null
+  screenshotUrl?: string | null
+  generatedScript?: string | null
+  durationMs?: number | null
+  errorMessage?: string | null
+  createdAt: string
+  executedAt?: string | null
 }
 
 export type CampaignStatusBackendDto = {
@@ -110,6 +131,97 @@ export function mapExecutionResultToTestExecutionDto(result: ExecutionResultBack
     status: result.status === 'SUCCESS' ? 'FINISHED' : 'ERROR',
     campaignId: campaignId,
   }
+}
+
+// Functional evaluation endpoints
+export type FunctionalEvaluationDto = UxEvaluationDto
+
+export async function listFunctionalEvaluations(projectId?: number, platform?: 'WEB' | 'MOBILE'): Promise<FunctionalEvaluationDto[]> {
+  const q = new URLSearchParams()
+  if (projectId !== undefined && projectId !== null) q.set('projectId', String(projectId))
+  if (platform) q.set('platform', platform)
+  const suffix = q.toString() ? `?${q.toString()}` : ''
+  const token = getAccessToken()
+  return requestJson<FunctionalEvaluationDto[]>(`/api/functional-evaluation${suffix}`, {
+    cache: 'no-store',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export async function getFunctionalEvaluation(id: number): Promise<FunctionalEvaluationDto> {
+  const token = getAccessToken()
+  return requestJson<FunctionalEvaluationDto>(`/api/functional-evaluation/${id}`, {
+    cache: 'no-store',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export async function createFunctionalEvaluation(payload: Partial<FunctionalEvaluationDto>): Promise<FunctionalEvaluationDto> {
+  const token = getAccessToken()
+  const response = await fetch(`/api/functional-evaluation`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  })
+  if (!response.ok) throw new Error(await readReadableError(response))
+  return (await response.json()) as FunctionalEvaluationDto
+}
+
+export async function generateUxScript(payload: { platform: 'WEB' | 'MOBILE'; url: string; description: string }): Promise<string> {
+  const token = getAccessToken()
+  const response = await fetch(`/api/llm/generate-functional-script`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  })
+  if (!response.ok) throw new Error(await readReadableError(response))
+  const data = await response.json()
+  return data.script
+}
+
+export async function executeFunctionalEvaluation(id: number): Promise<void> {
+  const token = getAccessToken()
+  const response = await fetch(`/api/functional-evaluation/${encodeURIComponent(String(id))}/execute`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!response.ok) throw new Error(await readReadableError(response))
+}
+
+export async function downloadFunctionalEvaluationReport(id: number): Promise<Blob> {
+  const token = getAccessToken()
+  const response = await fetch(`/api/reports/ux-evaluation/${encodeURIComponent(String(id))}/pdf`, {
+    method: 'GET',
+    headers: { accept: 'application/pdf', Authorization: `Bearer ${token}` },
+  })
+  if (!response.ok) throw new Error(await readReadableError(response))
+  return await response.blob()
+}
+
+export async function listUxEvaluations(projectId?: number, platform?: 'WEB' | 'MOBILE'): Promise<UxEvaluationDto[]> {
+  return listFunctionalEvaluations(projectId, platform)
+}
+
+export async function getUxEvaluation(id: number): Promise<UxEvaluationDto> {
+  return getFunctionalEvaluation(id)
+}
+
+export async function createUxEvaluation(payload: Partial<UxEvaluationDto>): Promise<UxEvaluationDto> {
+  return createFunctionalEvaluation(payload)
+}
+
+export async function executeUxEvaluation(id: number): Promise<void> {
+  return executeFunctionalEvaluation(id)
+}
+
+export async function downloadUxEvaluationReport(id: number): Promise<Blob> {
+  return downloadFunctionalEvaluationReport(id)
+}
+
+export function getAccessToken(): string {
+  const token = typeof window !== 'undefined' ? getStoredAccessToken() : null
+  if (!token) throw new Error('JWT access token is missing')
+  return token
 }
 
 // Old types for backward compatibility with test-management
@@ -200,7 +312,7 @@ export type DiscoveryCompleteRequest = {
 
 export type GitProvider = 'GITHUB' | 'GITLAB'
 
-export type TestType = 'FUNCTIONAL' | 'PERFORMANCE' | 'REGRESSION' | 'SECURITY' | 'API'
+export type TestType = 'FUNCTIONAL' | 'PERFORMANCE' | 'REGRESSION' | 'SECURITY' | 'API' | 'FUNCTIONAL_WEB' | 'FUNCTIONAL_MOBILE'
 
 export interface TestCaseDto {
   id: number

@@ -57,6 +57,54 @@ public class LlmAnalysisService {
         return analyze("Script non disponible", logs, "FAILURE", "");
     }
 
+    public String analyzeUx(String testSummary, String pageContent, String platform) {
+        return analyzeFunctionalTest(testSummary, pageContent, platform);
+    }
+
+    public String analyzeFunctionalTest(String testSummary, String pageContent, String platform) {
+        String normalizedSummary = truncate(testSummary, MAX_LOG_CHARS);
+        String normalizedPageContent = truncate(pageContent, MAX_LOG_CHARS);
+        String platformLabel = platform == null ? "" : platform.trim();
+        String prompt = "Tu es un expert en qualité logicielle et expérience utilisateur avec 15 ans d'expérience.\n"
+                + "Tu viens de tester une application " + platformLabel + " et tu dois rédiger ton rapport.\n\n"
+                + "Voici les résultats des tests automatisés :\n"
+                + normalizedSummary + "\n\n"
+                + "Voici le contenu textuel des pages visitées :\n"
+                + normalizedPageContent + "\n\n"
+                + "Rédige un rapport d'évaluation fonctionnelle complet en français avec :\n"
+                + "1. RÉSUMÉ GLOBAL (2-3 phrases sur l'état général de l'application)\n"
+                + "2. FONCTIONNALITÉS OK (liste de ce qui marche bien)\n"
+                + "3. ANOMALIES DÉTECTÉES (bugs, erreurs, comportements inattendus)\n"
+                + "4. CLARTÉ DES MESSAGES (les messages d'erreur/succès sont-ils compréhensibles ?)\n"
+                + "5. PERFORMANCE (les temps de réponse sont-ils acceptables ?)\n"
+                + "6. RECOMMANDATIONS (suggestions concrètes d'amélioration)\n"
+                + "7. SCORE GLOBAL SUR 10\n\n"
+                + "IMPORTANT : Écris comme un humain, pas comme une machine. Sois naturel, constructif, et utile.";
+
+        try {
+            Map<String, Object> body = Map.of(
+                    "model", MODEL,
+                    "prompt", prompt,
+                    "stream", false
+            );
+
+            Map response = restTemplate.postForObject(OLLAMA_URL, body, Map.class);
+            if (response == null || !response.containsKey("response")) {
+                log.warn("Ollama did not return a functional analysis response.");
+                return "Service d'IA temporairement indisponible";
+            }
+
+            Object raw = response.get("response");
+            return raw != null ? raw.toString().trim() : "Service d'IA temporairement indisponible";
+        } catch (RestClientException ex) {
+            log.warn("Ollama functional analysis service is unavailable: {}", ex.getMessage());
+            return "Service d'IA temporairement indisponible";
+        } catch (Exception ex) {
+            log.warn("Unexpected error while analyzing functional summary: {}", ex.getMessage());
+            return "Service d'IA temporairement indisponible";
+        }
+    }
+
     private String buildPrompt(String scriptCode, String logs, String status, String errorMessage) {
         String normalizedStatus = status == null ? "" : status.trim().toUpperCase();
         if ("SUCCESS".equals(normalizedStatus)) {

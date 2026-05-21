@@ -21,7 +21,7 @@ const safeSetItem = (key: string, value: string) => {
 	} catch {
 		return
 	}
-}
+} 
 
 const safeRemoveItem = (key: string) => {
 	if (!isBrowser()) return

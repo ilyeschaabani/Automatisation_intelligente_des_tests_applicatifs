@@ -79,7 +79,7 @@ type SuiteFormState = {
 }
 
 // Add suite type to form state
-type SuiteType = 'WEB' | 'API' | 'UNIT' | 'INTEGRATION'
+type SuiteType = 'WEB' | 'API' | 'UNIT' | 'INTEGRATION' | 'FUNCTIONAL_WEB' | 'FUNCTIONAL_MOBILE'
 
 
 type MemberFormState = {
@@ -141,7 +141,9 @@ const normalizeRepoUrl = (url: string): string =>
 
 const isRepoMandatorySuiteType = (type?: SuiteType): boolean => type === 'UNIT' || type === 'INTEGRATION'
 
-const isWebOrApiSuiteType = (type?: SuiteType): boolean => type === 'WEB' || type === 'API'
+const isUxSuiteType = (type?: SuiteType): boolean => type === 'FUNCTIONAL_WEB' || type === 'FUNCTIONAL_MOBILE'
+
+const isWebOrApiSuiteType = (type?: SuiteType): boolean => type === 'WEB' || type === 'API' || isUxSuiteType(type)
 
 const shouldShowGitRepoFields = (type?: SuiteType, useGitRepo?: boolean): boolean =>
   isRepoMandatorySuiteType(type) || (isWebOrApiSuiteType(type) && Boolean(useGitRepo))
@@ -1234,9 +1236,9 @@ export default function ProjectDetailsPage() {
                     }
                   : {
                       // Switching away from mandatory types clears git fields by default.
-                      useGitRepo: (prev.type === 'WEB' || prev.type === 'API') ? prev.useGitRepo : false,
-                      gitRepoUrl: (prev.type === 'WEB' || prev.type === 'API') && prev.useGitRepo ? prev.gitRepoUrl : '',
-                      gitBranch: (prev.type === 'WEB' || prev.type === 'API') && prev.useGitRepo ? prev.gitBranch : '',
+                      useGitRepo: isWebOrApiSuiteType(prev.type) ? prev.useGitRepo : false,
+                      gitRepoUrl: isWebOrApiSuiteType(prev.type) && prev.useGitRepo ? prev.gitRepoUrl : '',
+                      gitBranch: isWebOrApiSuiteType(prev.type) && prev.useGitRepo ? prev.gitBranch : '',
                     }),
                 modulePath: value === 'UNIT' || value === 'INTEGRATION' ? prev.modulePath : '',
               }))
@@ -1250,6 +1252,8 @@ export default function ProjectDetailsPage() {
               <SelectItem value="INTEGRATION">INTEGRATION</SelectItem>
               <SelectItem value="WEB">WEB</SelectItem>
               <SelectItem value="API">API</SelectItem>
+              <SelectItem value="FUNCTIONAL_WEB">FUNCTIONAL_WEB</SelectItem>
+              <SelectItem value="FUNCTIONAL_MOBILE">FUNCTIONAL_MOBILE</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -1277,7 +1281,7 @@ export default function ProjectDetailsPage() {
             <div className="space-y-1">
               <Label>Attach Git repository (optional)</Label>
               <p className="text-xs text-muted-foreground">
-                WEB/API suites can use a separate test repository.
+                WEB/API/UX suites can use a separate test repository.
               </p>
             </div>
             <Switch

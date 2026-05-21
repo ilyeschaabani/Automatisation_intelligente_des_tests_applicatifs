@@ -63,6 +63,6 @@ public class TestCase {
 
     private LocalDateTime createdAt = LocalDateTime.now();
 
-    public enum TestType { WEB, API, UNIT, INTEGRATION }
+    public enum TestType { WEB, API, UNIT, INTEGRATION, UX_WEB, UX_MOBILE }
     public enum RiskLevel { CRITICAL, HIGH, MEDIUM, LOW }
 }

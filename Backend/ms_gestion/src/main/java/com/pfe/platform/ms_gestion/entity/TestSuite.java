@@ -50,5 +50,5 @@ public class TestSuite {
     @Column(nullable = true)
     private TestType type = TestType.WEB;
 
-    public enum TestType { WEB, API, UNIT, INTEGRATION }
+    public enum TestType { WEB, API, UNIT, INTEGRATION, UX_WEB, UX_MOBILE }
 }

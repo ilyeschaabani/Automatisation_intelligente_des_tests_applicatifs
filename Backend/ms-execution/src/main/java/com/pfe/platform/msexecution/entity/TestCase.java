@@ -33,7 +33,7 @@ public class TestCase {
     @Column(nullable = false)
     private Boolean generated = false;
 
-    public enum TestType { WEB, API, UNIT, INTEGRATION }
+    public enum TestType { WEB, API, UNIT, INTEGRATION, FUNCTIONAL_WEB, FUNCTIONAL_MOBILE }
 
     public TestCase() {
     }

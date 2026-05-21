@@ -96,6 +96,10 @@ public class ExecutionService {
         private static final String DEP_WDM_ARTIFACT = "webdrivermanager";
         private static final String DEP_WDM_VERSION = "5.8.0";
 
+        private static final String DEP_APPIUM_GROUP = "io.appium";
+        private static final String DEP_APPIUM_ARTIFACT = "java-client";
+        private static final String DEP_APPIUM_VERSION = "9.2.2";
+
         private static final String DEP_REST_ASSURED_GROUP = "io.rest-assured";
         private static final String DEP_REST_ASSURED_ARTIFACT = "rest-assured";
         private static final String DEP_REST_ASSURED_VERSION = "5.4.0";
@@ -904,6 +908,19 @@ public class ExecutionService {
                 log.error("[TESTCASE {}] Maven output (first 500 lines, truncated):\n{}", tc.getId(), firstLines(combinedOutput, 500, 20_000));
             }
 
+            // If this was a UX test, extract UX_SUMMARY from logs and analyze with LLM
+            if (tc.getType() == TestCase.TestType.FUNCTIONAL_WEB || tc.getType() == TestCase.TestType.FUNCTIONAL_MOBILE) {
+                String testSummary = extractUxSummary(combinedOutput);
+                if (testSummary != null && !testSummary.isBlank()) {
+                    String analysis = llmAnalysisService.analyzeUx(testSummary, combinedOutput, tc.getType().name());
+                    result.setUxAnalysis(analysis);
+                    log.info("[TESTCASE {}] UX analysis generated", tc.getId());
+                } else {
+                    result.setUxAnalysis("TEST_SUMMARY non disponible");
+                    log.info("[TESTCASE {}] UX summary not found in logs", tc.getId());
+                }
+            }
+
         } catch (Exception e) {
             long duration = System.currentTimeMillis() - start;
             result.setDurationMs(duration);
@@ -975,13 +992,18 @@ public class ExecutionService {
                 DEP_MOCKITO_GROUP, DEP_MOCKITO_ARTIFACT, DEP_MOCKITO_VERSION, "test");
         }
 
-        if (testType == TestCase.TestType.WEB) {
+        if (testType == TestCase.TestType.WEB || testType == TestCase.TestType.FUNCTIONAL_WEB) {
             changed |= ensureDependency(doc, dependencies, ns, pomXml,
                 DEP_SELENIUM_GROUP, DEP_SELENIUM_ARTIFACT, DEP_SELENIUM_VERSION, "test");
             changed |= ensureDependency(doc, dependencies, ns, pomXml,
                 DEP_SELENIUM_GROUP, DEP_HTMLUNIT_ARTIFACT, DEP_HTMLUNIT_VERSION, "test");
             changed |= ensureDependency(doc, dependencies, ns, pomXml,
                 DEP_WDM_GROUP, DEP_WDM_ARTIFACT, DEP_WDM_VERSION, "test");
+        }
+
+        if (testType == TestCase.TestType.FUNCTIONAL_MOBILE) {
+            changed |= ensureDependency(doc, dependencies, ns, pomXml,
+                DEP_APPIUM_GROUP, DEP_APPIUM_ARTIFACT, DEP_APPIUM_VERSION, "test");
         }
 
         if (testType == TestCase.TestType.API) {
@@ -1734,7 +1756,23 @@ spring.jpa.hibernate.ddl-auto=create-drop
             case INTEGRATION -> "suites/integration";
             case WEB -> "suites/herapp";
             case API -> "suites/api";
+            case FUNCTIONAL_WEB -> "suites/functional/web";
+            case FUNCTIONAL_MOBILE -> "suites/functional/mobile";
         };
+    }
+
+    private String extractUxSummary(String logs) {
+        if (logs == null || logs.isBlank()) return null;
+        String marker = "TEST_SUMMARY:";
+        int idx = logs.indexOf(marker);
+        if (idx < 0) return null;
+        String after = logs.substring(idx + marker.length()).trim();
+        // Take until next blank line or end
+        int endIdx = after.indexOf("\n\n");
+        if (endIdx > 0) return after.substring(0, endIdx).trim();
+        int nl = after.indexOf('\n');
+        if (nl > 0) return after.substring(0, nl).trim();
+        return after.trim();
     }
 
     public String takeScreenshot(WebDriver driver, String testName) {
