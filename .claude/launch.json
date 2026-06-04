@@ -1,0 +1,41 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Eureka Service Registry",
+      "runtimeExecutable": "mvn",
+      "runtimeArgs": ["spring-boot:run"],
+      "cwd": "Backend/EurekaServeur",
+      "port": 8761
+    },
+    {
+      "name": "Authentication Microservice",
+      "runtimeExecutable": "mvn",
+      "runtimeArgs": ["spring-boot:run"],
+      "cwd": "Backend/AuthenticationMicroservice",
+      "port": 8081
+    },
+    {
+      "name": "ms_gestion (Management Microservice)",
+      "runtimeExecutable": "mvn",
+      "runtimeArgs": ["spring-boot:run"],
+      "cwd": "Backend/ms_gestion",
+      "port": 8082
+    },
+    {
+      "name": "ms-execution (Execution Microservice)",
+      "runtimeExecutable": "mvn",
+      "runtimeArgs": ["spring-boot:run"],
+      "cwd": "Backend/ms-execution",
+      "port": 8083
+    },
+    {
+      "name": "Frontend (Next.js)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "Frontend",
+      "port": 3000,
+      "autoPort": true
+    }
+  ]
+}
