@@ -202,6 +202,8 @@ public class LlmService {
             );
         }
 
+        String integrationDbRule = buildIntegrationDbRule(normalizedDatabaseType);
+
         String specifics = switch (normalizedType) {
             case "UNIT" -> """
                 CONSIGNES UNIT (test unitaire pur) :
@@ -259,19 +261,20 @@ public class LlmService {
                   alors importe : import com.pfe.platform.ms_gestion.repository.TestCaseRepository;
                 - Importe chaque classe utilisée avec son chemin complet.
 
+                IMPORTS OBLIGATOIRES (ajoute-les tous) :
+                import org.springframework.boot.test.context.SpringBootTest;
+                import org.springframework.test.context.ActiveProfiles;
+                import org.springframework.test.context.TestPropertySource;
+                import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
+                import org.springframework.beans.factory.annotation.Autowired;
+                import org.springframework.transaction.annotation.Transactional;
+
                 RÈGLES SPRING TEST :
-                - Utilise @SpringBootTest et @ActiveProfiles("test").
+                - La classe doit étendre AbstractTestNGSpringContextTests.
+                - Annote la classe avec @SpringBootTest et @ActiveProfiles("test").
                 - Ne mocke PAS les repositories : injecte-les avec @Autowired.
-                - Configure H2 avec @TestPropertySource(properties = {
-                    "spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
-                    "spring.datasource.driverClassName=org.h2.Driver",
-                    "spring.datasource.username=sa",
-                    "spring.datasource.password=",
-                    "spring.jpa.hibernate.ddl-auto=create-drop",
-                    "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect"
-                  })
-                - Utilise @Transactional pour rollback automatique après chaque test.
-                - Utilise AbstractTestNGSpringContextTests comme classe parente pour TestNG + Spring.
+                """ + integrationDbRule + """
+                - Annote la classe avec @Transactional pour rollback automatique après chaque test.
                 - Assertions complètes (assertNotNull, assertEquals, etc.).
                 """;
 
@@ -373,6 +376,42 @@ public class LlmService {
         };
 
         return commonRules + mongoIntegrationRules + header + skeletonBlock + testDataBlock + scenarioBlock + "\n" + specifics + "\n" + "Génère maintenant le code Java.";
+    }
+
+    private String buildIntegrationDbRule(String dbType) {
+        return switch (dbType == null ? "" : dbType.trim().toUpperCase()) {
+            case "POSTGRESQL" -> """
+                - Configure Testcontainers PostgreSQL avec @TestPropertySource(properties = {
+                    "spring.datasource.url=jdbc:tc:postgresql:14:///testdb",
+                    "spring.datasource.driverClassName=org.testcontainers.jdbc.ContainerDatabaseDriver",
+                    "spring.datasource.username=sa",
+                    "spring.datasource.password=",
+                    "spring.jpa.hibernate.ddl-auto=create-drop"
+                  })
+                - N'ajoute PAS @Testcontainers ou @Container : la connexion se fait automatiquement via l'URL tc:.
+                """;
+            case "MYSQL" -> """
+                - Configure Testcontainers MySQL avec @TestPropertySource(properties = {
+                    "spring.datasource.url=jdbc:tc:mysql:8.0.33:///testdb",
+                    "spring.datasource.driverClassName=org.testcontainers.jdbc.ContainerDatabaseDriver",
+                    "spring.datasource.username=sa",
+                    "spring.datasource.password=",
+                    "spring.jpa.hibernate.ddl-auto=create-drop"
+                  })
+                - N'ajoute PAS @Testcontainers ou @Container : la connexion se fait automatiquement via l'URL tc:.
+                """;
+            case "MONGODB" -> "";
+            default -> """
+                - Configure H2 avec @TestPropertySource(properties = {
+                    "spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
+                    "spring.datasource.driverClassName=org.h2.Driver",
+                    "spring.datasource.username=sa",
+                    "spring.datasource.password=",
+                    "spring.jpa.hibernate.ddl-auto=create-drop",
+                    "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect"
+                  })
+                """;
+        };
     }
 
     private String resolveScenarioLabel(String scenarioType) {
