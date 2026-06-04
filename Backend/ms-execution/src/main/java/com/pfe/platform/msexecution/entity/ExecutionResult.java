@@ -28,6 +28,9 @@ public class ExecutionResult {
     @Column(columnDefinition = "TEXT")
     private String logs;
 
+    @Column(name = "test_method_results", columnDefinition = "TEXT")
+    private String testMethodResults; // JSON array of per-method results from Surefire XML
+
     @Column(name = "ai_analysis", columnDefinition = "TEXT")
     private String aiAnalysis;
 
@@ -120,6 +123,9 @@ public class ExecutionResult {
     public void setLogs(String logs) {
         this.logs = logs;
     }
+
+    public String getTestMethodResults() { return testMethodResults; }
+    public void setTestMethodResults(String testMethodResults) { this.testMethodResults = testMethodResults; }
 
     public String getAiAnalysis() {
         return aiAnalysis;

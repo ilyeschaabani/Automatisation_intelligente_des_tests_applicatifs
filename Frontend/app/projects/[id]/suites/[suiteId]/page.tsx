@@ -31,12 +31,17 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
+import { apiFetch } from '@/components/profile/GitHubIntegrationCard'
+import { SourceClassWizard, type WizardResult } from '@/components/source-class-wizard'
+import { ScenarioBuilder, type ScenarioResult } from '@/components/scenario-builder'
+import { environmentService } from '@/services/environments'
 import { testCaseService } from '@/services/testCases'
 import { llmService } from '@/services/llm'
 import { testSuiteService } from '@/services/suites'
 import { projectService } from '@/services/projects'
 import type {
   CreateTestCaseRequest,
+  Environment,
   RiskLevel,
   TestCase,
   TestSuite,
@@ -47,10 +52,46 @@ import type {
 
 type LoadState = 'loading' | 'ready' | 'error'
 
+type CaseMode = 'AI' | 'MANUAL' | 'REPO'
+
+type GitHubMeResponse = {
+  githubConnected: boolean
+  githubId?: string
+  githubUsername?: string
+  githubAvatarUrl?: string
+  githubTokenCreatedAt?: string
+}
+
+type RepoRow = {
+  key: string
+  name: string
+  owner: string
+  isPrivate: boolean
+  url: string
+  updatedAt?: string
+  branches: string[]
+}
+
+type GitHubConnectionState =
+  | { kind: 'idle' }
+  | { kind: 'loading' }
+  | { kind: 'notConnected' }
+  | { kind: 'unauthorized' }
+  | { kind: 'connected'; me: GitHubMeResponse }
+  | { kind: 'error'; message: string }
+
+type RepoListState =
+  | { kind: 'idle' }
+  | { kind: 'loading' }
+  | { kind: 'available'; repos: RepoRow[] }
+  | { kind: 'error'; message: string }
+
 type CaseFormState = {
   title: string
   description: string
+  mode: CaseMode
   type: TestType
+  gitRepoUrl: string
   springProfile: string
   databaseType: string
   priority: string
@@ -59,12 +100,15 @@ type CaseFormState = {
   testData: string
   tags: string
   maxDurationSeconds: string
+  targetClassName: string
 }
 
 const emptyCaseForm: CaseFormState = {
   title: '',
   description: '',
+  mode: 'MANUAL',
   type: 'WEB',
+  gitRepoUrl: '',
   springProfile: '',
   databaseType: '',
   priority: '',
@@ -73,6 +117,7 @@ const emptyCaseForm: CaseFormState = {
   testData: '',
   tags: '',
   maxDurationSeconds: '',
+  targetClassName: '',
 }
 
 // Additional UI state for AI generation
@@ -95,6 +140,86 @@ const formatDate = (value?: string) => {
   return date.toLocaleString()
 }
 
+const normalizeRepoUrl = (url: string): string =>
+  String(url || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\.git$/, '')
+    .replace(/\/+$/, '')
+
+const normalizeRepos = (payload: unknown): RepoRow[] => {
+  const list: unknown[] = Array.isArray(payload)
+    ? payload
+    : payload && typeof payload === 'object' && Array.isArray((payload as any).repos)
+      ? ((payload as any).repos as unknown[])
+      : []
+
+  return list
+    .map((repo, idx) => {
+      if (!repo || typeof repo !== 'object') return null
+      const r = repo as Record<string, unknown>
+
+      const name: string =
+        typeof r.name === 'string'
+          ? r.name
+          : typeof (r as any).full_name === 'string'
+            ? String((r as any).full_name).split('/').slice(-1)[0]
+            : ''
+
+      const owner: string =
+        typeof r.owner === 'string'
+          ? r.owner
+          : r.owner && typeof r.owner === 'object' && typeof (r.owner as any).login === 'string'
+            ? String((r.owner as any).login)
+            : typeof (r as any).full_name === 'string'
+              ? String((r as any).full_name).split('/')[0] ?? ''
+              : ''
+
+      const url: string =
+        typeof (r as any).html_url === 'string'
+          ? String((r as any).html_url)
+          : typeof r.url === 'string'
+            ? r.url
+            : ''
+
+      const updatedAt: string | undefined =
+        typeof (r as any).updated_at === 'string'
+          ? String((r as any).updated_at)
+          : typeof (r as any).updatedAt === 'string'
+            ? String((r as any).updatedAt)
+            : undefined
+
+      const branches: string[] = Array.isArray((r as any).branches)
+        ? ((r as any).branches as unknown[])
+            .map((b) => {
+              if (typeof b === 'string') return b
+              if (b && typeof b === 'object' && typeof (b as any).name === 'string') {
+                return (b as any).name
+              }
+              return null
+            })
+            .filter(Boolean) as string[]
+        : []
+
+      const key =
+        typeof r.id === 'number' || typeof r.id === 'string'
+          ? String(r.id)
+          : `${owner}/${name || 'repo'}:${idx}`
+
+      if (!name) return null
+      return {
+        key,
+        name,
+        owner,
+        isPrivate: Boolean((r as any).private),
+        url,
+        updatedAt,
+        branches,
+      }
+    })
+    .filter(Boolean) as RepoRow[]
+}
+
 export default function SuiteTestCasesPage() {
   const params = useParams<{ id?: string | string[]; suiteId?: string | string[] }>()
   const projectId = Number(Array.isArray(params?.id) ? params?.id[0] : params?.id)
@@ -108,6 +233,27 @@ export default function SuiteTestCasesPage() {
   const [suiteState, setSuiteState] = useState<LoadState>('loading')
   const [suiteError, setSuiteError] = useState<string | null>(null)
 
+  // Source class wizard state
+  const [showWizard, setShowWizard] = useState(false)
+  const [wizardSkeleton, setWizardSkeleton] = useState<string>('')
+  const [projectEnvs, setProjectEnvs] = useState<Environment[]>([])
+
+  // Scenario builder state (Step 2-4 after wizard)
+  const [showScenarioBuilder, setShowScenarioBuilder] = useState(false)
+
+  // Parse owner/repo from a GitHub URL like https://github.com/owner/repo
+  const parseGitHubUrl = (url: string): { owner: string; repo: string } | null => {
+    const m = url?.match(/github\.com\/([^/]+)\/([^/.]+)/)
+    if (!m) return null
+    return { owner: m[1], repo: m[2] }
+  }
+
+  // Find env with gitRepoUrl configured
+  const sourceEnv = projectEnvs.find((e) => (e as any).gitRepoUrl)
+  const sourceGitInfo = sourceEnv ? parseGitHubUrl((sourceEnv as any).gitRepoUrl ?? '') : null
+  const sourceBranch = (sourceEnv as any)?.gitBranch ?? 'main'
+  const isUnitOrIntegration = suite?.type === 'UNIT' || suite?.type === 'INTEGRATION'
+
   const [cases, setCases] = useState<TestCase[]>([])
   const [caseState, setCaseState] = useState<LoadState>('loading')
   const [caseError, setCaseError] = useState<string | null>(null)
@@ -117,6 +263,13 @@ export default function SuiteTestCasesPage() {
   const [aiState, setAiState] = useState<AICaseState>(emptyAICase)
   const [generating, setGenerating] = useState(false)
 
+  const [gitHubConnection, setGitHubConnection] = useState<GitHubConnectionState>({
+    kind: 'idle',
+  })
+  const [gitHubRepos, setGitHubRepos] = useState<RepoListState>({ kind: 'idle' })
+  const [selectedRepoKey, setSelectedRepoKey] = useState('')
+  const [repoInitialized, setRepoInitialized] = useState(false)
+
   const [createOpen, setCreateOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [editingCase, setEditingCase] = useState<TestCase | null>(null)
@@ -125,9 +278,16 @@ export default function SuiteTestCasesPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
-  const isUxSuiteType = suite?.type === 'FUNCTIONAL_WEB' || suite?.type === 'FUNCTIONAL_MOBILE'
+  const isUxSuiteType = (suite?.type as string) === 'FUNCTIONAL_WEB' || (suite?.type as string) === 'FUNCTIONAL_MOBILE'
   const forceAiForSuite = suite?.type === 'UNIT' || suite?.type === 'INTEGRATION' || isUxSuiteType
-  const showAiSection = Boolean(project?.aiProject) || forceAiForSuite
+  const effectiveMode: CaseMode = forceAiForSuite ? 'AI' : formState.mode
+  const showAiSection = effectiveMode === 'AI'
+
+  const connectUrl = useMemo(() => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL
+    if (!apiUrl) return ''
+    return `${apiUrl.replace(/\/+$/, '')}/api/github/connect`
+  }, [])
 
   const loadSuite = async () => {
     if (!hasIds) return
@@ -173,18 +333,159 @@ export default function SuiteTestCasesPage() {
     await Promise.all([loadSuite(), loadCases(), loadProject()])
   }
 
+  const fetchRepos = async () => {
+    setGitHubRepos({ kind: 'loading' })
+    try {
+      const res = await apiFetch('/api/github/repos')
+
+      if (res.status === 401) {
+        setGitHubConnection({ kind: 'unauthorized' })
+        setGitHubRepos({ kind: 'idle' })
+        return
+      }
+
+      if (res.status === 404) {
+        setGitHubConnection({ kind: 'notConnected' })
+        setGitHubRepos({ kind: 'idle' })
+        return
+      }
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        setGitHubRepos({
+          kind: 'error',
+          message: `Unable to load repos (${res.status})${text ? `: ${text}` : ''}`,
+        })
+        return
+      }
+
+      const data = (await res.json().catch(() => null)) as unknown
+      const normalized = normalizeRepos(data)
+      setGitHubRepos({ kind: 'available', repos: normalized })
+    } catch (err) {
+      setGitHubRepos({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Network error',
+      })
+    }
+  }
+
+  const fetchGitHubMe = async () => {
+    setGitHubConnection({ kind: 'loading' })
+    setGitHubRepos({ kind: 'idle' })
+
+    try {
+      const res = await apiFetch('/api/github/me')
+
+      if (res.status === 401) {
+        setGitHubConnection({ kind: 'unauthorized' })
+        return
+      }
+
+      if (res.status === 404 || res.status === 400) {
+        setGitHubConnection({ kind: 'notConnected' })
+        return
+      }
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        setGitHubConnection({
+          kind: 'error',
+          message: `Unable to load GitHub status (${res.status})${text ? `: ${text}` : ''}`,
+        })
+        return
+      }
+
+      const data = (await res.json().catch(() => null)) as unknown
+      if (!data || typeof data !== 'object') {
+        setGitHubConnection({ kind: 'error', message: 'Unexpected response from server.' })
+        return
+      }
+
+      const me = data as GitHubMeResponse
+      if (!me.githubConnected) {
+        setGitHubConnection({ kind: 'notConnected' })
+        return
+      }
+
+      setGitHubConnection({ kind: 'connected', me })
+      await fetchRepos()
+    } catch (err) {
+      setGitHubConnection({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Network error',
+      })
+    }
+  }
+
   useEffect(() => {
     if (!hasIds) return
     void loadAll()
   }, [hasIds])
 
+  // Load environments to find source gitRepoUrl for wizard
+  useEffect(() => {
+    if (!hasIds) return
+    environmentService.getAll(projectId).then((envs) => {
+      setProjectEnvs(Array.isArray(envs) ? envs : [])
+    }).catch(() => setProjectEnvs([]))
+  }, [hasIds, projectId])
+
+  useEffect(() => {
+    if (!createOpen && !editOpen) return
+    if (showAiSection) return
+    void fetchGitHubMe()
+  }, [createOpen, editOpen, showAiSection])
+
+  useEffect(() => {
+    if (repoInitialized) return
+    if (!createOpen && !editOpen) return
+    if (gitHubRepos.kind !== 'available') return
+
+    const repos = gitHubRepos.repos
+    const currentRepoUrl = formState.gitRepoUrl
+    if (currentRepoUrl) {
+      const normalizedUrl = normalizeRepoUrl(currentRepoUrl)
+      const match = repos.find((repo) => normalizeRepoUrl(repo.url) === normalizedUrl)
+      if (match) {
+        setSelectedRepoKey(match.key)
+      }
+    }
+
+    setRepoInitialized(true)
+  }, [repoInitialized, createOpen, editOpen, gitHubRepos, formState.gitRepoUrl])
+
+  useEffect(() => {
+    if (gitHubRepos.kind !== 'available') return
+    if (!selectedRepoKey) return
+
+    const repo = gitHubRepos.repos.find((item) => item.key === selectedRepoKey)
+    if (!repo) return
+
+    setFormState((prev) => {
+      if (!repo.url || prev.gitRepoUrl === repo.url) return prev
+      return { ...prev, gitRepoUrl: repo.url }
+    })
+  }, [gitHubRepos, selectedRepoKey])
+
   const resetForm = () => {
+    const defaultMode: CaseMode = forceAiForSuite
+      ? 'AI'
+      : project?.aiProject
+        ? 'AI'
+        : 'MANUAL'
     setFormState({
       ...emptyCaseForm,
+      mode: defaultMode,
       type: suite?.type ?? emptyCaseForm.type,
     })
     setFormError(null)
     setAiState(emptyAICase)
+    setSelectedRepoKey('')
+    setRepoInitialized(false)
+    setShowWizard(false)
+    setWizardSkeleton('')
+    setShowScenarioBuilder(false)
   }
 
   const openCreate = async () => {
@@ -202,20 +503,36 @@ export default function SuiteTestCasesPage() {
     setCreateOpen(true)
   }
 
-  const generateScript = async () => {
+  const generateScript = async (scenarioResult?: ScenarioResult) => {
     setFormError(null)
     const suiteType = suite?.type
     if (!suiteType) {
       setFormError('Suite type is not loaded yet. Please retry.')
       return
     }
-    if (forceAiForSuite && !aiState.descriptionAI.trim()) {
+    if (!showAiSection) {
+      setFormError('AI generation is only available in AI mode.')
+      return
+    }
+    if (forceAiForSuite && !aiState.descriptionAI.trim() && !scenarioResult) {
       setFormError('AI description is required for UNIT/INTEGRATION/UX suites.')
       return
     }
     setGenerating(true)
     try {
-      const payload = { type: suiteType, description: aiState.descriptionAI || formState.description }
+      const payload = {
+        type: suiteType,
+        description: scenarioResult?.expectedBehavior || aiState.descriptionAI || formState.description,
+        databaseType: formState.databaseType || undefined,
+        suiteId: suiteId || undefined,
+        targetClassName: formState.targetClassName.trim() || undefined,
+        testData: formState.testData.trim() || undefined,
+        skeleton: wizardSkeleton.trim() || undefined,
+        // M1 structured fields
+        methodName: scenarioResult?.methodName || undefined,
+        scenarioType: scenarioResult?.scenarioType || undefined,
+        expectedBehavior: scenarioResult?.expectedBehavior || undefined,
+      }
       const resp = await llmService.generateTest(payload)
       setAiState((prev) => ({ ...prev, generatedCode: resp.generatedCode, codeValidated: false }))
     } catch (err) {
@@ -230,11 +547,20 @@ export default function SuiteTestCasesPage() {
   }
 
   const openEdit = (testCase: TestCase) => {
+    const deriveMode = (): CaseMode => {
+      if (forceAiForSuite) return 'AI'
+      if (testCase.useAI || testCase.generated || testCase.generatedCode) return 'AI'
+      if (testCase.gitRepoUrl) return 'REPO'
+      return 'MANUAL'
+    }
+
     setEditingCase(testCase)
     setFormState({
       title: testCase.title ?? '',
       description: testCase.description ?? '',
+      mode: deriveMode(),
       type: suite?.type ?? testCase.type,
+      gitRepoUrl: testCase.gitRepoUrl ?? '',
       springProfile: testCase.springProfile ?? '',
       databaseType: (testCase as any).databaseType ?? '',
       priority: testCase.priority != null ? String(testCase.priority) : '',
@@ -244,15 +570,17 @@ export default function SuiteTestCasesPage() {
       tags: testCase.tags ?? '',
       maxDurationSeconds:
         testCase.maxDurationSeconds != null ? String(testCase.maxDurationSeconds) : '',
+      targetClassName: String((testCase as any).targetClassName ?? ''),
     })
     setEditOpen(true)
     // if this case was generated, prefill AI state
     setAiState({
-      // best-effort prefill: we don't persist descriptionAI server-side yet
       descriptionAI: String((testCase as any).descriptionAI ?? testCase.description ?? ''),
       generatedCode: String((testCase as any).generatedCode ?? ''),
       codeValidated: Boolean((testCase as any).generated),
     })
+    setSelectedRepoKey('')
+    setRepoInitialized(false)
   }
 
   const openDelete = (testCase: TestCase) => {
@@ -269,7 +597,7 @@ export default function SuiteTestCasesPage() {
 
     const isIntegration = suiteType === 'INTEGRATION'
     const showTestData = suiteType !== 'UNIT'
-    const requireScriptPathInManual = suiteType === 'WEB' || suiteType === 'API'
+    const mode = effectiveMode
 
     const title = formState.title.trim()
     if (!title) {
@@ -296,6 +624,7 @@ export default function SuiteTestCasesPage() {
       title,
       description: formState.description.trim() || undefined,
       type: suiteType,
+      gitRepoUrl: formState.gitRepoUrl.trim() || undefined,
       springProfile: isIntegration ? (formState.springProfile.trim() || undefined) : undefined,
       databaseType: isIntegration ? (formState.databaseType.trim() || undefined) : undefined,
       priority,
@@ -304,6 +633,7 @@ export default function SuiteTestCasesPage() {
       testData: showTestData ? (formState.testData.trim() || undefined) : undefined,
       tags: formState.tags.trim() || undefined,
       maxDurationSeconds,
+      targetClassName: formState.targetClassName.trim() || undefined,
     }
 
     if (!isIntegration) {
@@ -327,10 +657,8 @@ export default function SuiteTestCasesPage() {
     // 1. If generatedCode exists (and validated) -> send it
     // 2. If project.aiProject with description -> backend regenerates
     // 3. Otherwise -> manual mode with scriptPath
-    if (forceAiForSuite) {
-      // Forced AI for UNIT/INTEGRATION/UX suites:
-      // - If user has code in the editor, persist it (allows post-generation edits).
-      // - Otherwise, require descriptionAI and let backend generate.
+    if (mode === 'AI') {
+      // AI mode: either persist edited code or request generation from description.
       if (aiState.generatedCode && aiState.generatedCode.trim()) {
         if (!aiState.codeValidated) {
           setFormError('You must validate the generated script before saving.')
@@ -342,7 +670,7 @@ export default function SuiteTestCasesPage() {
       } else {
         const prompt = aiState.descriptionAI.trim()
         if (!prompt) {
-          setFormError('AI description is required for UNIT/INTEGRATION/UX suites.')
+          setFormError('AI description is required for AI mode.')
           return null
         }
         payload.useAI = true
@@ -350,32 +678,26 @@ export default function SuiteTestCasesPage() {
         delete (payload as any).scriptPath
         delete (payload as any).generatedCode
       }
-    } else if (aiState.generatedCode && aiState.generatedCode.trim()) {
-      // Case 1: User has generated/edited code and validated it
-      if (!aiState.codeValidated) {
-        setFormError('You must validate the generated script before saving.')
-        return null
-      }
-      payload.generatedCode = aiState.generatedCode
-      payload.useAI = false
-      delete (payload as any).scriptPath
-    } else if (project?.aiProject) {
-      // Case 2: AI project: backend generates (descriptionAI preferred, fallback to description)
-      const prompt = (aiState.descriptionAI || formState.description).trim()
-      if (!prompt) {
-        setFormError('Description is required for AI projects.')
-        return null
-      }
-      payload.useAI = true
-      payload.descriptionAI = prompt
-      delete (payload as any).scriptPath
+      delete (payload as any).gitRepoUrl
     } else {
-      // Case 3: Manual mode
-      payload.useAI = false
-      if (requireScriptPathInManual && (!payload.scriptPath || !String(payload.scriptPath).trim())) {
-        setFormError('Script path is required for WEB/API test cases in manual mode.')
+      const repoUrl = formState.gitRepoUrl.trim()
+      const scriptPath = formState.scriptPath.trim()
+
+      if (!repoUrl) {
+        setFormError('Repository URL is required for manual/import mode.')
         return null
       }
+
+      if (!scriptPath) {
+        setFormError('Script path is required for manual/import mode.')
+        return null
+      }
+
+      payload.useAI = false
+      payload.gitRepoUrl = repoUrl
+      payload.scriptPath = scriptPath
+      delete (payload as any).generatedCode
+      delete (payload as any).descriptionAI
     }
 
     return payload
@@ -571,7 +893,7 @@ export default function SuiteTestCasesPage() {
         submitLabel="Create test case"
         isSubmitting={isSubmitting}
         disableSubmit={
-          (Boolean(aiState.generatedCode && aiState.generatedCode.trim()) && !aiState.codeValidated) ||
+          (showAiSection && Boolean(aiState.generatedCode && aiState.generatedCode.trim()) && !aiState.codeValidated) ||
           (suite?.type === 'INTEGRATION' && !formState.databaseType)
         }
         size="xl"
@@ -598,28 +920,173 @@ export default function SuiteTestCasesPage() {
             placeholder="Optional description"
           />
         </div>
+        <div className="space-y-2">
+          <Label>Mode</Label>
+          {forceAiForSuite ? (
+            <Input value="Generate with AI" readOnly />
+          ) : (
+            <Select
+              value={formState.mode}
+              onValueChange={(value) => {
+                const mode = value as CaseMode
+                setFormState((prev) => ({ ...prev, mode }))
+                if (mode !== 'AI') setAiState(emptyAICase)
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select mode" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="AI">Generate with AI</SelectItem>
+                <SelectItem value="MANUAL">Write manually</SelectItem>
+                <SelectItem value="REPO">Import from repo</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        </div>
         {showAiSection ? (
           <>
-            <div className="space-y-2">
-              <Label htmlFor="case-description-ai">AI description <span className="text-destructive">*</span></Label>
-              <Textarea
-                id="case-description-ai"
-                value={aiState.descriptionAI}
-                onChange={(e) => setAiState((prev) => ({ ...prev, descriptionAI: e.target.value }))}
-                placeholder="Describe what the test should do in natural language"
-                required={forceAiForSuite || Boolean(project?.aiProject)}
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button type="button" variant="outline" onClick={generateScript} disabled={generating}>
-                {generating ? 'Generating…' : 'Generate script'}
-              </Button>
-              {aiState.generatedCode ? (
-                <Button type="button" onClick={() => setAiState((prev) => ({ ...prev, generatedCode: '', codeValidated: false }))} variant="ghost">
-                  Regenerate
-                </Button>
-              ) : null}
-            </div>
+            {isUnitOrIntegration && sourceGitInfo ? (
+              /* ── Wizard mode for UNIT/INTEGRATION with configured env repo ── */
+              showWizard ? (
+                <SourceClassWizard
+                  owner={sourceGitInfo.owner}
+                  repo={sourceGitInfo.repo}
+                  branch={sourceBranch}
+                  onCancel={() => setShowWizard(false)}
+                  onComplete={(result: WizardResult) => {
+                    setShowWizard(false)
+                    setFormState((prev) => ({
+                      ...prev,
+                      targetClassName: result.targetClassName,
+                      testData: result.testData,
+                    }))
+                    setWizardSkeleton(result.skeleton)
+                    setAiState((prev) => ({ ...prev, descriptionAI: result.descriptionAI }))
+                    // Show ScenarioBuilder (Steps 2-4) instead of generating immediately
+                    setShowScenarioBuilder(true)
+                  }}
+                />
+              ) : showScenarioBuilder ? (
+                /* ── Step 2-4: ScenarioBuilder ── */
+                <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-2">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge variant="secondary" className="font-mono text-xs">{formState.targetClassName}</Badge>
+                    <Button
+                      type="button" variant="ghost" size="sm" className="h-5 text-xs ml-auto"
+                      onClick={() => { setShowScenarioBuilder(false); setShowWizard(true); setWizardSkeleton(''); setFormState(prev => ({ ...prev, targetClassName: '' })) }}
+                    >
+                      Changer de classe
+                    </Button>
+                  </div>
+                  <ScenarioBuilder
+                    skeleton={wizardSkeleton}
+                    testDataJson={formState.testData}
+                    onCancel={() => { setShowScenarioBuilder(false); setWizardSkeleton(''); setFormState(prev => ({ ...prev, targetClassName: '' })) }}
+                    onComplete={(result: ScenarioResult, validatedTestData: string) => {
+                      setShowScenarioBuilder(false)
+                      // Update testData with the LLM-generated + human-validated data
+                      setFormState(prev => ({ ...prev, testData: validatedTestData }))
+                      setAiState(prev => ({ ...prev, descriptionAI: result.expectedBehavior }))
+                      void generateScript(result)
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {/* Selected class badge (if already chosen) */}
+                  {formState.targetClassName && !showScenarioBuilder && (
+                    <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2">
+                      <span className="text-xs text-muted-foreground">Target class:</span>
+                      <Badge variant="secondary" className="font-mono">{formState.targetClassName}</Badge>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="ml-auto h-6 text-xs"
+                        onClick={() => {
+                          setShowWizard(true)
+                          setWizardSkeleton('')
+                          setFormState((prev) => ({ ...prev, targetClassName: '' }))
+                        }}
+                      >
+                        Change
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Browse button */}
+                  {!formState.targetClassName && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full gap-2 border-dashed"
+                      onClick={() => setShowWizard(true)}
+                    >
+                      <Wand2 size={15} />
+                      Browse source class & describe test
+                    </Button>
+                  )}
+
+                  {/* Manual description if class already chosen */}
+                  {formState.targetClassName && (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="case-description-ai">AI description <span className="text-destructive">*</span></Label>
+                        <Textarea
+                          id="case-description-ai"
+                          value={aiState.descriptionAI}
+                          onChange={(e) => setAiState((prev) => ({ ...prev, descriptionAI: e.target.value }))}
+                          placeholder="Describe what the test should do"
+                          required={showAiSection}
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button type="button" variant="outline" onClick={() => generateScript()} disabled={generating}>
+                          {generating ? 'Generating…' : 'Generate script'}
+                        </Button>
+                        {aiState.generatedCode ? (
+                          <Button type="button" onClick={() => setAiState((prev) => ({ ...prev, generatedCode: '', codeValidated: false }))} variant="ghost">
+                            Regenerate
+                          </Button>
+                        ) : null}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )
+            ) : (
+              /* ── Standard mode for E2E or when no env repo configured ── */
+              <>
+                {isUnitOrIntegration && !sourceGitInfo && (
+                  <div className="rounded-md border border-orange-200 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-800 px-3 py-2">
+                    <p className="text-xs text-orange-800 dark:text-orange-300">
+                      No source repository configured on this project's environment. Add a Git repository in the Environment settings to enable smart class browsing.
+                    </p>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label htmlFor="case-description-ai">AI description <span className="text-destructive">*</span></Label>
+                  <Textarea
+                    id="case-description-ai"
+                    value={aiState.descriptionAI}
+                    onChange={(e) => setAiState((prev) => ({ ...prev, descriptionAI: e.target.value }))}
+                    placeholder="Describe what the test should do in natural language"
+                    required={showAiSection}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" onClick={() => generateScript()} disabled={generating}>
+                    {generating ? 'Generating…' : 'Generate script'}
+                  </Button>
+                  {aiState.generatedCode ? (
+                    <Button type="button" onClick={() => setAiState((prev) => ({ ...prev, generatedCode: '', codeValidated: false }))} variant="ghost">
+                      Regenerate
+                    </Button>
+                  ) : null}
+                </div>
+              </>
+            )}
           </>
         ) : null}
 
@@ -695,18 +1162,90 @@ export default function SuiteTestCasesPage() {
           </div>
         </div>
         {!showAiSection ? (
-          <div className="space-y-2">
-            <Label htmlFor="case-script">Script path</Label>
-            <Input
-              id="case-script"
-              value={formState.scriptPath}
-              onChange={(event) =>
-                setFormState((prev) => ({ ...prev, scriptPath: event.target.value }))
-              }
-              placeholder="tests/login.spec.ts"
-              required={suite?.type === 'WEB' || suite?.type === 'API' || suite?.type === 'FUNCTIONAL_WEB' || suite?.type === 'FUNCTIONAL_MOBILE'}
-            />
-          </div>
+          <>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label>GitHub repository</Label>
+                {gitHubConnection.kind === 'notConnected' && connectUrl ? (
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={connectUrl}>Connect GitHub</a>
+                  </Button>
+                ) : null}
+              </div>
+
+              {gitHubConnection.kind === 'loading' ? (
+                <p className="text-sm text-muted-foreground">Checking GitHub connection...</p>
+              ) : null}
+
+              {gitHubConnection.kind === 'unauthorized' ? (
+                <p className="text-sm text-muted-foreground">Sign in to load GitHub repositories.</p>
+              ) : null}
+
+              {gitHubConnection.kind === 'error' ? (
+                <p className="text-sm text-destructive">{gitHubConnection.message}</p>
+              ) : null}
+
+              {gitHubConnection.kind === 'notConnected' ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    Connect GitHub to select a repository. You can still paste a URL manually.
+                  </p>
+                  <Input
+                    value={formState.gitRepoUrl}
+                    onChange={(event) =>
+                      setFormState((prev) => ({ ...prev, gitRepoUrl: event.target.value }))
+                    }
+                    placeholder="https://github.com/org/repo"
+                  />
+                </div>
+              ) : null}
+
+              {gitHubConnection.kind === 'connected' ? (
+                <div className="space-y-2">
+                  {gitHubRepos.kind === 'loading' ? (
+                    <p className="text-sm text-muted-foreground">Loading repositories...</p>
+                  ) : null}
+
+                  {gitHubRepos.kind === 'error' ? (
+                    <p className="text-sm text-destructive">{gitHubRepos.message}</p>
+                  ) : null}
+
+                  {gitHubRepos.kind === 'available' ? (
+                    <Select
+                      value={selectedRepoKey}
+                      onValueChange={(value) => setSelectedRepoKey(value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a repository" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {gitHubRepos.repos.map((repo) => (
+                          <SelectItem key={repo.key} value={repo.key}>
+                            {repo.owner}/{repo.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : null}
+
+                  <Input value={formState.gitRepoUrl} readOnly placeholder="Repository URL" />
+                </div>
+              ) : null}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="case-script">Script path to execute</Label>
+              <Input
+                id="case-script"
+                value={formState.scriptPath}
+                onChange={(event) =>
+                  setFormState((prev) => ({ ...prev, scriptPath: event.target.value }))
+                }
+                placeholder="tests/login.spec.ts"
+                required
+              />
+            </div>
+          </>
         ) : null}
 
         {suite?.type === 'INTEGRATION' ? (
@@ -772,7 +1311,7 @@ export default function SuiteTestCasesPage() {
         submitLabel="Save changes"
         isSubmitting={isSubmitting}
         disableSubmit={
-          (Boolean(aiState.generatedCode && aiState.generatedCode.trim()) && !aiState.codeValidated) ||
+          (showAiSection && Boolean(aiState.generatedCode && aiState.generatedCode.trim()) && !aiState.codeValidated) ||
           (suite?.type === 'INTEGRATION' && !formState.databaseType)
         }
         size="xl"
@@ -797,19 +1336,58 @@ export default function SuiteTestCasesPage() {
             }
           />
         </div>
+        <div className="space-y-2">
+          <Label>Mode</Label>
+          {forceAiForSuite ? (
+            <Input value="Generate with AI" readOnly />
+          ) : (
+            <Select
+              value={formState.mode}
+              onValueChange={(value) => {
+                const mode = value as CaseMode
+                setFormState((prev) => ({ ...prev, mode }))
+                if (mode !== 'AI') setAiState(emptyAICase)
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select mode" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="AI">Generate with AI</SelectItem>
+                <SelectItem value="MANUAL">Write manually</SelectItem>
+                <SelectItem value="REPO">Import from repo</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        </div>
         {showAiSection ? (
           <>
+            {(suite?.type === 'UNIT' || suite?.type === 'INTEGRATION') && (
+              <div className="space-y-2">
+                <Label>
+                  Target class <span className="text-muted-foreground text-xs">(optional — improves AI accuracy)</span>
+                </Label>
+                <Input
+                  value={formState.targetClassName}
+                  onChange={(e) => setFormState((prev) => ({ ...prev, targetClassName: e.target.value }))}
+                  placeholder="e.g. UserService"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Simple class name to test. The AI will extract its method signatures from the source repo and generate a real test.
+                </p>
+              </div>
+            )}
             <div className="space-y-2">
               <Label>AI description{forceAiForSuite ? ' *' : ''}</Label>
               <Textarea
                 value={aiState.descriptionAI}
                 onChange={(e) => setAiState((prev) => ({ ...prev, descriptionAI: e.target.value }))}
                 placeholder="Describe what the test should do in natural language"
-                required={forceAiForSuite}
+                required={showAiSection}
               />
             </div>
             <div className="flex gap-2 mb-2">
-              <Button type="button" variant="outline" onClick={generateScript} disabled={generating}>
+              <Button type="button" variant="outline" onClick={() => generateScript()} disabled={generating}>
                 {generating ? 'Generating…' : 'Generate script'}
               </Button>
               {aiState.generatedCode ? (
@@ -891,17 +1469,89 @@ export default function SuiteTestCasesPage() {
           </div>
         </div>
         {!showAiSection ? (
-          <div className="space-y-2">
-            <Label htmlFor="case-edit-script">Script path</Label>
-            <Input
-              id="case-edit-script"
-              value={formState.scriptPath}
-              onChange={(event) =>
-                setFormState((prev) => ({ ...prev, scriptPath: event.target.value }))
-              }
-              required={suite?.type === 'WEB' || suite?.type === 'API'}
-            />
-          </div>
+          <>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label>GitHub repository</Label>
+                {gitHubConnection.kind === 'notConnected' && connectUrl ? (
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={connectUrl}>Connect GitHub</a>
+                  </Button>
+                ) : null}
+              </div>
+
+              {gitHubConnection.kind === 'loading' ? (
+                <p className="text-sm text-muted-foreground">Checking GitHub connection...</p>
+              ) : null}
+
+              {gitHubConnection.kind === 'unauthorized' ? (
+                <p className="text-sm text-muted-foreground">Sign in to load GitHub repositories.</p>
+              ) : null}
+
+              {gitHubConnection.kind === 'error' ? (
+                <p className="text-sm text-destructive">{gitHubConnection.message}</p>
+              ) : null}
+
+              {gitHubConnection.kind === 'notConnected' ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    Connect GitHub to select a repository. You can still paste a URL manually.
+                  </p>
+                  <Input
+                    value={formState.gitRepoUrl}
+                    onChange={(event) =>
+                      setFormState((prev) => ({ ...prev, gitRepoUrl: event.target.value }))
+                    }
+                    placeholder="https://github.com/org/repo"
+                  />
+                </div>
+              ) : null}
+
+              {gitHubConnection.kind === 'connected' ? (
+                <div className="space-y-2">
+                  {gitHubRepos.kind === 'loading' ? (
+                    <p className="text-sm text-muted-foreground">Loading repositories...</p>
+                  ) : null}
+
+                  {gitHubRepos.kind === 'error' ? (
+                    <p className="text-sm text-destructive">{gitHubRepos.message}</p>
+                  ) : null}
+
+                  {gitHubRepos.kind === 'available' ? (
+                    <Select
+                      value={selectedRepoKey}
+                      onValueChange={(value) => setSelectedRepoKey(value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a repository" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {gitHubRepos.repos.map((repo) => (
+                          <SelectItem key={repo.key} value={repo.key}>
+                            {repo.owner}/{repo.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : null}
+
+                  <Input value={formState.gitRepoUrl} readOnly placeholder="Repository URL" />
+                </div>
+              ) : null}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="case-edit-script">Script path to execute</Label>
+              <Input
+                id="case-edit-script"
+                value={formState.scriptPath}
+                onChange={(event) =>
+                  setFormState((prev) => ({ ...prev, scriptPath: event.target.value }))
+                }
+                required
+              />
+            </div>
+          </>
         ) : null}
 
         {suite?.type === 'INTEGRATION' ? (

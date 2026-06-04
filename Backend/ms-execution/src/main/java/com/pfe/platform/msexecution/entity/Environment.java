@@ -12,17 +12,27 @@ public class Environment {
     private Long id;
     private String baseUrlWeb;
     private String baseUrlApi;
-    @Column(columnDefinition = "JSONB")
-    private String variables;
+
+    @Column(name = "git_repo_url")
+    private String gitRepoUrl;
+
+    @Column(name = "git_branch")
+    private String gitBranch;
+
+    @Column(name = "database_type")
+    private String databaseType;
 
     public Environment() {
     }
 
-    public Environment(Long id, String baseUrlWeb, String baseUrlApi, String variables) {
+    public Environment(Long id, String baseUrlWeb, String baseUrlApi,
+                       String gitRepoUrl, String gitBranch, String databaseType) {
         this.id = id;
         this.baseUrlWeb = baseUrlWeb;
         this.baseUrlApi = baseUrlApi;
-        this.variables = variables;
+        this.gitRepoUrl = gitRepoUrl;
+        this.gitBranch = gitBranch;
+        this.databaseType = databaseType;
     }
 
     public Long getId() {
@@ -49,11 +59,12 @@ public class Environment {
         this.baseUrlApi = baseUrlApi;
     }
 
-    public String getVariables() {
-        return variables;
-    }
+    public String getGitRepoUrl() { return gitRepoUrl; }
+    public void setGitRepoUrl(String gitRepoUrl) { this.gitRepoUrl = gitRepoUrl; }
 
-    public void setVariables(String variables) {
-        this.variables = variables;
-    }
+    public String getGitBranch() { return gitBranch; }
+    public void setGitBranch(String gitBranch) { this.gitBranch = gitBranch; }
+
+    public String getDatabaseType() { return databaseType; }
+    public void setDatabaseType(String databaseType) { this.databaseType = databaseType; }
 }

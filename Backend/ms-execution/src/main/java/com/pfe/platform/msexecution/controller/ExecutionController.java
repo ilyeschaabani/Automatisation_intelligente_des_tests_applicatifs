@@ -29,43 +29,55 @@ public class ExecutionController {
     private final ExecutionResultRepository executionResultRepository;
 
 
+    /**
+     * Run a campaign.
+     * Optional body:
+     *   { "runMode": "ALL" }           → run all test cases (default)
+     *   { "runMode": "SELECTED", "testCaseIds": [1, 2, 3] } → run only specified test cases
+     */
     @PostMapping("/run/{campaignId}")
-    public ResponseEntity<CampaignRunResponseDto> runCampaign(@PathVariable Long campaignId) {
+    public ResponseEntity<CampaignRunResponseDto> runCampaign(
+            @PathVariable Long campaignId,
+            @RequestBody(required = false) Map<String, Object> body) {
         try {
-            Campaign campaign = campaignRepository.findById(campaignId)
-                    .orElse(null);
-            
+            Campaign campaign = campaignRepository.findById(campaignId).orElse(null);
             if (campaign == null) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(CampaignRunResponseDto.error("Campaign not found"));
             }
-
             if (campaign.getStatus() == Campaign.CampaignStatus.RUNNING) {
-                List<ExecutionResultDto> results = executionResultRepository.findByCampaignId(campaignId)
-                        .stream()
-                        .map(ExecutionResultDto::fromEntity)
-                        .toList();
-                CampaignStatusDto statusDto = CampaignStatusDto.fromEntity(campaign, results);
                 return ResponseEntity.ok(CampaignRunResponseDto.alreadyRunning(campaignId));
             }
 
-            // Set status to RUNNING immediately before starting async execution
+            // Parse runMode and optional testCaseIds
+            String runMode = "ALL";
+            List<Long> selectedIds = null;
+            if (body != null) {
+                Object mode = body.get("runMode");
+                if (mode != null) runMode = mode.toString().toUpperCase();
+                Object ids = body.get("testCaseIds");
+                if (ids instanceof List<?> rawList) {
+                    selectedIds = rawList.stream()
+                            .filter(o -> o instanceof Number)
+                            .map(o -> ((Number) o).longValue())
+                            .toList();
+                }
+            }
+
             campaign.setStatus(Campaign.CampaignStatus.RUNNING);
             campaign.setStartedAt(java.time.LocalDateTime.now());
             campaign.setProgress(5);
             campaign.setCurrentStep("Cloning repository");
             campaignRepository.save(campaign);
 
-            // Start async execution
-            executionService.runCampaign(campaignId);
-            
-            // Return the updated campaign status immediately
+            // Pass selectedIds to execution (null = run all)
+            List<Long> idsToRun = "SELECTED".equals(runMode) && selectedIds != null && !selectedIds.isEmpty()
+                    ? selectedIds : null;
+            executionService.runCampaign(campaignId, idsToRun);
+
             List<ExecutionResultDto> results = executionResultRepository.findByCampaignId(campaignId)
-                    .stream()
-                    .map(ExecutionResultDto::fromEntity)
-                    .toList();
+                    .stream().map(ExecutionResultDto::fromEntity).toList();
             CampaignStatusDto statusDto = CampaignStatusDto.fromEntity(campaign, results);
-            
             return ResponseEntity.accepted().body(CampaignRunResponseDto.started(campaignId, statusDto));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)

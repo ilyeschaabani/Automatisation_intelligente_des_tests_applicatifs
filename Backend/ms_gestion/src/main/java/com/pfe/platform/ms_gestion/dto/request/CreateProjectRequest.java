@@ -8,6 +8,4 @@ public class CreateProjectRequest {
     @NotBlank(message = "Le nom du projet est obligatoire")
     private String name;
     private String description;
-    private String gitRepoUrl;
-    private String gitDefaultBranch = "main";
 }

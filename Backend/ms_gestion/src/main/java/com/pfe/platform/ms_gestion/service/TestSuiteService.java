@@ -192,23 +192,14 @@ public class TestSuiteService {
     }
 
     private void validateGitFieldsByType(TestSuite.TestType type, CreateTestSuiteRequest request) {
+        // gitRepoUrl and gitBranch are now configured at Environment level.
+        // They are optional overrides at suite level (e.g. for multi-repo projects).
+        // modulePath is still validated if the suite has its own gitRepoUrl.
         if (type == null) return;
-
-        boolean requiresRepo = type == TestSuite.TestType.UNIT || type == TestSuite.TestType.INTEGRATION;
-        if (!requiresRepo) return;
-
-        if (request.getGitRepoUrl() == null || request.getGitRepoUrl().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "gitRepoUrl is required when suite type is " + type);
-        }
-        if (request.getGitBranch() == null || request.getGitBranch().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "gitBranch is required when suite type is " + type);
-        }
-        if ((type == TestSuite.TestType.UNIT || type == TestSuite.TestType.INTEGRATION)
-                && (request.getModulePath() == null || request.getModulePath().isBlank())) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "modulePath is required when suite type is " + type
-            );
+        boolean hasSuiteRepo = request.getGitRepoUrl() != null && !request.getGitRepoUrl().isBlank();
+        if (hasSuiteRepo && (request.getGitBranch() == null || request.getGitBranch().isBlank())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "gitBranch is required when gitRepoUrl is specified on the suite");
         }
     }
 }

@@ -15,11 +15,30 @@ public class LlmService {
     private final RestTemplate restTemplate = new RestTemplate();
 
     public String generateTestCode(String type, String description) {
-        return generateTestCode(type, description, null);
+        return generateTestCode(type, description, null, null);
     }
 
     public String generateTestCode(String type, String description, String databaseType) {
-        String prompt = buildPrompt(type, description, databaseType);
+        return generateTestCode(type, description, databaseType, null);
+    }
+
+    public String generateTestCode(String type, String description, String databaseType, String classSkeleton) {
+        return generateTestCode(type, description, databaseType, classSkeleton, null);
+    }
+
+    public String generateTestCode(String type, String description, String databaseType, String classSkeleton, String testData) {
+        return generateTestCode(type, description, databaseType, classSkeleton, testData, null, null, null);
+    }
+
+    /**
+     * Full structured generation: method + scenario + expectedBehavior give the LLM
+     * enough context to produce a precise, targeted test instead of a generic one.
+     */
+    public String generateTestCode(String type, String description, String databaseType,
+                                   String classSkeleton, String testData,
+                                   String methodName, String scenarioType, String expectedBehavior) {
+        String prompt = buildPrompt(type, description, databaseType, classSkeleton, testData,
+                                    methodName, scenarioType, expectedBehavior);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -40,12 +59,23 @@ public class LlmService {
             raw = raw.replaceAll("(?i)```java\\s*", "")
                     .replaceAll("```", "")
                     .trim();
+            // Supprimer les tokens spéciaux deepseek-coder qui fuient parfois dans la sortie
+            raw = raw.replaceAll("<｜[^｜]*｜>", "")
+                    .replaceAll("\\|begin▁of▁sentence\\|", "")
+                    .replaceAll("\\|end▁of▁sentence\\|", "")
+                    .trim();
             return raw;
         }
         throw new RuntimeException("Ollama n’a pas renvoyé de code.");
     }
 
-    private String buildPrompt(String type, String description, String databaseType) {
+    private String buildPrompt(String type, String description, String databaseType, String classSkeleton, String testData) {
+        return buildPrompt(type, description, databaseType, classSkeleton, testData, null, null, null);
+    }
+
+    private String buildPrompt(String type, String description, String databaseType,
+                                String classSkeleton, String testData,
+                                String methodName, String scenarioType, String expectedBehavior) {
         String normalizedType = type == null ? "" : type.trim().toUpperCase();
         String normalizedDescription = description == null ? "" : description.trim();
         String normalizedDatabaseType = databaseType == null ? "" : databaseType.trim().toUpperCase();
@@ -56,10 +86,11 @@ public class LlmService {
             RÈGLES ABSOLUES (tu dois les respecter) :
             - Réponds UNIQUEMENT avec du code Java compilable (un seul fichier) : pas de texte, pas de titre.
             - Ne mets PAS de markdown, PAS de backticks, PAS de blocs ```.
-            - Commence directement par 'package' OU 'import'.
+            - Commence TOUJOURS par la déclaration 'package'.
             - Utilise TestNG (org.testng.annotations.*) : pas de JUnit.
-            - Le code doit contenir : imports, une classe publique, et des méthodes de test annotées @Test.
-            - Utilise des assertions TestNG (org.testng.Assert.*) et/ou des vérifications pertinentes.
+            - Le code doit contenir : package, imports complets, une classe publique, et des méthodes @Test.
+            - Utilise des assertions TestNG (org.testng.Assert.*).
+            - N'ajoute JAMAIS de commentaires ou d'explications en dehors du code Java.
             """;
 
         String header = """
@@ -117,33 +148,130 @@ public class LlmService {
                 """;
         }
 
+        String skeletonBlock = "";
+        if (classSkeleton != null && !classSkeleton.isBlank()
+                && ("UNIT".equals(normalizedType) || "INTEGRATION".equals(normalizedType))) {
+            skeletonBlock = """
+
+                CLASSE SOURCE À TESTER (squelette extrait automatiquement du repo) :
+                ```java
+                %s
+                ```
+                - Importe et utilise EXACTEMENT cette classe dans ton test (même package, même nom de méthodes).
+                - N'invente pas de méthodes qui n'existent pas dans ce squelette.
+                """.formatted(classSkeleton);
+        }
+
+        String testDataBlock = "";
+        if (testData != null && !testData.isBlank()) {
+            testDataBlock = """
+
+                DONNÉES DE TEST À UTILISER DANS LE CODE (JSON fourni par le testeur) :
+                ```json
+                %s
+                ```
+                - Utilise ces valeurs comme inputs dans tes assertions et appels de méthodes.
+                - Ex: si tu vois {"username":"admin","password":"123"}, utilise exactement ces valeurs dans le test.
+                - Ne génère pas de données aléatoires si des données sont fournies ici.
+                """.formatted(testData);
+        }
+
+        // ── Structured scenario block (highest priority — overrides vague description) ──
+        String scenarioBlock = "";
+        if (methodName != null && !methodName.isBlank()) {
+            String scenarioLabel = resolveScenarioLabel(scenarioType);
+            String expectedLine = (expectedBehavior != null && !expectedBehavior.isBlank())
+                    ? expectedBehavior.trim()
+                    : "le comportement normal de la méthode";
+
+            scenarioBlock = """
+
+                CIBLE DU TEST (instructions prioritaires — respecter exactement) :
+                - Méthode à tester    : %s
+                - Scénario            : %s
+                - Résultat attendu    : %s
+                - Génère UNE SEULE méthode @Test qui couvre CE scénario précis.
+                - Nomme la méthode de test : test_%s_%s()
+                - Ne génère PAS d'autres scénarios.
+                """.formatted(
+                    methodName,
+                    scenarioLabel,
+                    expectedLine,
+                    methodName,
+                    (scenarioType != null ? scenarioType.toLowerCase() : "happyPath")
+            );
+        }
+
         String specifics = switch (normalizedType) {
             case "UNIT" -> """
                 CONSIGNES UNIT (test unitaire pur) :
-                - N'utilise PAS Spring (pas de @SpringBootTest, pas de contexte, pas d'@Autowired).
-                - Mocker TOUTES les dépendances (repositories, clients externes, autres services) avec Mockito.
-                - Utilise @Mock et MockitoAnnotations.openMocks(this) dans une méthode @BeforeMethod.
-                - Si possible, utilise @InjectMocks pour la classe sous test.
-                - N'utilise PAS de base de données.
-                - Chaque test doit vérifier un résultat (assertEquals/assertNotNull/...) ET les interactions (verify(...)).
-                - Imports autorisés : TestNG + Mockito + classes métier nécessaires (pas d'imports inutiles).
+
+                RÈGLE ABSOLUE SUR LE PACKAGE :
+                - Le test sera écrit dans src/test/java/suites/unit/ du projet source cloné.
+                - DONC le package OBLIGATOIRE est : package suites.unit;
+                - N'utilise JAMAIS le package du projet source comme package du test.
+
+                RÈGLE ABSOLUE SUR LES IMPORTS :
+                - Le test est compilé DANS le projet source — tu as accès à toutes ses classes.
+                - Déduis les imports full-qualified depuis le package du squelette fourni.
+                  Exemple : si le squelette montre "package com.pfe.platform.ms_gestion.service;"
+                  alors importe : import com.pfe.platform.ms_gestion.service.TestCaseService;
+                  et aussi : import com.pfe.platform.ms_gestion.repository.TestCaseRepository; etc.
+                - Importe chaque classe utilisée avec son chemin complet.
+
+                RÈGLES MOCKITO + TESTNG :
+                - N'utilise PAS Spring (pas de @SpringBootTest, pas d'@Autowired).
+                - Mocke TOUTES les dépendances avec @Mock (repositories, services, SecurityUtils).
+                - Utilise @InjectMocks pour la classe sous test — JAMAIS de new() explicite.
+                  CORRECT   : @InjectMocks private TestSuiteService testSuiteService;
+                  INCORRECT : @InjectMocks private TestSuiteService testSuiteService = new TestSuiteService();
+                - Si la méthode testée appelle SecurityUtils.getCurrentUserId(), ajoute OBLIGATOIREMENT :
+                    private MockedStatic<SecurityUtils> mockedSecurity;
+                    @BeforeMethod public void setUp() {
+                        mocks = MockitoAnnotations.openMocks(this);
+                        mockedSecurity = Mockito.mockStatic(SecurityUtils.class);
+                        mockedSecurity.when(SecurityUtils::getCurrentUserId).thenReturn(1L);
+                    }
+                    @AfterMethod public void tearDown() throws Exception {
+                        mockedSecurity.close(); mocks.close();
+                    }
+                - OBLIGATOIRE : génère TOUJOURS cette structure setUp/tearDown si SecurityUtils est utilisé.
+                - Mock TOUS les repositories utilisés par la méthode (findById, save, existsBy...).
+                - Si la méthode cherche un projet : mock projectRepository.findById(projectId).thenReturn(Optional.of(project)).
+                - Si la méthode vérifie les droits : mock projectMemberRepository.findByProjectIdAndUserId(...).thenReturn(Optional.of(member)).
+                - UTILISE les valeurs du testData dans le test : si testData contient name='X', crée request.setName("X").
+                - Chaque test vérifie un résultat (assertEquals/assertNotNull) ET les interactions (verify).
+                - Pour les méthodes retournant Optional, mocke avec Optional.of(...) ou Optional.empty().
                 """;
 
             case "INTEGRATION" -> """
                 CONSIGNES INTEGRATION (test d'intégration Spring) :
-                - Utilise Spring Test : @SpringBootTest (ou @DataJpaTest si c'est uniquement la couche JPA).
-                - Ne mocke PAS les repositories : utilise une vraie base H2 en mémoire.
-                - Active le profil 'test' via @ActiveProfiles("test").
-                - Configure H2 en mémoire directement dans le test (pour être autonome) avec @TestPropertySource(properties = { ... }).
-                  Propriétés attendues (exemple) :
-                  - spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
-                  - spring.datasource.driverClassName=org.h2.Driver
-                  - spring.datasource.username=sa
-                  - spring.datasource.password=
-                  - spring.jpa.hibernate.ddl-auto=create-drop
-                  - spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
-                - Injecte les beans avec @Autowired.
-                - Utilise @Transactional pour isoler/rollback les tests.
+
+                RÈGLE ABSOLUE SUR LE PACKAGE :
+                - Le test sera écrit dans src/test/java/suites/integration/ du projet source cloné.
+                - DONC le package OBLIGATOIRE est : package suites.integration;
+                - N'utilise JAMAIS le package du projet source comme package du test.
+
+                RÈGLE ABSOLUE SUR LES IMPORTS :
+                - Le test est compilé DANS le projet source — toutes ses classes sont disponibles.
+                - Déduis les imports depuis le package du squelette fourni.
+                  Exemple : si le squelette montre "package com.pfe.platform.ms_gestion.repository;"
+                  alors importe : import com.pfe.platform.ms_gestion.repository.TestCaseRepository;
+                - Importe chaque classe utilisée avec son chemin complet.
+
+                RÈGLES SPRING TEST :
+                - Utilise @SpringBootTest et @ActiveProfiles("test").
+                - Ne mocke PAS les repositories : injecte-les avec @Autowired.
+                - Configure H2 avec @TestPropertySource(properties = {
+                    "spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
+                    "spring.datasource.driverClassName=org.h2.Driver",
+                    "spring.datasource.username=sa",
+                    "spring.datasource.password=",
+                    "spring.jpa.hibernate.ddl-auto=create-drop",
+                    "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect"
+                  })
+                - Utilise @Transactional pour rollback automatique après chaque test.
+                - Utilise AbstractTestNGSpringContextTests comme classe parente pour TestNG + Spring.
                 - Assertions complètes (assertNotNull, assertEquals, etc.).
                 """;
 
@@ -244,6 +372,18 @@ public class LlmService {
                 """;
         };
 
-        return commonRules + mongoIntegrationRules + header + "\n" + specifics + "\n" + "Génère maintenant le code Java.";
+        return commonRules + mongoIntegrationRules + header + skeletonBlock + testDataBlock + scenarioBlock + "\n" + specifics + "\n" + "Génère maintenant le code Java.";
+    }
+
+    private String resolveScenarioLabel(String scenarioType) {
+        if (scenarioType == null) return "Cas nominal (Happy Path)";
+        return switch (scenarioType.toUpperCase()) {
+            case "HAPPY_PATH"  -> "Cas nominal — la méthode s'exécute sans erreur et retourne un résultat valide";
+            case "EXCEPTION"   -> "Exception — la méthode doit lever une exception dans ce contexte";
+            case "NULL_INPUT"  -> "Entrée nulle — un paramètre obligatoire est null, une exception est attendue";
+            case "WRONG_INPUT" -> "Mauvaise entrée — valeur invalide (hors enum, format incorrect, etc.)";
+            case "BOUNDARY"    -> "Valeur limite — tester aux valeurs minimales ou maximales autorisées";
+            default            -> scenarioType;
+        };
     }
 }

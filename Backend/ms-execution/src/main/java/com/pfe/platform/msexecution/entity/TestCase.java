@@ -33,6 +33,14 @@ public class TestCase {
     @Column(nullable = false)
     private Boolean generated = false;
 
+    private Boolean active = true;
+    private Boolean flaky = false;
+    private Integer maxDurationSeconds;
+
+    @Column(columnDefinition = "JSONB")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    private String testData;
+
     public enum TestType { WEB, API, UNIT, INTEGRATION, FUNCTIONAL_WEB, FUNCTIONAL_MOBILE }
 
     public TestCase() {
@@ -108,8 +116,17 @@ public class TestCase {
     public Boolean getGenerated() {
         return generated;
     }
-    public void setGenerated(Boolean generated) {
-        this.generated = generated;
-    }
+    public void setGenerated(Boolean generated) { this.generated = generated; }
 
+    public Boolean getActive() { return active; }
+    public void setActive(Boolean active) { this.active = active; }
+
+    public Boolean getFlaky() { return flaky; }
+    public void setFlaky(Boolean flaky) { this.flaky = flaky; }
+
+    public Integer getMaxDurationSeconds() { return maxDurationSeconds; }
+    public void setMaxDurationSeconds(Integer maxDurationSeconds) { this.maxDurationSeconds = maxDurationSeconds; }
+
+    public String getTestData() { return testData; }
+    public void setTestData(String testData) { this.testData = testData; }
 }

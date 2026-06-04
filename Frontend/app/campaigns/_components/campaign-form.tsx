@@ -59,7 +59,6 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
   const [projectId, setProjectId] = useState<number | null>(null)
   const [name, setName] = useState('')
   const [appVersion, setAppVersion] = useState('')
-  const [gitBranch, setGitBranch] = useState('')
   const [environmentId, setEnvironmentId] = useState<number | null>(null)
   const [triggerMode, setTriggerMode] = useState('MANUAL')
 
@@ -130,7 +129,6 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
         setCampaign(loaded)
         setName(loaded.name ?? '')
         setAppVersion(String(loaded.appVersion ?? ''))
-        setGitBranch(String(loaded.gitBranch ?? ''))
         setTriggerMode(String(loaded.triggerMode ?? 'MANUAL'))
         setEnvironmentId(loaded.environmentId ?? null)
         setSelectedIds(new Set())
@@ -288,7 +286,6 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
           name: name.trim(),
           environmentId,
           appVersion: appVersion.trim() ? appVersion.trim() : null,
-          gitBranch: gitBranch.trim() ? gitBranch.trim() : null,
           triggerMode: triggerMode.trim() ? triggerMode.trim() : 'MANUAL',
           testCaseIds,
         }
@@ -398,16 +395,6 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="campaignBranch">Git branch</Label>
-              <Input
-                id="campaignBranch"
-                value={gitBranch}
-                onChange={(e) => setGitBranch(e.target.value)}
-                placeholder="main"
-              />
-            </div>
-
-            <div className="space-y-2">
               <Label htmlFor="environment">Environment *</Label>
               <Select
                 value={environmentId ? String(environmentId) : ''}
@@ -424,12 +411,14 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
                 <SelectContent>
                   {environments.length === 0 ? (
                     <SelectItem value="__none" disabled>
-                      No environments found
+                      No environments found — add one in the project settings
                     </SelectItem>
                   ) : (
                     environments.map((env) => (
                       <SelectItem key={env.id} value={String(env.id)}>
                         {env.name}
+                        {(env as any).gitRepoUrl ? ` · ${(env as any).gitBranch ?? 'main'}` : ''}
+                        {(env as any).databaseType ? ` · ${(env as any).databaseType}` : ''}
                       </SelectItem>
                     ))
                   )}
@@ -438,7 +427,43 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
               {environmentsError ? (
                 <p className="text-xs text-destructive">{environmentsError}</p>
               ) : null}
+
+              {/* Show selected environment config */}
+              {environmentId && (() => {
+                const selectedEnv = environments.find(e => e.id === environmentId) as any
+                if (!selectedEnv) return null
+                return (
+                  <div className="rounded-md border border-border bg-muted/30 px-3 py-2 space-y-1">
+                    <p className="text-xs font-medium text-foreground">Environment configuration</p>
+                    {selectedEnv.baseUrlApi && (
+                      <p className="text-xs text-muted-foreground">
+                        <span className="font-mono text-foreground">API:</span> {selectedEnv.baseUrlApi}
+                      </p>
+                    )}
+                    {selectedEnv.baseUrlWeb && (
+                      <p className="text-xs text-muted-foreground">
+                        <span className="font-mono text-foreground">Web:</span> {selectedEnv.baseUrlWeb}
+                      </p>
+                    )}
+                    {selectedEnv.gitRepoUrl && (
+                      <p className="text-xs text-muted-foreground">
+                        <span className="font-mono text-foreground">Repo:</span> {selectedEnv.gitRepoUrl}
+                        {' @ '}<span className="font-mono">{selectedEnv.gitBranch ?? 'main'}</span>
+                      </p>
+                    )}
+                    {selectedEnv.databaseType && (
+                      <p className="text-xs text-muted-foreground">
+                        <span className="font-mono text-foreground">DB:</span> {selectedEnv.databaseType}
+                      </p>
+                    )}
+                    {!selectedEnv.gitRepoUrl && !selectedEnv.baseUrlApi && !selectedEnv.baseUrlWeb && (
+                      <p className="text-xs text-orange-600">No configuration set — add repo URL or base URLs in environment settings.</p>
+                    )}
+                  </div>
+                )
+              })()}
             </div>
+
 
             <div className="space-y-2">
               <Label htmlFor="triggerType">Trigger mode</Label>
@@ -461,6 +486,11 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
                 <h3 className="text-sm font-semibold text-foreground">Test cases</h3>
                 <p className="text-xs text-muted-foreground">
                   Select test cases for this campaign.
+                  {testCases.filter((tc) => !(tc as any).active && (tc as any).active !== undefined).length > 0 && (
+                    <span className="ml-1 text-orange-500">
+                      ({testCases.filter((tc) => !(tc as any).active && (tc as any).active !== undefined).length} inactive — will be skipped at execution)
+                    </span>
+                  )}
                 </p>
               </div>
 
@@ -525,22 +555,45 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredTestCases.map((tc) => (
-                      <TableRow key={tc.id}>
+                    {filteredTestCases.map((tc) => {
+                      const isInactive = (tc as any).active === false
+                      const typeLabel = tc.type === 'WEB' ? 'E2E' : tc.type ?? '—'
+                      const typeBadgeColor =
+                        tc.type === 'UNIT' ? 'bg-blue-100 text-blue-700' :
+                        tc.type === 'INTEGRATION' ? 'bg-purple-100 text-purple-700' :
+                        tc.type === 'WEB' ? 'bg-green-100 text-green-700' :
+                        'bg-gray-100 text-gray-600'
+                      return (
+                      <TableRow key={tc.id} className={isInactive ? 'opacity-50' : ''}>
                         <TableCell>
                           <Checkbox
                             checked={selectedIds.has(tc.id)}
                             onCheckedChange={() => toggleOne(tc.id)}
                             aria-label={`Select test case ${tc.title}`}
+                            disabled={isInactive}
                           />
                         </TableCell>
-                        <TableCell className="font-medium">{tc.title}</TableCell>
-                        <TableCell>{tc.suiteName}</TableCell>
-                        <TableCell>{tc.type ?? '—'}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{tc.title}</span>
+                            {isInactive && (
+                              <span className="text-xs bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded">
+                                inactive
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{tc.suiteName}</TableCell>
+                        <TableCell>
+                          <span className={`text-xs font-mono px-2 py-0.5 rounded-full ${typeBadgeColor}`}>
+                            {typeLabel}
+                          </span>
+                        </TableCell>
                         <TableCell>{tc.priority ?? '—'}</TableCell>
                         <TableCell>{tc.riskLevel ?? '—'}</TableCell>
                       </TableRow>
-                    ))}
+                      )
+                    })}
                   </TableBody>
                 </Table>
               </div>

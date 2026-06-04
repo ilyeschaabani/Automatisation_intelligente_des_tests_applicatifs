@@ -39,6 +39,12 @@ public class ProjectController {
     }
 
     @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        projectService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/archive")
     public ResponseEntity<Void> archive(@PathVariable Long id) {
         projectService.archive(id);
         return ResponseEntity.noContent().build();

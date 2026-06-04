@@ -16,6 +16,7 @@ public class ExecutionResultDto {
     private String aiAnalysis;
     private String uxAnalysis;
     private String screenshotUrl;
+    private String testMethodResults; // JSON array of per-method Surefire results
     private LocalDateTime executedAt;
 
     public ExecutionResultDto() {
@@ -125,6 +126,9 @@ public class ExecutionResultDto {
         this.screenshotUrl = screenshotUrl;
     }
 
+    public String getTestMethodResults() { return testMethodResults; }
+    public void setTestMethodResults(String testMethodResults) { this.testMethodResults = testMethodResults; }
+
     public LocalDateTime getExecutedAt() {
         return executedAt;
     }
@@ -134,7 +138,7 @@ public class ExecutionResultDto {
     }
 
     public static ExecutionResultDto fromEntity(ExecutionResult entity) {
-        return new ExecutionResultDto(
+        ExecutionResultDto dto = new ExecutionResultDto(
                 entity.getId(),
                 entity.getCampaignId(),
                 entity.getTestCaseId(),
@@ -143,10 +147,12 @@ public class ExecutionResultDto {
                 entity.getDurationMs(),
                 entity.getErrorMessage(),
                 entity.getLogs(),
-            entity.getAiAnalysis(),
-            entity.getUxAnalysis(),
+                entity.getAiAnalysis(),
+                entity.getUxAnalysis(),
                 entity.getScreenshotUrl(),
                 entity.getExecutedAt()
         );
+        dto.setTestMethodResults(entity.getTestMethodResults());
+        return dto;
     }
 }

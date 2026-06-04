@@ -1,5 +1,5 @@
 export type ProjectStatus = 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
-export type TestType = 'WEB' | 'API' | 'UNIT' | 'INTEGRATION' | 'FUNCTIONAL_WEB' | 'FUNCTIONAL_MOBILE';
+export type TestType = 'WEB' | 'UNIT' | 'INTEGRATION';
 export type RiskLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 export type MemberRole = 'ADMIN' | 'TESTER' | 'DEVOPS';
 
@@ -18,9 +18,6 @@ export interface Project {
 export interface CreateProjectRequest {
   name: string;          // required
   description?: string;
-  gitRepoUrl?: string;
-  gitDefaultBranch?: string; // default 'main'
-  aiBuiltin?: boolean; // True to use internal Maven template without Git
 }
 
 export interface UpdateProjectRequest extends CreateProjectRequest {}
@@ -30,7 +27,9 @@ export interface Environment {
   name: string;
   baseUrlWeb?: string;
   baseUrlApi?: string;
-  variables?: string; // JSON string
+  gitRepoUrl?: string;   // source code repo (UNIT/INTEGRATION tests)
+  gitBranch?: string;    // branch of source code repo
+  databaseType?: string; // POSTGRESQL | MYSQL | H2 | MONGODB
   createdAt: string;
 }
 
@@ -38,7 +37,9 @@ export interface CreateEnvironmentRequest {
   name: string;
   baseUrlWeb?: string;
   baseUrlApi?: string;
-  variables?: string;
+  gitRepoUrl?: string;
+  gitBranch?: string;
+  databaseType?: string;
 }
 
 export interface UpdateEnvironmentRequest extends CreateEnvironmentRequest {}
@@ -71,6 +72,7 @@ export interface TestCase {
   title: string;
   description?: string;
   type: TestType;
+  gitRepoUrl?: string;
   springProfile?: string;
   databaseType?: string;
   priority?: number;
@@ -92,6 +94,7 @@ export interface CreateTestCaseRequest {
   title: string;
   description?: string;
   type: TestType;        // required
+  gitRepoUrl?: string;
   springProfile?: string;
   databaseType?: string; // POSTGRESQL | MYSQL | H2 | MONGODB
   priority?: number;
@@ -105,6 +108,7 @@ export interface CreateTestCaseRequest {
   testData?: string;
   tags?: string;
   maxDurationSeconds?: number;
+  targetClassName?: string;
 }
 
 export interface UpdateTestCaseRequest extends CreateTestCaseRequest {}

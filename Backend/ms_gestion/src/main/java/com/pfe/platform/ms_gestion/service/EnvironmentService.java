@@ -5,6 +5,9 @@ import com.pfe.platform.ms_gestion.dto.response.EnvironmentResponse;
 import com.pfe.platform.ms_gestion.entity.Environment;
 import com.pfe.platform.ms_gestion.entity.Project;
 import com.pfe.platform.ms_gestion.entity.ProjectMember;
+import com.pfe.platform.ms_gestion.repository.CampaignRepository;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import com.pfe.platform.ms_gestion.repository.EnvironmentRepository;
 import com.pfe.platform.ms_gestion.repository.ProjectMemberRepository;
 import com.pfe.platform.ms_gestion.repository.ProjectRepository;
@@ -22,6 +25,7 @@ public class EnvironmentService {
     private final EnvironmentRepository environmentRepository;
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
+    private final CampaignRepository campaignRepository;
 
     @Transactional
     public EnvironmentResponse add(Long projectId, CreateEnvironmentRequest request) {
@@ -37,7 +41,9 @@ public class EnvironmentService {
         env.setName(request.getName());
         env.setBaseUrlWeb(request.getBaseUrlWeb());
         env.setBaseUrlApi(request.getBaseUrlApi());
-        env.setVariables(request.getVariables());
+        env.setGitRepoUrl(request.getGitRepoUrl());
+        env.setGitBranch(request.getGitBranch());
+        env.setDatabaseType(request.getDatabaseType());
         env = environmentRepository.save(env);
         return mapToResponse(env);
     }
@@ -68,7 +74,9 @@ public class EnvironmentService {
         env.setName(request.getName());
         env.setBaseUrlWeb(request.getBaseUrlWeb());
         env.setBaseUrlApi(request.getBaseUrlApi());
-        env.setVariables(request.getVariables());
+        env.setGitRepoUrl(request.getGitRepoUrl());
+        env.setGitBranch(request.getGitBranch());
+        env.setDatabaseType(request.getDatabaseType());
         return mapToResponse(environmentRepository.save(env));
     }
 
@@ -76,6 +84,16 @@ public class EnvironmentService {
     public void delete(Long projectId, Long envId) {
         Environment env = getEnvOrThrow(envId, projectId);
         checkProjectRole(env.getProject(), ProjectMember.Role.ADMIN);
+
+        long campaignCount = campaignRepository.countByEnvironmentId(envId);
+        if (campaignCount > 0) {
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Impossible de supprimer cet environnement : " + campaignCount +
+                " campagne(s) l'utilisent encore. Supprimez d'abord ces campagnes."
+            );
+        }
+
         environmentRepository.delete(env);
     }
 
@@ -121,7 +139,9 @@ public class EnvironmentService {
                 .name(env.getName())
                 .baseUrlWeb(env.getBaseUrlWeb())
                 .baseUrlApi(env.getBaseUrlApi())
-                .variables(env.getVariables())
+                .gitRepoUrl(env.getGitRepoUrl())
+                .gitBranch(env.getGitBranch())
+                .databaseType(env.getDatabaseType())
                 .createdAt(env.getCreatedAt())
                 .build();
     }

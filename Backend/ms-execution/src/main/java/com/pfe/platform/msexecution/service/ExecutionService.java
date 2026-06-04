@@ -120,8 +120,19 @@ public class ExecutionService {
     @Value("${execution.maven-timeout-minutes:15}")
     private long mavenTimeoutMinutes;
 
+    @Value("${github.token:}")
+    private String githubToken;
+
     @Async
     public void runCampaign(Long campaignId) {
+        runCampaign(campaignId, null);
+    }
+
+    /**
+     * @param selectedTestCaseIds if non-null and non-empty, only these test cases are executed
+     */
+    @Async
+    public void runCampaign(Long campaignId, List<Long> selectedTestCaseIds) {
         log.info("=== STARTING CAMPAIGN EXECUTION FOR ID: {} ===", campaignId);
 
         Campaign campaign = campaignRepository.findById(campaignId)
@@ -151,7 +162,7 @@ public class ExecutionService {
         Path repoDir = null;
         try {
             log.info("[CAMPAIGN {}] Preparing base repository (project-level)", campaignId);
-            repoDir = prepareRepository(project, campaign);
+            repoDir = prepareRepository(project, campaign, env);
             log.info("Repository ready at: {}", repoDir);
             campaign.setProgress(20);
             campaign.setCurrentStep("Preparing campaign context");
@@ -169,6 +180,15 @@ public class ExecutionService {
         List<CampaignTestCase> ctcList = campaignTestCaseRepository
                 .findByCampaignIdOrderByExecutionOrder(campaignId);
         log.info("Found {} test cases for campaign", ctcList.size());
+
+        // Filter to selected test cases if specified (SELECTED run mode)
+        if (selectedTestCaseIds != null && !selectedTestCaseIds.isEmpty()) {
+            java.util.Set<Long> selectedSet = new java.util.HashSet<>(selectedTestCaseIds);
+            ctcList = ctcList.stream()
+                    .filter(ctc -> selectedSet.contains(ctc.getTestCaseId()))
+                    .toList();
+            log.info("[CAMPAIGN {}] Filtered to {} selected test cases (out of total)", campaignId, ctcList.size());
+        }
 
         if (ctcList.isEmpty()) {
             log.warn("No test cases found for campaign! Marking as finished successfully.");
@@ -203,6 +223,12 @@ public class ExecutionService {
                     continue;
                 }
 
+                // Fix 1: skip inactive test cases
+                if (Boolean.FALSE.equals(tc.getActive())) {
+                    log.info("[CAMPAIGN {}] TestCase {} is inactive, skipping", campaignId, tc.getId());
+                    continue;
+                }
+
                 log.info(
                         "[CAMPAIGN {}] TestCase {} => type={}, generated={}",
                         campaignId,
@@ -233,6 +259,20 @@ public class ExecutionService {
                         log.warn("[CAMPAIGN {}] Suite {} not found (TestCase {}), using base repo", campaignId, suiteId, tc.getId());
                     }
                     suiteForWorkDir = suite;
+                    // For UNIT/INTEGRATION suites without their own gitRepoUrl, inherit from environment
+                    String effectiveSuiteGitUrl = (suite != null && suite.getGitRepoUrl() != null && !suite.getGitRepoUrl().isBlank())
+                            ? suite.getGitRepoUrl()
+                            : ((env != null && env.getGitRepoUrl() != null && !env.getGitRepoUrl().isBlank()
+                                && (testType == TestCase.TestType.UNIT || testType == TestCase.TestType.INTEGRATION))
+                                ? env.getGitRepoUrl()
+                                : null);
+                    if (effectiveSuiteGitUrl != null) {
+                        if (suite != null && (suite.getGitRepoUrl() == null || suite.getGitRepoUrl().isBlank())) {
+                            // patch suite object so cache key uses env url
+                            suite.setGitRepoUrl(effectiveSuiteGitUrl);
+                            suite.setGitBranch(env.getGitBranch() != null ? env.getGitBranch() : "main");
+                        }
+                    }
                     if (suite != null && suite.getGitRepoUrl() != null && !suite.getGitRepoUrl().isBlank()) {
                         try {
                             TestSuite finalSuite = suite;
@@ -328,7 +368,14 @@ public class ExecutionService {
 
                 log.info("Executing test: {} ({})", tc.getId(),
                         tc.getGenerated() ? "GENERATED-" + tc.getId() : tc.getScriptPath());
+                // Fix 2: retry x2 for flaky tests
                 ExecutionResult result = executeRealTest(tc, env, workDir, campaignId);
+                if (Boolean.TRUE.equals(tc.getFlaky())
+                        && (result.getStatus() == ExecutionResult.ResultStatus.FAILURE
+                            || result.getStatus() == ExecutionResult.ResultStatus.ERROR)) {
+                    log.warn("[CAMPAIGN {}] TestCase {} is flaky and failed — retrying (attempt 2/2)", campaignId, tc.getId());
+                    result = executeRealTest(tc, env, workDir, campaignId);
+                }
                 result.setCampaignId(campaignId);
                 result.setTestCaseId(tc.getId());
 
@@ -456,17 +503,24 @@ public class ExecutionService {
     }
 
     // --- Préparation du dépôt d'exécution (Git externe ou template IA intégré) ---
-    private Path prepareRepository(Project project, Campaign campaign) throws IOException, GitAPIException {
-        String gitUrl = project.getGitRepoUrl();
+    private Path prepareRepository(Project project, Campaign campaign, Environment env) throws IOException, GitAPIException {
+        // Fix 3: gitRepoUrl is now on Environment (primary) — project.gitRepoUrl is legacy fallback
+        String gitUrl = (env != null && env.getGitRepoUrl() != null && !env.getGitRepoUrl().isBlank())
+                ? env.getGitRepoUrl()
+                : project.getGitRepoUrl();
+
         if (gitUrl == null || gitUrl.isBlank() || "ai-builtin".equalsIgnoreCase(gitUrl)) {
-            log.info("Using built-in AI test template (no Git URL / ai-builtin)");
+            log.info("Using built-in AI test template (no Git URL configured on environment or project)");
             return prepareBuiltInTemplate();
-        } else {
-            String branch = campaign.getGitBranch() != null ? campaign.getGitBranch() :
-                    (project.getGitDefaultBranch() != null ? project.getGitDefaultBranch() : "main");
-            log.info("Cloning repository from: {} on branch: {}", gitUrl, branch);
-            return cloneRepository(gitUrl, branch);
         }
+
+        // Branch comes from the environment (all config is on the environment now)
+        String branch = (env != null && env.getGitBranch() != null && !env.getGitBranch().isBlank())
+                ? env.getGitBranch()
+                : "main";
+
+        log.info("Cloning repository from: {} on branch: {}", gitUrl, branch);
+        return cloneRepository(gitUrl, branch);
     }
 
     private Path prepareBuiltInTemplate() throws IOException {
@@ -632,9 +686,13 @@ public class ExecutionService {
 
     private Path cloneRepository(String repoUrl, String branch) throws GitAPIException, IOException {
         Path dir = createTempDir("exec-");
+        // Embed token in URL for fine-grained PAT compatibility (avoids JGit CredentialsProvider quirks)
+        String effectiveUrl = (githubToken != null && !githubToken.isBlank() && repoUrl.startsWith("https://"))
+                ? repoUrl.replace("https://", "https://oauth2:" + githubToken + "@")
+                : repoUrl;
         log.info("Cloning Git repo => url='{}', branch='{}', dest='{}'", repoUrl, branch, dir);
         Git.cloneRepository()
-                .setURI(repoUrl)
+                .setURI(effectiveUrl)
                 .setDirectory(dir.toFile())
                 .setBranch(branch)
                 .call();
@@ -709,6 +767,19 @@ public class ExecutionService {
                 Files.createDirectories(workDir.resolve("screenshots"));
             } catch (Exception e) {
                 log.debug("[TESTCASE {}] Unable to pre-create screenshots dir under {}: {}", tc.getId(), workDir, e.toString());
+            }
+
+            // Fix 7: declare testDataFile early so it is in scope for buildMavenCommand
+            Path testDataFile = null;
+            if (tc.getTestData() != null && !tc.getTestData().isBlank()) {
+                try {
+                    testDataFile = workDir.resolve("test-data-" + tc.getId() + ".json");
+                    Files.writeString(testDataFile, tc.getTestData(), StandardCharsets.UTF_8);
+                    log.info("[TESTCASE {}] testData written to {}", tc.getId(), testDataFile);
+                } catch (Exception e) {
+                    log.warn("[TESTCASE {}] Failed to write testData file: {}", tc.getId(), e.getMessage());
+                    testDataFile = null;
+                }
             }
 
             Path pom = workDir.resolve("pom.xml");
@@ -804,10 +875,12 @@ public class ExecutionService {
             // Ensure a default Spring Boot test profile exists for integration tests.
             TestCase.TestType effectiveType = tc.getType() != null ? tc.getType() : TestCase.TestType.WEB;
             if (effectiveType == TestCase.TestType.INTEGRATION) {
-                // databaseType must be provided for integration tests
-                String dbType = tc.getDatabaseType();
+                // Fix 4: databaseType — tc level overrides env level
+                String dbType = (tc.getDatabaseType() != null && !tc.getDatabaseType().isBlank())
+                        ? tc.getDatabaseType()
+                        : (env != null ? env.getDatabaseType() : null);
                 if (dbType == null || dbType.isBlank()) {
-                    String message = "databaseType is required for INTEGRATION tests";
+                    String message = "databaseType is required for INTEGRATION tests (set on test case or environment)";
                     log.error("[TESTCASE {}] {}", tc.getId(), message);
                     result.setDurationMs(System.currentTimeMillis() - start);
                     result.setStatus(ExecutionResult.ResultStatus.ERROR);
@@ -817,7 +890,7 @@ public class ExecutionService {
                 }
 
                 // Ensure dependencies for integration tests (DB-specific additions included)
-                ensureTestDependencies(pom, effectiveType, dbType);
+                ensureTestDependencies(pom, effectiveType, dbType); // dbType already resolved above
 
                 // Apply DB-specific test properties
                 ensureTestProperties(workDir, dbType);
@@ -832,7 +905,15 @@ public class ExecutionService {
                 }
             }
 
-            List<String> command = buildMavenCommand(tc, env, workDir, className, wrapper);
+            List<String> command = buildMavenCommand(tc, env, workDir, className, wrapper, testDataFile);
+            // Fix 8: inject appVersion if available
+            if (campaignId != null) {
+                Campaign campaignForVersion = campaignRepository.findById(campaignId).orElse(null);
+                if (campaignForVersion != null && campaignForVersion.getAppVersion() != null
+                        && !campaignForVersion.getAppVersion().isBlank()) {
+                    command.add("-Dapp.version=" + campaignForVersion.getAppVersion());
+                }
+            }
 
             log.info("Maven command: {}", String.join(" ", command));
             log.info("Working directory: {}", workDir);
@@ -856,7 +937,13 @@ public class ExecutionService {
                     tc.getId(),
                     mavenTimeoutMinutes
             );
-            boolean finished = process.waitFor(mavenTimeoutMinutes, TimeUnit.MINUTES);
+            // Fix 6: per-test timeout from maxDurationSeconds, fallback to global
+            long effectiveTimeoutMinutes = (tc.getMaxDurationSeconds() != null && tc.getMaxDurationSeconds() > 0)
+                    ? Math.max(1, (long) Math.ceil(tc.getMaxDurationSeconds() / 60.0))
+                    : mavenTimeoutMinutes;
+            log.info("[TESTCASE {}] Timeout set to {} minute(s) (maxDurationSeconds={})",
+                    tc.getId(), effectiveTimeoutMinutes, tc.getMaxDurationSeconds());
+            boolean finished = process.waitFor(effectiveTimeoutMinutes, TimeUnit.MINUTES);
             long waitForCompletedTime = System.currentTimeMillis();
             log.debug(
                     "[TESTCASE {}] process.waitFor() completed (elapsed={}ms, finished={})",
@@ -883,7 +970,7 @@ public class ExecutionService {
                 process.destroyForcibly();
                 result.setDurationMs(System.currentTimeMillis() - start);
                 result.setStatus(ExecutionResult.ResultStatus.ERROR);
-                result.setErrorMessage("Maven timeout after " + mavenTimeoutMinutes + " minutes");
+                result.setErrorMessage("Maven timeout after " + effectiveTimeoutMinutes + " minutes");
                 result.setLogs(combinedOutput);
                 log.error("[TESTCASE {}] Maven TIMEOUT after {} minutes (pid={})", tc.getId(), mavenTimeoutMinutes, process.pid());
                 log.error("[TESTCASE {}] Maven output (first 500 lines, truncated):\n{}", tc.getId(), firstLines(combinedOutput, 500, 20_000));
@@ -899,6 +986,16 @@ public class ExecutionService {
             if (!combinedOutput.isBlank()) {
                 int max = Math.min(combinedOutput.length(), 800);
                 log.debug("[TESTCASE {}] Maven output (first {} chars): {}", tc.getId(), max, combinedOutput.substring(0, max));
+            }
+
+            // Parse Surefire XML for per-method results
+            try {
+                String methodResults = parseSurefireReports(workDir);
+                if (methodResults != null) {
+                    result.setTestMethodResults(methodResults);
+                }
+            } catch (Exception e) {
+                log.warn("[TESTCASE {}] Failed to parse Surefire reports: {}", tc.getId(), e.getMessage());
             }
 
             if (exitCode != 0) {
@@ -1355,6 +1452,10 @@ public class ExecutionService {
     }
 
     private List<String> buildMavenCommand(TestCase tc, Environment env, Path repoDir, String className, Path wrapper) {
+        return buildMavenCommand(tc, env, repoDir, className, wrapper, null);
+    }
+
+    private List<String> buildMavenCommand(TestCase tc, Environment env, Path repoDir, String className, Path wrapper, Path testDataFile) {
         List<String> command = new ArrayList<>();
         String os = System.getProperty("os.name").toLowerCase();
 
@@ -1377,19 +1478,30 @@ public class ExecutionService {
         TestCase.TestType testType = tc.getType() != null ? tc.getType() : TestCase.TestType.WEB;
         String baseUrl = resolveBaseUrl(testType, env);
 
+        // Fix 4: databaseType — tc level overrides env level
+        String effectiveDbType = (tc.getDatabaseType() != null && !tc.getDatabaseType().isBlank())
+                ? tc.getDatabaseType()
+                : (env != null ? env.getDatabaseType() : null);
+
+        // Fix 5: springProfile from tc, fallback to "test"
+        String effectiveProfile = (tc.getSpringProfile() != null && !tc.getSpringProfile().isBlank())
+                ? tc.getSpringProfile()
+                : "test";
+
         switch (testType) {
             case UNIT:
                 command.add("-Dtest.layer=unit");
+                command.add("-Dspring.profiles.active=" + effectiveProfile);
                 break;
             case INTEGRATION:
                 command.add("-Dtest.layer=integration");
-                if (tc.getDatabaseType() != null && tc.getDatabaseType().trim().equalsIgnoreCase("H2")) {
+                if (effectiveDbType != null && effectiveDbType.trim().equalsIgnoreCase("H2")) {
                     command.add("-Dspring.jpa.database-platform=org.hibernate.dialect.H2Dialect");
                 }
                 if (baseUrl != null && !baseUrl.isBlank()) {
                     command.add("-DBASE_URL=" + baseUrl);
                 }
-                command.add("-Dspring.profiles.active=test");
+                command.add("-Dspring.profiles.active=" + effectiveProfile);
                 break;
             case API:
             case WEB:
@@ -1401,9 +1513,13 @@ public class ExecutionService {
                 break;
         }
 
-        if (env != null && env.getVariables() != null && !env.getVariables().isEmpty()) {
-            command.add("-Denv.variables=" + env.getVariables());
+        // Fix 7: testData file path
+        if (testDataFile != null && Files.exists(testDataFile)) {
+            command.add("-Dtest.data.file=" + testDataFile.toAbsolutePath());
         }
+
+        // Fix 8: appVersion from campaign
+        // (passed in via env.variables field as workaround — injected by caller if needed)
 
         return command;
     }
@@ -1906,6 +2022,105 @@ spring.jpa.hibernate.ddl-auto=create-drop
         Files.copy(src, out, StandardCopyOption.REPLACE_EXISTING);
         result.setScreenshotUrl(out.toAbsolutePath().toString());
         log.info("Copied screenshot {} -> {}", src, out);
+    }
+
+    /**
+     * Parses all Surefire XML report files under target/surefire-reports/
+     * and returns a JSON array of per-method results.
+     * Format: [{"method":"testCreate","status":"PASS","durationMs":123},
+     *          {"method":"testDelete","status":"FAIL","message":"expected...","stacktrace":"..."}]
+     */
+    private String parseSurefireReports(Path workDir) {
+        if (workDir == null) return null;
+        Path reportsDir = workDir.resolve("target/surefire-reports");
+        if (!Files.isDirectory(reportsDir)) return null;
+
+        StringBuilder json = new StringBuilder("[");
+        boolean first = true;
+
+        try (var stream = Files.list(reportsDir)) {
+            List<Path> xmlFiles = stream
+                    .filter(p -> p.getFileName() != null
+                            && p.getFileName().toString().startsWith("TEST-")
+                            && p.getFileName().toString().endsWith(".xml"))
+                    .collect(Collectors.toList());
+
+            for (Path xmlFile : xmlFiles) {
+                try {
+                    DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+                    factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+                    DocumentBuilder builder = factory.newDocumentBuilder();
+                    Document doc = builder.parse(xmlFile.toFile());
+                    NodeList testcases = doc.getElementsByTagName("testcase");
+
+                    for (int i = 0; i < testcases.getLength(); i++) {
+                        Element tc = (Element) testcases.item(i);
+                        String methodName = tc.getAttribute("name");
+                        String durationStr = tc.getAttribute("time");
+                        long durationMs = 0;
+                        try {
+                            durationMs = Math.round(Double.parseDouble(durationStr) * 1000);
+                        } catch (Exception ignored) {}
+
+                        NodeList failures = tc.getElementsByTagName("failure");
+                        NodeList errors   = tc.getElementsByTagName("error");
+
+                        String status;
+                        String message = null;
+                        String stacktrace = null;
+
+                        if (failures.getLength() > 0) {
+                            status = "FAIL";
+                            Element f = (Element) failures.item(0);
+                            message    = f.getAttribute("message");
+                            stacktrace = f.getTextContent().trim();
+                        } else if (errors.getLength() > 0) {
+                            status = "ERROR";
+                            Element e = (Element) errors.item(0);
+                            message    = e.getAttribute("message");
+                            stacktrace = e.getTextContent().trim();
+                        } else {
+                            status = "PASS";
+                        }
+
+                        if (!first) json.append(",");
+                        first = false;
+                        json.append("{");
+                        json.append("\"method\":").append(jsonStr(methodName)).append(",");
+                        json.append("\"status\":").append(jsonStr(status)).append(",");
+                        json.append("\"durationMs\":").append(durationMs);
+                        if (message != null && !message.isBlank()) {
+                            json.append(",\"message\":").append(jsonStr(message));
+                        }
+                        if (stacktrace != null && !stacktrace.isBlank()) {
+                            // cap stacktrace at 1000 chars
+                            String st = stacktrace.length() > 1000 ? stacktrace.substring(0, 1000) + "..." : stacktrace;
+                            json.append(",\"stacktrace\":").append(jsonStr(st));
+                        }
+                        json.append("}");
+                    }
+                } catch (Exception e) {
+                    log.debug("Failed to parse Surefire XML {}: {}", xmlFile, e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Failed to list Surefire reports dir {}: {}", reportsDir, e.getMessage());
+            return null;
+        }
+
+        json.append("]");
+        return first ? null : json.toString(); // return null if no methods found
+    }
+
+    private String jsonStr(String value) {
+        if (value == null) return "null";
+        return "\"" + value
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t")
+                + "\"";
     }
 
     private String findRootPackage(Path repoDir) {

@@ -65,7 +65,9 @@ type EnvironmentFormState = {
   name: string
   baseUrlWeb: string
   baseUrlApi: string
-  variables: string
+  gitRepoUrl: string
+  gitBranch: string
+  databaseType: string
 }
 
 type SuiteFormState = {
@@ -79,7 +81,7 @@ type SuiteFormState = {
 }
 
 // Add suite type to form state
-type SuiteType = 'WEB' | 'API' | 'UNIT' | 'INTEGRATION' | 'FUNCTIONAL_WEB' | 'FUNCTIONAL_MOBILE'
+type SuiteType = 'WEB' | 'UNIT' | 'INTEGRATION'
 
 
 type MemberFormState = {
@@ -91,7 +93,9 @@ const emptyEnvForm: EnvironmentFormState = {
   name: '',
   baseUrlWeb: '',
   baseUrlApi: '',
-  variables: '',
+  gitRepoUrl: '',
+  gitBranch: '',
+  databaseType: '',
 }
 
 const emptySuiteForm: SuiteFormState = {
@@ -141,9 +145,7 @@ const normalizeRepoUrl = (url: string): string =>
 
 const isRepoMandatorySuiteType = (type?: SuiteType): boolean => type === 'UNIT' || type === 'INTEGRATION'
 
-const isUxSuiteType = (type?: SuiteType): boolean => type === 'FUNCTIONAL_WEB' || type === 'FUNCTIONAL_MOBILE'
-
-const isWebOrApiSuiteType = (type?: SuiteType): boolean => type === 'WEB' || type === 'API' || isUxSuiteType(type)
+const isWebOrApiSuiteType = (type?: SuiteType): boolean => type === 'WEB'
 
 const shouldShowGitRepoFields = (type?: SuiteType, useGitRepo?: boolean): boolean =>
   isRepoMandatorySuiteType(type) || (isWebOrApiSuiteType(type) && Boolean(useGitRepo))
@@ -242,6 +244,9 @@ export default function ProjectDetailsPage() {
 
   const [branchState, setBranchState] = useState<BranchListState>({ kind: 'idle', branches: [] })
   const [repoBranchCache, setRepoBranchCache] = useState<Record<string, string[]>>({})
+
+  // Dedicated branch state for environment form (separate from suite form)
+  const [envBranchState, setEnvBranchState] = useState<BranchListState>({ kind: 'idle', branches: [] })
 
   const [envCreateOpen, setEnvCreateOpen] = useState(false)
   const [envEditOpen, setEnvEditOpen] = useState(false)
@@ -379,7 +384,9 @@ export default function ProjectDetailsPage() {
       name: env.name ?? '',
       baseUrlWeb: env.baseUrlWeb ?? '',
       baseUrlApi: env.baseUrlApi ?? '',
-      variables: env.variables ?? '',
+      gitRepoUrl: (env as any).gitRepoUrl ?? '',
+      gitBranch: (env as any).gitBranch ?? '',
+      databaseType: (env as any).databaseType ?? '',
     })
     setEnvEditOpen(true)
   }
@@ -435,18 +442,13 @@ export default function ProjectDetailsPage() {
     setFormError(null)
 
     try {
-      const { value: variables, error } = normalizeVariables(envForm.variables)
-      if (error) {
-        setFormError(error)
-        setIsEnvSubmitting(false)
-        return
-      }
-
       const payload: CreateEnvironmentRequest = {
         name: envForm.name.trim(),
         baseUrlWeb: envForm.baseUrlWeb.trim() || undefined,
         baseUrlApi: envForm.baseUrlApi.trim() || undefined,
-        variables,
+        gitRepoUrl: envForm.gitRepoUrl.trim() || undefined,
+        gitBranch: envForm.gitBranch.trim() || undefined,
+        databaseType: envForm.databaseType.trim() || undefined,
       }
       await environmentService.create(projectId, payload)
       setEnvCreateOpen(false)
@@ -580,6 +582,58 @@ export default function ProjectDetailsPage() {
     }
   }, [suiteCreateOpen, suiteEditOpen, suiteForm.type, suiteForm.useGitRepo])
 
+  // Fetch GitHub repos when environment dialog opens
+  useEffect(() => {
+    if (!envCreateOpen && !envEditOpen) return
+    void fetchGitHubRepos()
+    setEnvBranchState({ kind: 'idle', branches: [] })
+  }, [envCreateOpen, envEditOpen])
+
+  // Fetch branches when env form's gitRepoUrl changes
+  useEffect(() => {
+    if (!envCreateOpen && !envEditOpen) return
+    const url = envForm.gitRepoUrl.trim()
+    if (!url) {
+      setEnvBranchState({ kind: 'idle', branches: [] })
+      return
+    }
+    if (gitReposState !== 'ready' || gitRepos.length === 0) return
+
+    const repo = gitRepos.find((r) => normalizeRepoUrl(r.url) === normalizeRepoUrl(url))
+    if (!repo) return
+
+    const localBranches = Array.isArray(repo.branches) ? repo.branches : []
+    if (localBranches.length > 0) {
+      setEnvBranchState({ kind: 'available', branches: localBranches })
+      if (!envForm.gitBranch.trim() && repo.defaultBranch) {
+        setEnvForm((prev) => ({ ...prev, gitBranch: repo.defaultBranch! }))
+      }
+      return
+    }
+
+    void (async () => {
+      setEnvBranchState({ kind: 'loading', branches: [] })
+      const cacheKey = `${repo.owner}/${repo.name}`
+      if (repoBranchCache[cacheKey]?.length) {
+        setEnvBranchState({ kind: 'available', branches: repoBranchCache[cacheKey] })
+        return
+      }
+      try {
+        const res = await apiFetch(`/api/github/repos/${repo.owner}/${repo.name}/branches`)
+        if (!res.ok) { setEnvBranchState({ kind: 'error', branches: [] }); return }
+        const data = await res.json().catch(() => null)
+        const branches = extractBranchNames(data)
+        setRepoBranchCache((prev) => ({ ...prev, [cacheKey]: branches }))
+        setEnvBranchState({ kind: 'available', branches })
+        if (!envForm.gitBranch.trim() && repo.defaultBranch) {
+          setEnvForm((prev) => ({ ...prev, gitBranch: repo.defaultBranch! }))
+        }
+      } catch {
+        setEnvBranchState({ kind: 'error', branches: [] })
+      }
+    })()
+  }, [envForm.gitRepoUrl, envCreateOpen, envEditOpen, gitReposState, gitRepos])
+
   const fetchBranches = async (owner: string, repo: string) => {
     const cacheKey = `${owner}/${repo}`
     if (repoBranchCache[cacheKey]?.length) {
@@ -684,18 +738,13 @@ export default function ProjectDetailsPage() {
     setFormError(null)
 
     try {
-      const { value: variables, error } = normalizeVariables(envForm.variables)
-      if (error) {
-        setFormError(error)
-        setIsEnvSubmitting(false)
-        return
-      }
-
       const payload: UpdateEnvironmentRequest = {
         name: envForm.name.trim(),
         baseUrlWeb: envForm.baseUrlWeb.trim() || undefined,
         baseUrlApi: envForm.baseUrlApi.trim() || undefined,
-        variables,
+        gitRepoUrl: envForm.gitRepoUrl.trim() || undefined,
+        gitBranch: envForm.gitBranch.trim() || undefined,
+        databaseType: envForm.databaseType.trim() || undefined,
       }
       await environmentService.update(projectId, envEditing.id, payload)
       setEnvEditOpen(false)
@@ -1110,15 +1159,65 @@ export default function ProjectDetailsPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="env-variables">Variables (JSON)</Label>
-          <Textarea
-            id="env-variables"
-            value={envForm.variables}
-            onChange={(event) =>
-              setEnvForm((prev) => ({ ...prev, variables: event.target.value }))
-            }
-            placeholder='{"BASE_URL": "https://staging.example.com"}'
-          />
+          <Label htmlFor="env-git-repo">Source code repository <span className="text-muted-foreground text-xs">(for UNIT / INTEGRATION tests)</span></Label>
+          <Select
+            value={envForm.gitRepoUrl}
+            onValueChange={(v) => setEnvForm((prev) => ({ ...prev, gitRepoUrl: v, gitBranch: '' }))}
+            disabled={gitReposState === 'loading'}
+          >
+            <SelectTrigger id="env-git-repo">
+              <SelectValue placeholder={
+                gitReposState === 'loading' ? 'Loading...' :
+                gitRepos.length > 0 ? 'Select repository' : 'No GitHub repos connected'
+              } />
+            </SelectTrigger>
+            <SelectContent>
+              {gitReposState === 'loading' && <SelectItem value="__loading__" disabled>Loading...</SelectItem>}
+              {gitReposState === 'ready' && gitRepos.length === 0 && <SelectItem value="__none__" disabled>No connected GitHub repositories</SelectItem>}
+              {gitRepos.map((r) => <SelectItem key={r.key} value={r.url}>{r.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {gitReposMessage && <p className="text-xs text-muted-foreground">{gitReposMessage}</p>}
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="env-git-branch">Branch</Label>
+          <Select
+            value={envForm.gitBranch}
+            onValueChange={(v) => setEnvForm((prev) => ({ ...prev, gitBranch: v }))}
+            disabled={!envForm.gitRepoUrl.trim()}
+          >
+            <SelectTrigger id="env-git-branch">
+              <SelectValue placeholder={
+                !envForm.gitRepoUrl.trim() ? 'Select repository first' :
+                envBranchState.kind === 'loading' ? 'Loading branches...' :
+                envBranchState.kind === 'available' && envBranchState.branches.length > 0 ? 'Select branch' : 'No branches'
+              } />
+            </SelectTrigger>
+            <SelectContent>
+              {envBranchState.kind === 'loading' && <SelectItem value="__loading__" disabled>Loading...</SelectItem>}
+              {envBranchState.kind === 'error' && <SelectItem value="__error__" disabled>Failed to load branches</SelectItem>}
+              {envBranchState.kind === 'available' && envForm.gitBranch.trim() && !envBranchState.branches.includes(envForm.gitBranch.trim()) && (
+                <SelectItem value={envForm.gitBranch.trim()}>{envForm.gitBranch.trim()} (current)</SelectItem>
+              )}
+              {envBranchState.kind === 'available' && envBranchState.branches.map((b) => (
+                <SelectItem key={b} value={b}>{b}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="env-db-type">Database type <span className="text-muted-foreground text-xs">(for INTEGRATION tests)</span></Label>
+          <Select value={envForm.databaseType} onValueChange={(v) => setEnvForm((prev) => ({ ...prev, databaseType: v }))}>
+            <SelectTrigger id="env-db-type">
+              <SelectValue placeholder="Select database type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="H2">H2 (in-memory)</SelectItem>
+              <SelectItem value="POSTGRESQL">PostgreSQL</SelectItem>
+              <SelectItem value="MYSQL">MySQL</SelectItem>
+              <SelectItem value="MONGODB">MongoDB</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
       </FormDialog>
@@ -1162,14 +1261,65 @@ export default function ProjectDetailsPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="env-edit-variables">Variables (JSON)</Label>
-          <Textarea
-            id="env-edit-variables"
-            value={envForm.variables}
-            onChange={(event) =>
-              setEnvForm((prev) => ({ ...prev, variables: event.target.value }))
-            }
-          />
+          <Label htmlFor="env-edit-git-repo">Source code repository <span className="text-muted-foreground text-xs">(for UNIT / INTEGRATION tests)</span></Label>
+          <Select
+            value={envForm.gitRepoUrl}
+            onValueChange={(v) => setEnvForm((prev) => ({ ...prev, gitRepoUrl: v, gitBranch: '' }))}
+            disabled={gitReposState === 'loading'}
+          >
+            <SelectTrigger id="env-edit-git-repo">
+              <SelectValue placeholder={
+                gitReposState === 'loading' ? 'Loading...' :
+                gitRepos.length > 0 ? 'Select repository' : 'No GitHub repos connected'
+              } />
+            </SelectTrigger>
+            <SelectContent>
+              {gitReposState === 'loading' && <SelectItem value="__loading__" disabled>Loading...</SelectItem>}
+              {gitReposState === 'ready' && gitRepos.length === 0 && <SelectItem value="__none__" disabled>No connected GitHub repositories</SelectItem>}
+              {gitRepos.map((r) => <SelectItem key={r.key} value={r.url}>{r.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {gitReposMessage && <p className="text-xs text-muted-foreground">{gitReposMessage}</p>}
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="env-edit-git-branch">Branch</Label>
+          <Select
+            value={envForm.gitBranch}
+            onValueChange={(v) => setEnvForm((prev) => ({ ...prev, gitBranch: v }))}
+            disabled={!envForm.gitRepoUrl.trim()}
+          >
+            <SelectTrigger id="env-edit-git-branch">
+              <SelectValue placeholder={
+                !envForm.gitRepoUrl.trim() ? 'Select repository first' :
+                envBranchState.kind === 'loading' ? 'Loading branches...' :
+                envBranchState.kind === 'available' && envBranchState.branches.length > 0 ? 'Select branch' : 'No branches'
+              } />
+            </SelectTrigger>
+            <SelectContent>
+              {envBranchState.kind === 'loading' && <SelectItem value="__loading__" disabled>Loading...</SelectItem>}
+              {envBranchState.kind === 'error' && <SelectItem value="__error__" disabled>Failed to load branches</SelectItem>}
+              {envBranchState.kind === 'available' && envForm.gitBranch.trim() && !envBranchState.branches.includes(envForm.gitBranch.trim()) && (
+                <SelectItem value={envForm.gitBranch.trim()}>{envForm.gitBranch.trim()} (current)</SelectItem>
+              )}
+              {envBranchState.kind === 'available' && envBranchState.branches.map((b) => (
+                <SelectItem key={b} value={b}>{b}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="env-edit-db-type">Database type <span className="text-muted-foreground text-xs">(for INTEGRATION tests)</span></Label>
+          <Select value={envForm.databaseType} onValueChange={(v) => setEnvForm((prev) => ({ ...prev, databaseType: v }))}>
+            <SelectTrigger id="env-edit-db-type">
+              <SelectValue placeholder="Select database type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="H2">H2 (in-memory)</SelectItem>
+              <SelectItem value="POSTGRESQL">PostgreSQL</SelectItem>
+              <SelectItem value="MYSQL">MySQL</SelectItem>
+              <SelectItem value="MONGODB">MongoDB</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
       </FormDialog>
@@ -1192,12 +1342,7 @@ export default function ProjectDetailsPage() {
         submitLabel="Create suite"
         isSubmitting={isSuiteSubmitting}
         onSubmit={submitSuiteCreate}
-        disableSubmit={
-          (isRepoMandatorySuiteType(suiteForm.type) &&
-            (!suiteForm.gitRepoUrl.trim() || !suiteForm.gitBranch.trim())) ||
-          ((suiteForm.type === 'UNIT' || suiteForm.type === 'INTEGRATION') &&
-            !suiteForm.modulePath.trim())
-        }
+        disableSubmit={false}
       >
         <div className="space-y-2">
           <Label htmlFor="suite-name">Name</Label>
@@ -1248,12 +1393,9 @@ export default function ProjectDetailsPage() {
               <SelectValue placeholder="Select type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="UNIT">UNIT</SelectItem>
-              <SelectItem value="INTEGRATION">INTEGRATION</SelectItem>
-              <SelectItem value="WEB">WEB</SelectItem>
-              <SelectItem value="API">API</SelectItem>
-              <SelectItem value="FUNCTIONAL_WEB">FUNCTIONAL_WEB</SelectItem>
-              <SelectItem value="FUNCTIONAL_MOBILE">FUNCTIONAL_MOBILE</SelectItem>
+              <SelectItem value="UNIT">Unit Test</SelectItem>
+              <SelectItem value="INTEGRATION">Integration Test</SelectItem>
+              <SelectItem value="WEB">E2E</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -1276,137 +1418,6 @@ export default function ProjectDetailsPage() {
           </div>
         ) : null}
 
-        {isWebOrApiSuiteType(suiteForm.type) ? (
-          <div className="flex items-start justify-between gap-4 rounded-md border p-3">
-            <div className="space-y-1">
-              <Label>Attach Git repository (optional)</Label>
-              <p className="text-xs text-muted-foreground">
-                WEB/API/UX suites can use a separate test repository.
-              </p>
-            </div>
-            <Switch
-              checked={suiteForm.useGitRepo}
-              onCheckedChange={(checked) => {
-                if (!checked) {
-                  setBranchState({ kind: 'idle', branches: [] })
-                }
-                setSuiteForm((prev) => ({
-                  ...prev,
-                  useGitRepo: checked,
-                  gitRepoUrl: checked ? prev.gitRepoUrl : '',
-                  gitBranch: checked ? prev.gitBranch : '',
-                }))
-              }}
-            />
-          </div>
-        ) : null}
-
-        {shouldShowGitRepoFields(suiteForm.type, suiteForm.useGitRepo) ? (
-          <>
-            <div className="space-y-2">
-              <Label>Git Repository{isRepoMandatorySuiteType(suiteForm.type) ? ' *' : ''}</Label>
-              <Select
-                value={suiteForm.gitRepoUrl}
-                onValueChange={(value) =>
-                  setSuiteForm((prev) => ({
-                    ...prev,
-                    gitRepoUrl: value,
-                    gitBranch: '',
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder={
-                      gitReposState === 'loading'
-                        ? 'Loading...'
-                        : gitReposState === 'ready' && gitRepos.length > 0
-                          ? 'Select repository'
-                          : 'No repos'
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {gitReposState === 'loading' ? (
-                    <SelectItem value="__loading__" disabled>Loading...</SelectItem>
-                  ) : null}
-                  {gitReposState === 'error' ? (
-                    <SelectItem value="__error__" disabled>Failed to load</SelectItem>
-                  ) : null}
-                  {gitReposState === 'ready' && gitRepos.length === 0 ? (
-                    <SelectItem value="__none__" disabled>No connected GitHub repositories</SelectItem>
-                  ) : null}
-                  {gitRepos.map((r) => (
-                    <SelectItem key={r.key} value={r.url}>
-                      {r.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {gitReposMessage ? (
-                <p className="text-xs text-muted-foreground">{gitReposMessage}</p>
-              ) : null}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="suite-git-branch">Git Branch{isRepoMandatorySuiteType(suiteForm.type) ? ' *' : ''}</Label>
-              <Select
-                value={suiteForm.gitBranch}
-                onValueChange={(value) => {
-                  setSuiteForm((prev) => ({ ...prev, gitBranch: value }))
-                }}
-                disabled={!suiteForm.gitRepoUrl.trim()}
-              >
-                <SelectTrigger id="suite-git-branch">
-                  <SelectValue
-                    placeholder={
-                      !suiteForm.gitRepoUrl.trim()
-                        ? 'Select repository first'
-                        : branchState.kind === 'loading'
-                          ? 'Loading branches...'
-                          : branchState.kind === 'available' && branchState.branches.length > 0
-                            ? 'Select branch'
-                            : 'No branches'
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {branchState.kind === 'loading' ? (
-                    <SelectItem value="__loading__" disabled>
-                      Loading...
-                    </SelectItem>
-                  ) : null}
-                  {branchState.kind === 'error' ? (
-                    <SelectItem value="__error__" disabled>
-                      Failed to load branches
-                    </SelectItem>
-                  ) : null}
-                  {branchState.kind === 'available' && branchState.branches.length === 0 ? (
-                    <SelectItem value="__none__" disabled>
-                      No branches
-                    </SelectItem>
-                  ) : null}
-                  {branchState.kind === 'available' &&
-                  suiteForm.gitBranch.trim() &&
-                  !branchState.branches.includes(suiteForm.gitBranch.trim()) ? (
-                    <SelectItem value={suiteForm.gitBranch.trim()}>
-                      {suiteForm.gitBranch.trim()} (current)
-                    </SelectItem>
-                  ) : null}
-                  {branchState.kind === 'available'
-                    ? branchState.branches.map((b) => (
-                        <SelectItem key={b} value={b}>
-                          {b}
-                        </SelectItem>
-                      ))
-                    : null}
-                </SelectContent>
-              </Select>
-              {branchState.kind === 'error' ? (
-                <p className="text-xs text-muted-foreground">{branchState.message}</p>
-              ) : null}
-            </div>
-          </>
-        ) : null}
         {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
       </FormDialog>
 
@@ -1418,12 +1429,7 @@ export default function ProjectDetailsPage() {
         submitLabel="Save changes"
         isSubmitting={isSuiteSubmitting}
         onSubmit={submitSuiteEdit}
-        disableSubmit={
-          (isRepoMandatorySuiteType(suiteForm.type) &&
-            (!suiteForm.gitRepoUrl.trim() || !suiteForm.gitBranch.trim())) ||
-          ((suiteForm.type === 'UNIT' || suiteForm.type === 'INTEGRATION') &&
-            !suiteForm.modulePath.trim())
-        }
+        disableSubmit={false}
       >
         <div className="space-y-2">
           <Label htmlFor="suite-edit-name">Name</Label>
@@ -1471,10 +1477,9 @@ export default function ProjectDetailsPage() {
               <SelectValue placeholder="Select type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="UNIT">UNIT</SelectItem>
-              <SelectItem value="INTEGRATION">INTEGRATION</SelectItem>
-              <SelectItem value="WEB">WEB</SelectItem>
-              <SelectItem value="API">API</SelectItem>
+              <SelectItem value="UNIT">Unit Test</SelectItem>
+              <SelectItem value="INTEGRATION">Integration Test</SelectItem>
+              <SelectItem value="WEB">E2E</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -1497,137 +1502,6 @@ export default function ProjectDetailsPage() {
           </div>
         ) : null}
 
-        {isWebOrApiSuiteType(suiteForm.type) ? (
-          <div className="flex items-start justify-between gap-4 rounded-md border p-3">
-            <div className="space-y-1">
-              <Label>Attach Git repository (optional)</Label>
-              <p className="text-xs text-muted-foreground">
-                WEB/API suites can use a separate test repository.
-              </p>
-            </div>
-            <Switch
-              checked={suiteForm.useGitRepo}
-              onCheckedChange={(checked) => {
-                if (!checked) {
-                  setBranchState({ kind: 'idle', branches: [] })
-                }
-                setSuiteForm((prev) => ({
-                  ...prev,
-                  useGitRepo: checked,
-                  gitRepoUrl: checked ? prev.gitRepoUrl : '',
-                  gitBranch: checked ? prev.gitBranch : '',
-                }))
-              }}
-            />
-          </div>
-        ) : null}
-
-        {shouldShowGitRepoFields(suiteForm.type, suiteForm.useGitRepo) ? (
-          <>
-            <div className="space-y-2">
-              <Label>Git Repository{isRepoMandatorySuiteType(suiteForm.type) ? ' *' : ''}</Label>
-              <Select
-                value={suiteForm.gitRepoUrl}
-                onValueChange={(value) =>
-                  setSuiteForm((prev) => ({
-                    ...prev,
-                    gitRepoUrl: value,
-                    gitBranch: '',
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder={
-                      gitReposState === 'loading'
-                        ? 'Loading...'
-                        : gitReposState === 'ready' && gitRepos.length > 0
-                          ? 'Select repository'
-                          : 'No repos'
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {gitReposState === 'loading' ? (
-                    <SelectItem value="__loading__" disabled>Loading...</SelectItem>
-                  ) : null}
-                  {gitReposState === 'error' ? (
-                    <SelectItem value="__error__" disabled>Failed to load</SelectItem>
-                  ) : null}
-                  {gitReposState === 'ready' && gitRepos.length === 0 ? (
-                    <SelectItem value="__none__" disabled>No connected GitHub repositories</SelectItem>
-                  ) : null}
-                  {gitRepos.map((r) => (
-                    <SelectItem key={r.key} value={r.url}>
-                      {r.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {gitReposMessage ? (
-                <p className="text-xs text-muted-foreground">{gitReposMessage}</p>
-              ) : null}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="suite-edit-git-branch">Git Branch{isRepoMandatorySuiteType(suiteForm.type) ? ' *' : ''}</Label>
-              <Select
-                value={suiteForm.gitBranch}
-                onValueChange={(value) => {
-                  setSuiteForm((prev) => ({ ...prev, gitBranch: value }))
-                }}
-                disabled={!suiteForm.gitRepoUrl.trim()}
-              >
-                <SelectTrigger id="suite-edit-git-branch">
-                  <SelectValue
-                    placeholder={
-                      !suiteForm.gitRepoUrl.trim()
-                        ? 'Select repository first'
-                        : branchState.kind === 'loading'
-                          ? 'Loading branches...'
-                          : branchState.kind === 'available' && branchState.branches.length > 0
-                            ? 'Select branch'
-                            : 'No branches'
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {branchState.kind === 'loading' ? (
-                    <SelectItem value="__loading__" disabled>
-                      Loading...
-                    </SelectItem>
-                  ) : null}
-                  {branchState.kind === 'error' ? (
-                    <SelectItem value="__error__" disabled>
-                      Failed to load branches
-                    </SelectItem>
-                  ) : null}
-                  {branchState.kind === 'available' && branchState.branches.length === 0 ? (
-                    <SelectItem value="__none__" disabled>
-                      No branches
-                    </SelectItem>
-                  ) : null}
-                  {branchState.kind === 'available' &&
-                  suiteForm.gitBranch.trim() &&
-                  !branchState.branches.includes(suiteForm.gitBranch.trim()) ? (
-                    <SelectItem value={suiteForm.gitBranch.trim()}>
-                      {suiteForm.gitBranch.trim()} (current)
-                    </SelectItem>
-                  ) : null}
-                  {branchState.kind === 'available'
-                    ? branchState.branches.map((b) => (
-                        <SelectItem key={b} value={b}>
-                          {b}
-                        </SelectItem>
-                      ))
-                    : null}
-                </SelectContent>
-              </Select>
-              {branchState.kind === 'error' ? (
-                <p className="text-xs text-muted-foreground">{branchState.message}</p>
-              ) : null}
-            </div>
-          </>
-        ) : null}
         {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
       </FormDialog>
 

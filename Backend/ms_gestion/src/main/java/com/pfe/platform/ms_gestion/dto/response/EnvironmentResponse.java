@@ -12,6 +12,8 @@ public class EnvironmentResponse {
     private String name;
     private String baseUrlWeb;
     private String baseUrlApi;
-    private String variables;
+    private String gitRepoUrl;
+    private String gitBranch;
+    private String databaseType;
     private LocalDateTime createdAt;
 }

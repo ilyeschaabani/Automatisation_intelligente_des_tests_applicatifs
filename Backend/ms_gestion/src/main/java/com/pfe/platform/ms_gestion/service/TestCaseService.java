@@ -29,6 +29,7 @@ public class TestCaseService {
     private final ProjectMemberRepository projectMemberRepository;
 
     private final LlmService llmService;
+    private final SkeletonExtractorService skeletonExtractorService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Transactional
@@ -44,10 +45,12 @@ public class TestCaseService {
         tc.setSpringProfile(request.getSpringProfile());
         tc.setPriority(request.getPriority());
         tc.setRiskLevel(TestCase.RiskLevel.valueOf(request.getRiskLevel().toUpperCase()));
+        tc.setGitRepoUrl(request.getGitRepoUrl());
         tc.setTestData(ensureValidJson(request.getTestData()));
         tc.setTags(request.getTags());
         tc.setMaxDurationSeconds(request.getMaxDurationSeconds());
         tc.setDatabaseType(request.getDatabaseType());
+        tc.setTargetClassName(request.getTargetClassName());
 
         // -------------------------------------------------------
         // Gestion du mode IA / manuel
@@ -58,13 +61,7 @@ public class TestCaseService {
         // -------------------------------------------------------
         boolean suiteForcesAi = suite.getType() == TestSuite.TestType.UNIT || suite.getType() == TestSuite.TestType.INTEGRATION;
 
-        // Validate databaseType for INTEGRATION suites
-        if (suite.getType() == TestSuite.TestType.INTEGRATION) {
-            String db = request.getDatabaseType();
-            if (db == null || db.isBlank() || !isValidDatabaseType(db)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "databaseType is required and must be one of POSTGRESQL, MYSQL, H2, MONGODB for INTEGRATION suites");
-            }
-        }
+        // databaseType is now inherited from Environment — validation removed at TestCase level
 
         if (suiteForcesAi) {
             // If the user provides edited/generated code, persist it as-is.
@@ -80,55 +77,76 @@ public class TestCaseService {
                             "descriptionAI is required when suite type is " + suite.getType()
                     );
                 }
+                String skeleton = resolveSkeletonForSuite(suite, request.getTargetClassName());
                 String generatedCode = llmService.generateTestCode(
                         suite.getType().name(),
                     request.getDescriptionAI().trim(),
-                    request.getDatabaseType()
+                    request.getDatabaseType(),
+                    skeleton
                 );
                 tc.setGeneratedCode(generatedCode);
                 tc.setGenerated(true);
                 tc.setScriptPath(null);
             }
         } else {
-        boolean projectIsAi = false;
-        if (suite.getProject() != null) {
-            String repo = suite.getProject().getGitRepoUrl();
-            projectIsAi = (repo == null || repo.isBlank());
-        }
+            boolean projectIsAi = false;
+            if (suite.getProject() != null) {
+                String repo = suite.getProject().getGitRepoUrl();
+                projectIsAi = (repo == null || repo.isBlank());
+            }
 
-        if (projectIsAi) {
-            // Force generation from LLM using descriptionAI if provided, otherwise use description
-            String promptDesc = request.getDescriptionAI() != null && !request.getDescriptionAI().isBlank()
-                    ? request.getDescriptionAI()
-                    : request.getDescription();
-            String generatedCode = llmService.generateTestCode(
-                    request.getType(),
-                    promptDesc,
-                    request.getDatabaseType()
-            );
-            tc.setGeneratedCode(generatedCode);
-            tc.setGenerated(true);
-            // do not set scriptPath
-        } else {
-            if (Boolean.TRUE.equals(request.getUseAI()) && request.getDescriptionAI() != null) {
-                // Cas 1 : régénérer depuis l'IA
+            boolean hasRepo = request.getGitRepoUrl() != null && !request.getGitRepoUrl().isBlank();
+            boolean hasScriptPath = request.getScriptPath() != null && !request.getScriptPath().isBlank();
+
+            if (hasRepo || hasScriptPath) {
+                if (!hasRepo || !hasScriptPath) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "gitRepoUrl and scriptPath are required for manual/import mode");
+                }
+                tc.setGitRepoUrl(request.getGitRepoUrl());
+                tc.setScriptPath(request.getScriptPath());
+                tc.setGenerated(false);
+                tc.setGeneratedCode(null);
+            } else if (projectIsAi) {
+                // Force generation from LLM using descriptionAI if provided, otherwise use description
+                String promptDesc = request.getDescriptionAI() != null && !request.getDescriptionAI().isBlank()
+                        ? request.getDescriptionAI()
+                        : request.getDescription();
                 String generatedCode = llmService.generateTestCode(
                         request.getType(),
-                    request.getDescriptionAI(),
-                    request.getDatabaseType()
+                        promptDesc,
+                        request.getDatabaseType()
                 );
                 tc.setGeneratedCode(generatedCode);
                 tc.setGenerated(true);
-            } else if (request.getGeneratedCode() != null && !request.getGeneratedCode().trim().isEmpty()) {
-                // Cas 2 : code généré/édité par l'utilisateur
-                tc.setGeneratedCode(request.getGeneratedCode());
-                tc.setGenerated(true);
+                tc.setScriptPath(null);
+                tc.setGitRepoUrl(null);
             } else {
-                // Cas 3 : mode manuel
-                tc.setScriptPath(request.getScriptPath());
-                tc.setGenerated(false);
+                if (Boolean.TRUE.equals(request.getUseAI()) && request.getDescriptionAI() != null) {
+                    // Cas 1 : régénérer depuis l'IA
+                    String generatedCode = llmService.generateTestCode(
+                            request.getType(),
+                            request.getDescriptionAI(),
+                            request.getDatabaseType()
+                    );
+                    tc.setGeneratedCode(generatedCode);
+                    tc.setGenerated(true);
+                    tc.setScriptPath(null);
+                    tc.setGitRepoUrl(null);
+                } else if (request.getGeneratedCode() != null && !request.getGeneratedCode().trim().isEmpty()) {
+                    // Cas 2 : code généré/édité par l'utilisateur
+                    tc.setGeneratedCode(request.getGeneratedCode());
+                    tc.setGenerated(true);
+                    tc.setScriptPath(null);
+                    tc.setGitRepoUrl(null);
+                } else {
+                    // Cas 3 : mode manuel
+                    if (request.getScriptPath() == null || request.getScriptPath().isBlank()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "scriptPath is required for manual mode");
+                    }
+                    tc.setScriptPath(request.getScriptPath());
+                    tc.setGenerated(false);
+                }
             }
-        }
         }
 
         tc = testCaseRepository.save(tc);
@@ -162,21 +180,35 @@ public class TestCaseService {
         tc.setSpringProfile(request.getSpringProfile());
         tc.setPriority(request.getPriority());
         tc.setRiskLevel(TestCase.RiskLevel.valueOf(request.getRiskLevel().toUpperCase()));
+        tc.setGitRepoUrl(request.getGitRepoUrl());
         tc.setTestData(ensureValidJson(request.getTestData()));
         tc.setTags(request.getTags());
         tc.setMaxDurationSeconds(request.getMaxDurationSeconds());
         tc.setDatabaseType(request.getDatabaseType());
 
+        boolean hasRepo = request.getGitRepoUrl() != null && !request.getGitRepoUrl().isBlank();
+        boolean hasScriptPath = request.getScriptPath() != null && !request.getScriptPath().isBlank();
+
         // Handle code mode updates.
         // Priority:
-        // 1) If generatedCode provided => persist it (user edited)
-        // 2) Else if useAI+descriptionAI => regenerate
-        // 3) Else if scriptPath provided => manual mode
-        // 4) Else => keep existing code/mode (metadata-only update)
-        if (request.getGeneratedCode() != null && !request.getGeneratedCode().trim().isEmpty()) {
+        // 1) If repo + scriptPath => manual/import mode
+        // 2) If generatedCode provided => persist it (user edited)
+        // 3) Else if useAI+descriptionAI => regenerate
+        // 4) Else if scriptPath provided => manual mode
+        // 5) Else => keep existing code/mode (metadata-only update)
+        if (hasRepo || hasScriptPath) {
+            if (!hasRepo || !hasScriptPath) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "gitRepoUrl and scriptPath are required for manual/import mode");
+            }
+            tc.setGitRepoUrl(request.getGitRepoUrl());
+            tc.setScriptPath(request.getScriptPath());
+            tc.setGenerated(false);
+            tc.setGeneratedCode(null);
+        } else if (request.getGeneratedCode() != null && !request.getGeneratedCode().trim().isEmpty()) {
             tc.setGeneratedCode(request.getGeneratedCode());
             tc.setGenerated(true);
             tc.setScriptPath(null);
+            tc.setGitRepoUrl(null);
         } else if (Boolean.TRUE.equals(request.getUseAI())
                 && request.getDescriptionAI() != null
                 && !request.getDescriptionAI().isBlank()) {
@@ -188,6 +220,7 @@ public class TestCaseService {
             tc.setGeneratedCode(generatedCode);
             tc.setGenerated(true);
             tc.setScriptPath(null);
+            tc.setGitRepoUrl(null);
         } else if (request.getScriptPath() != null && !request.getScriptPath().isBlank()) {
             tc.setScriptPath(request.getScriptPath());
             tc.setGenerated(false);
@@ -253,6 +286,44 @@ public class TestCaseService {
         if (!authorized) throw new RuntimeException("Action non autorisée");
     }
 
+    private String resolveSkeletonForSuite(TestSuite suite, String targetClassName) {
+        if (targetClassName == null || targetClassName.isBlank()) return null;
+        boolean isUnitOrIntegration = suite.getType() == TestSuite.TestType.UNIT
+                || suite.getType() == TestSuite.TestType.INTEGRATION;
+        if (!isUnitOrIntegration) return null;
+
+        // gitRepoUrl: suite override > first environment of the project
+        String gitRepoUrl = suite.getGitRepoUrl();
+        String gitBranch = suite.getGitBranch();
+        if (gitRepoUrl == null || gitRepoUrl.isBlank()) {
+            // fallback: use first environment with a gitRepoUrl configured
+            com.pfe.platform.ms_gestion.entity.Environment env = projectMemberRepository
+                    .findByProjectIdAndUserId(suite.getProject().getId(),
+                            com.pfe.platform.ms_gestion.security.SecurityUtils.getCurrentUserId())
+                    .map(m -> m.getProject())
+                    .flatMap(p -> p.getEnvironments().stream()
+                            .filter(e -> e.getGitRepoUrl() != null && !e.getGitRepoUrl().isBlank())
+                            .findFirst())
+                    .orElse(null);
+            if (env != null) {
+                gitRepoUrl = env.getGitRepoUrl();
+                gitBranch = env.getGitBranch();
+            }
+        }
+        if (gitRepoUrl == null || gitRepoUrl.isBlank()) return null;
+
+        try {
+            return skeletonExtractorService.extractSkeleton(
+                    gitRepoUrl,
+                    gitBranch,
+                    suite.getModulePath(),
+                    targetClassName.trim()
+            );
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private boolean isValidDatabaseType(String db) {
         if (db == null) return false;
         switch (db.trim().toUpperCase()) {
@@ -276,6 +347,7 @@ public class TestCaseService {
                 .springProfile(tc.getSpringProfile())
                 .priority(tc.getPriority())
                 .riskLevel(tc.getRiskLevel().name())
+                .gitRepoUrl(tc.getGitRepoUrl())
                 .scriptPath(tc.getScriptPath())
                 .testData(tc.getTestData())
                 .tags(tc.getTags())
@@ -286,6 +358,7 @@ public class TestCaseService {
                 .generatedCode(tc.getGeneratedCode())
                 .generated(tc.getGenerated())
                 .databaseType(tc.getDatabaseType())
+                .targetClassName(tc.getTargetClassName())
                 .build();
     }
 

@@ -68,6 +68,14 @@ export type EndpointDto = {
 }
 
 // Ms-execution backend types
+export type SurefireMethodResult = {
+  method: string
+  status: 'PASS' | 'FAIL' | 'ERROR'
+  durationMs: number
+  message?: string
+  stacktrace?: string
+}
+
 export type ExecutionResultBackendDto = {
   id: number
   campaignId: number
@@ -81,6 +89,7 @@ export type ExecutionResultBackendDto = {
   uxAnalysis?: string | null
   screenshotUrl: string | null
   executedAt: string
+  testMethodResults?: string | null // JSON array of SurefireMethodResult
 }
 
 export type UxEvaluationDto = {
@@ -247,6 +256,8 @@ export type CampaignRunRequest = {
   hostPortBase?: number | null
   useOllama?: boolean
   ollamaModel?: string | null
+  runMode?: 'ALL' | 'SELECTED'
+  testCaseIds?: number[]
 }
 
 export type CampaignRunContinueRequest = {
@@ -883,10 +894,12 @@ export async function startCampaignRun(
     },
   )
 
-  const data = (await response.json().catch(() => null)) as CampaignRunResponseDto | null
+  const text = await response.text().catch(() => '')
+  let data: CampaignRunResponseDto | null = null
+  try { data = text ? JSON.parse(text) : null } catch { /* not JSON */ }
 
   if (!response.ok) {
-    const message = await readReadableError(response)
+    const message = data?.message || text || `Run failed (HTTP ${response.status})`
     throw new Error(message)
   }
 

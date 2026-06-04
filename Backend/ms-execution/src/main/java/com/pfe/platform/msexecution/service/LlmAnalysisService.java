@@ -13,17 +13,19 @@ public class LlmAnalysisService {
 
     private static final String OLLAMA_URL = "http://localhost:11434/api/generate";
     private static final String MODEL = "deepseek-coder:6.7b";
-    private static final int MAX_SCRIPT_CHARS = 2000;
-    private static final int MAX_LOG_CHARS = 2000;
-    private static final int MAX_ERROR_CHARS = 500;
+    private static final int MAX_SCRIPT_CHARS = 1500;
+    private static final int MAX_LOG_CHARS = 1500;
+    private static final int MAX_ERROR_CHARS = 400;
 
     private final RestTemplate restTemplate = new RestTemplate();
 
     public String analyze(String scriptCode, String logs, String status, String errorMessage) {
         String truncatedScript = truncate(scriptCode, MAX_SCRIPT_CHARS);
-        String truncatedLogs = truncate(logs);
+        // Extract the relevant error lines instead of blindly taking first N chars
+        String truncatedLogs = extractRelevantErrors(logs);
         String truncatedErrorMessage = truncate(errorMessage, MAX_ERROR_CHARS);
-        String prompt = buildPrompt(truncatedScript, truncatedLogs, status, truncatedErrorMessage);
+        String errorType = detectErrorType(logs, errorMessage);
+        String prompt = buildPrompt(truncatedScript, truncatedLogs, status, truncatedErrorMessage, errorType);
 
         try {
             Map<String, Object> body = Map.of(
@@ -105,32 +107,94 @@ public class LlmAnalysisService {
         }
     }
 
-    private String buildPrompt(String scriptCode, String logs, String status, String errorMessage) {
-        String normalizedStatus = status == null ? "" : status.trim().toUpperCase();
-        if ("SUCCESS".equals(normalizedStatus)) {
-            return "Tu es un expert en automatisation de tests.\n"
-                    + "Analyse le script de test et les logs d'exécution ci-dessous.\n"
-                    + "Explique :\n"
-                    + "1. Ce qui a bien fonctionné (en 1-2 lignes)\n"
-                    + "2. Une suggestion d'optimisation si pertinent (temps d'exécution, robustesse) (en 1-2 lignes)\n\n"
-                    + "Script de test :\n"
-                    + scriptCode + "\n\n"
-                    + "Logs d'exécution :\n"
-                    + logs;
+    /**
+     * Extracts the most relevant error lines from Maven/test output.
+     * Instead of blindly truncating from the start (which misses errors at the end),
+     * this method prioritizes [ERROR] lines and surrounding context.
+     */
+    public String extractRelevantErrors(String logs) {
+        if (logs == null || logs.isBlank()) return "";
+
+        StringBuilder relevant = new StringBuilder();
+        String[] lines = logs.split("\\r?\\n");
+
+        // Pass 1: collect all [ERROR] lines
+        for (String line : lines) {
+            if (line.contains("[ERROR]") || line.contains("COMPILATION ERROR")
+                    || line.contains("cannot find symbol") || line.contains("is not applicable")
+                    || line.contains("AssertionError") || line.contains("NullPointerException")
+                    || line.contains("Exception in thread") || line.contains("BUILD FAILURE")) {
+                relevant.append(line).append("\n");
+            }
         }
 
-        return "Tu es un expert en automatisation de tests et en débogage.\n"
-                + "Analyse le script de test et les logs d'exécution ci-dessous.\n"
-                + "Explique :\n"
-                + "1. La cause probable de l'échec (en 2-3 lignes)\n"
-                + "2. La correction à apporter au script (en 2-3 lignes)\n"
-                + "3. Si pertinent, une suggestion d'amélioration du test (en 1-2 lignes)\n\n"
-                + "Script de test :\n"
-                + scriptCode + "\n\n"
-                + "Logs d'exécution :\n"
-                + logs + "\n\n"
-                + "Message d'erreur :\n"
-                + errorMessage;
+        // Pass 2: if still empty or very short, fall back to the last 60 lines
+        if (relevant.length() < 100) {
+            int start = Math.max(0, lines.length - 60);
+            StringBuilder tail = new StringBuilder();
+            for (int i = start; i < lines.length; i++) {
+                tail.append(lines[i]).append("\n");
+            }
+            return truncate(tail.toString(), MAX_LOG_CHARS);
+        }
+
+        return truncate(relevant.toString(), MAX_LOG_CHARS);
+    }
+
+    /**
+     * Detects whether the failure is a compilation error, assertion failure, runtime exception, or timeout.
+     */
+    public String detectErrorType(String logs, String errorMessage) {
+        if (logs == null) logs = "";
+        if (errorMessage == null) errorMessage = "";
+        String combined = logs + errorMessage;
+        if (combined.contains("COMPILATION ERROR") || combined.contains("cannot find symbol")
+                || combined.contains("is not applicable") || combined.contains("testCompile")) {
+            return "COMPILATION_ERROR";
+        }
+        if (combined.contains("AssertionError") || combined.contains("assertEquals")
+                || combined.contains("expected") && combined.contains("but was")) {
+            return "ASSERTION_FAILURE";
+        }
+        if (combined.contains("NullPointerException")) return "NULL_POINTER";
+        if (combined.contains("timeout") || combined.contains("Timeout")) return "TIMEOUT";
+        if (combined.contains("Exception")) return "RUNTIME_EXCEPTION";
+        return "UNKNOWN";
+    }
+
+    private String buildPrompt(String scriptCode, String logs, String status, String errorMessage, String errorType) {
+        String normalizedStatus = status == null ? "" : status.trim().toUpperCase();
+
+        if ("SUCCESS".equals(normalizedStatus)) {
+            return "Tu es un expert en automatisation de tests Java (TestNG + Mockito).\n"
+                    + "Le test suivant a réussi. Analyse-le brièvement :\n"
+                    + "1. Ce qui est bien testé (1-2 lignes)\n"
+                    + "2. Une suggestion d'amélioration si pertinent (robustesse, lisibilité) (1-2 lignes)\n\n"
+                    + "Script de test :\n" + scriptCode;
+        }
+
+        String errorTypeLabel = switch (errorType) {
+            case "COMPILATION_ERROR" -> "ERREUR DE COMPILATION — le test ne compile pas";
+            case "ASSERTION_FAILURE" -> "ÉCHEC D'ASSERTION — le test a exécuté mais une assertion a échoué";
+            case "NULL_POINTER"      -> "NullPointerException — un objet est null au moment de l'appel";
+            case "TIMEOUT"           -> "TIMEOUT — le test a dépassé la durée limite";
+            case "RUNTIME_EXCEPTION" -> "EXCEPTION RUNTIME — une exception non attendue a été levée";
+            default                  -> "ÉCHEC INCONNU";
+        };
+
+        return "Tu es un expert en automatisation de tests Java (TestNG + Mockito + Spring).\n"
+                + "Type d'échec détecté : " + errorTypeLabel + "\n\n"
+                + "RÈGLES DE RÉPONSE :\n"
+                + "- Réponds en français, en 3 sections courtes et précises\n"
+                + "- Ne répète pas le code d'erreur en entier\n"
+                + "- Cite la ligne ou le symbole exact concerné\n\n"
+                + "Script de test :\n" + scriptCode + "\n\n"
+                + "Erreurs extraites des logs Maven :\n" + logs
+                + (errorMessage.isBlank() ? "" : "\n\nMessage d'erreur : " + errorMessage) + "\n\n"
+                + "Réponds avec exactement :\n"
+                + "**Cause** : (1-2 phrases — quelle classe/méthode manque ou est fausse)\n"
+                + "**Correction** : (étapes concrètes pour corriger le script ou le setup)\n"
+                + "**Conseil** : (1 phrase — bonne pratique pour éviter ce type d'échec)";
     }
 
     private String truncate(String value, int maxChars) {

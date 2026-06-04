@@ -5,9 +5,6 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-
 import java.time.LocalDateTime;
 
 @Entity
@@ -32,9 +29,14 @@ public class Environment {
     private String baseUrlWeb;
     private String baseUrlApi;
 
-    @Column(columnDefinition = "JSONB")
-    @JdbcTypeCode(SqlTypes.JSON)
-    private String variables; // stockage JSON sous forme de String
+    @Column(name = "git_repo_url")
+    private String gitRepoUrl;
+
+    @Column(name = "git_branch")
+    private String gitBranch;
+
+    @Column(name = "database_type")
+    private String databaseType; // POSTGRESQL | MYSQL | H2 | MONGODB
 
     private LocalDateTime createdAt = LocalDateTime.now();
 }

@@ -29,8 +29,6 @@ public class ProjectService {
         Project project = new Project();
         project.setName(request.getName());
         project.setDescription(request.getDescription());
-        project.setGitRepoUrl(request.getGitRepoUrl());
-        project.setGitDefaultBranch(request.getGitDefaultBranch());
         project = projectRepository.save(project);
 
         // Ajouter le créateur comme ADMIN
@@ -66,9 +64,14 @@ public class ProjectService {
         }
         project.setName(request.getName());
         project.setDescription(request.getDescription());
-        project.setGitRepoUrl(request.getGitRepoUrl());
-        project.setGitDefaultBranch(request.getGitDefaultBranch());
         return mapToResponse(projectRepository.save(project));
+    }
+
+    @Transactional
+    public void delete(Long projectId) {
+        Project project = getProjectOrThrow(projectId);
+        checkRole(project, ProjectMember.Role.ADMIN);
+        projectRepository.delete(project);
     }
 
     @Transactional

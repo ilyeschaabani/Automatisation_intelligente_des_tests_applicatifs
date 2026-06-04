@@ -15,6 +15,7 @@ public class CreateTestCaseRequest {
     private String springProfile;
     private Integer priority;
     private String riskLevel; // CRITICAL, HIGH, MEDIUM, LOW
+    private String gitRepoUrl;
     private String scriptPath;
     private String testData; // JSON
     private String tags;
@@ -23,4 +24,5 @@ public class CreateTestCaseRequest {
     private Boolean useAI = false;     // si true, on génère
     private String databaseType;       // POSTGRESQL | MYSQL | H2 | MONGODB (required for INTEGRATION)
     private String descriptionAI;      // description en langage naturel
+    private String targetClassName;    // nom simple de la classe à tester (ex: "UserService")
 }

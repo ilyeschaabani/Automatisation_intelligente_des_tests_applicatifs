@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/projects/{projectId}/campaigns")
@@ -40,6 +41,37 @@ public class CampaignController {
     public ResponseEntity<List<TestCaseWithStatusResponse>> getTestCases(@PathVariable Long projectId,
                                                                           @PathVariable Long campaignId) {
         return ResponseEntity.ok(campaignService.getTestCasesForCampaign(projectId, campaignId));
+    }
+
+    /** Test cases from the project NOT yet in the campaign */
+    @GetMapping("/{campaignId}/available-testcases")
+    public ResponseEntity<List<TestCaseWithStatusResponse>> getAvailableTestCases(
+            @PathVariable Long projectId, @PathVariable Long campaignId) {
+        return ResponseEntity.ok(campaignService.getAvailableTestCases(projectId, campaignId));
+    }
+
+    /** Add one or more test cases to an existing campaign */
+    @PostMapping("/{campaignId}/testcases")
+    public ResponseEntity<?> addTestCases(
+            @PathVariable Long projectId,
+            @PathVariable Long campaignId,
+            @RequestBody Map<String, List<Long>> body) {
+        List<Long> ids = body.get("testCaseIds");
+        if (ids == null || ids.isEmpty()) {
+            return ResponseEntity.badRequest().body("testCaseIds est requis");
+        }
+        campaignService.addTestCasesToCampaign(projectId, campaignId, ids);
+        return ResponseEntity.ok(Map.of("message", ids.size() + " cas de test ajouté(s) à la campagne"));
+    }
+
+    /** Remove a test case from an existing campaign */
+    @DeleteMapping("/{campaignId}/testcases/{testCaseId}")
+    public ResponseEntity<?> removeTestCase(
+            @PathVariable Long projectId,
+            @PathVariable Long campaignId,
+            @PathVariable Long testCaseId) {
+        campaignService.removeTestCaseFromCampaign(projectId, campaignId, testCaseId);
+        return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/{campaignId}/stop")

@@ -25,6 +25,7 @@ public class Campaign {
     private TriggerMode triggerMode;
 
     private String gitBranch;
+    private String appVersion;
     private Integer progress = 0;
     private String currentStep;
     private LocalDateTime startedAt;
@@ -91,13 +92,11 @@ public class Campaign {
         this.triggerMode = triggerMode;
     }
 
-    public String getGitBranch() {
-        return gitBranch;
-    }
+    public String getGitBranch() { return gitBranch; }
+    public void setGitBranch(String gitBranch) { this.gitBranch = gitBranch; }
 
-    public void setGitBranch(String gitBranch) {
-        this.gitBranch = gitBranch;
-    }
+    public String getAppVersion() { return appVersion; }
+    public void setAppVersion(String appVersion) { this.appVersion = appVersion; }
 
     public Integer getProgress() {
         return progress;

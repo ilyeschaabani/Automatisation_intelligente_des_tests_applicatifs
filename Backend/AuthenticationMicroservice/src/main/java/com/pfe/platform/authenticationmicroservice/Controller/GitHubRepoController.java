@@ -10,7 +10,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Comparator;
@@ -92,6 +94,63 @@ public class GitHubRepoController {
             return owner.get("login");
         }
         return null;
+    }
+
+    /**
+     * Returns a list of Java source files from the repo (src/main/java only).
+     * Uses GitHub git/trees API — no clone, single lightweight request.
+     */
+    @GetMapping("/repos/{owner}/{repo}/java-files")
+    public ResponseEntity<?> listJavaFiles(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable String owner,
+            @PathVariable String repo,
+            @RequestParam(defaultValue = "main") String branch) {
+
+        String accessToken = resolveToken(userDetails);
+        if (accessToken == null) return ResponseEntity.status(404).body("GitHub not connected");
+
+        try {
+            List<String> files = gitHubClient.getJavaSourceFiles(accessToken, owner, repo, branch);
+            return ResponseEntity.ok(files);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("Failed to list files: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Returns the raw content of a single Java file.
+     * Uses GitHub contents API — no clone needed.
+     */
+    @GetMapping("/repos/{owner}/{repo}/file-content")
+    public ResponseEntity<?> getFileContent(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable String owner,
+            @PathVariable String repo,
+            @RequestParam String path,
+            @RequestParam(defaultValue = "main") String branch) {
+
+        String accessToken = resolveToken(userDetails);
+        if (accessToken == null) return ResponseEntity.status(404).body("GitHub not connected");
+
+        try {
+            String content = gitHubClient.getFileContent(accessToken, owner, repo, path, branch);
+            if (content == null) return ResponseEntity.status(404).body("File not found");
+            return ResponseEntity.ok(java.util.Map.of("content", content));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("Failed to fetch file: " + e.getMessage());
+        }
+    }
+
+    private String resolveToken(UserDetails userDetails) {
+        if (userDetails == null) return null;
+        User user = userService.getUserByEmail(userDetails.getUsername());
+        if (!Boolean.TRUE.equals(user.getGithubConnected()) || user.getGithubAccessToken() == null) return null;
+        try {
+            return tokenManager.decrypt(user.getGithubAccessToken());
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     @SuppressWarnings("unchecked")

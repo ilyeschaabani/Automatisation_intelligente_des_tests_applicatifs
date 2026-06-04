@@ -73,6 +73,7 @@ import {
   getProjects,
   listCampaigns,
   listExecutions,
+  listExecutionResults,
   startCampaignRun,
   continueCampaignRun,
   stopCampaign,
@@ -89,6 +90,8 @@ import {
   type TestCampaignDto,
   type TestExecutionDto,
   type TestCaseWithStatusDto,
+  type ExecutionResultBackendDto,
+  type SurefireMethodResult,
 } from '@/lib/api-client'
 import { environmentService } from '@/services/environments'
 import type { Environment } from '@/types/ms-gestion'
@@ -714,6 +717,8 @@ export default function CampaignDetailsPage() {
   }, [campaign, remoteCampaign])
 
   const [testCasesFromApi, setTestCasesFromApi] = useState<TestCaseWithStatusDto[]>([])
+  const [executionResults, setExecutionResults] = useState<ExecutionResultBackendDto[]>([])
+  const [expandedResults, setExpandedResults] = useState<Set<number>>(new Set())
   const [reports, setReports] = useState<{
     id: number
     campaignId: number
@@ -725,8 +730,30 @@ export default function CampaignDetailsPage() {
   const [autoDownloadedExecutionId, setAutoDownloadedExecutionId] = useState<number | null>(null)
   const [testCasesLoading, setTestCasesLoading] = useState(false)
   const [selectedTestIds, setSelectedTestIds] = useState<string[]>([])
+
+  // Available test cases (from project, not yet in campaign)
+  const [availableTestCases, setAvailableTestCases] = useState<TestCaseWithStatusDto[]>([])
+  const [availableLoading, setAvailableLoading] = useState(false)
+  const [selectedAvailableIds, setSelectedAvailableIds] = useState<string[]>([])
+  const [addingTests, setAddingTests] = useState(false)
+  const [removingTestId, setRemovingTestId] = useState<number | null>(null)
+  const [showRunDialog, setShowRunDialog] = useState(false)
   const [storedRuns, setStoredRuns] = useState<CampaignExecution[]>([])
   
+  // Fetch detailed execution results (with testMethodResults, aiAnalysis, etc.)
+  useEffect(() => {
+    if (!campaignNumericId) { setExecutionResults([]); return }
+    let cancelled = false
+    const load = async () => {
+      try {
+        const results = await listExecutionResults({ campaignId: campaignNumericId })
+        if (!cancelled) setExecutionResults(results)
+      } catch { if (!cancelled) setExecutionResults([]) }
+    }
+    void load()
+    return () => { cancelled = true }
+  }, [campaignNumericId, latestExecution?.status]) // re-fetch when execution finishes
+
   // Fetch test cases from API when campaign is loaded
   useEffect(() => {
     if (!remoteCampaign || !campaignNumericId || !resolvedProjectId) {
@@ -1027,21 +1054,100 @@ export default function CampaignDetailsPage() {
       return
     }
 
+    // Show run mode dialog instead of running directly
+    void loadAvailableTestCases()
+    setShowRunDialog(true)
+  }
+
+  // ── Load available test cases (from project, not yet in campaign) ──
+  const loadAvailableTestCases = async () => {
+    if (!campaignNumericId || !campaign?.projectId) return
+    setAvailableLoading(true)
+    try {
+      const res = await fetch(
+        `/api/campaigns/${campaignNumericId}/available-testcases?projectId=${campaign.projectId}`,
+        { credentials: 'include' }
+      )
+      if (res.ok) {
+        const data = await res.json()
+        setAvailableTestCases(Array.isArray(data) ? data : [])
+      }
+    } catch { setAvailableTestCases([]) }
+    finally { setAvailableLoading(false) }
+  }
+
+  // ── Add test cases to campaign ──
+  const handleAddTestCases = async () => {
+    if (!campaignNumericId || !campaign?.projectId || selectedAvailableIds.length === 0) return
+    setAddingTests(true)
+    try {
+      const res = await fetch(
+        `/api/campaigns/${campaignNumericId}/testcases?projectId=${campaign.projectId}`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ testCaseIds: selectedAvailableIds.map(Number) }),
+        }
+      )
+      if (res.ok) {
+        toast({ title: 'Tests ajoutés', description: `${selectedAvailableIds.length} cas de test ajouté(s) à la campagne.` })
+        setSelectedAvailableIds([])
+        // Reload both lists
+        void loadAvailableTestCases()
+        if (campaign.projectId) {
+          const testCases = await getTestCasesForCampaign(campaign.projectId, campaignNumericId)
+          setTestCasesFromApi(Array.isArray(testCases) ? testCases : [])
+        }
+      } else {
+        const data = await res.json().catch(() => ({}))
+        toast({ title: 'Erreur', description: data.message ?? 'Impossible d\'ajouter les tests', variant: 'destructive' })
+      }
+    } catch (err) {
+      toast({ title: 'Erreur', description: err instanceof Error ? err.message : 'Erreur réseau', variant: 'destructive' })
+    } finally { setAddingTests(false) }
+  }
+
+  // ── Remove a test case from campaign ──
+  const handleRemoveTestCase = async (testCaseId: number) => {
+    if (!campaignNumericId || !campaign?.projectId) return
+    setRemovingTestId(testCaseId)
+    try {
+      const res = await fetch(
+        `/api/campaigns/${campaignNumericId}/testcases/${testCaseId}?projectId=${campaign.projectId}`,
+        { method: 'DELETE', credentials: 'include' }
+      )
+      if (res.ok || res.status === 204) {
+        toast({ title: 'Test retiré', description: 'Le cas de test a été retiré de la campagne.' })
+        setTestCasesFromApi(prev => prev.filter(tc => tc.id !== testCaseId))
+        void loadAvailableTestCases()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        toast({ title: 'Erreur', description: data.message ?? 'Impossible de retirer le test', variant: 'destructive' })
+      }
+    } catch (err) {
+      toast({ title: 'Erreur', description: err instanceof Error ? err.message : 'Erreur réseau', variant: 'destructive' })
+    } finally { setRemovingTestId(null) }
+  }
+
+  // ── Run with mode selection ──
+  const runCampaignWithMode = async (mode: 'ALL' | 'SELECTED') => {
+    if (!campaignNumericId || !campaign?.projectId) return
+    setShowRunDialog(false)
     setExecutionUiRunning(true)
     setRunSubmitting(true)
     try {
-      const branchValue = String(campaign?.branch ?? '').trim()
-      const response = await startCampaignRun(campaignNumericId, {
-        branch: branchValue || undefined,
-      })
+      const payload: Record<string, unknown> = { runMode: mode }
+      if (mode === 'SELECTED' && selectedTestIds.length > 0) {
+        payload.testCaseIds = selectedTestIds.map(Number)
+      }
+      const response = await startCampaignRun(campaignNumericId, payload as any)
       await applyRunResponse(response)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to start campaign run'
       setExecutionUiRunning(false)
       toast({ title: 'Run failed', description: message, variant: 'destructive' })
-    } finally {
-      setRunSubmitting(false)
-    }
+    } finally { setRunSubmitting(false) }
   }
 
   const handleStopCampaign = async () => {
@@ -1622,52 +1728,171 @@ export default function CampaignDetailsPage() {
 
                   <Card>
                     <CardHeader>
-                      <CardTitle>Tests</CardTitle>
-                      <CardDescription>Select specific tests to run from this campaign.</CardDescription>
+                      <CardTitle>Test Results</CardTitle>
+                      <CardDescription>Detailed results per test case with method-level breakdown.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-                        <p className="text-sm text-muted-foreground">
-                          Selected: <span className="font-medium text-foreground">{selectedTestIds.length}</span>
-                        </p>
-                        <Button
-                          variant="outline"
-                          className="gap-2"
-                          onClick={runSelectedTests}
-                          disabled={selectedTestIds.length === 0}
-                        >
-                          <Play className="h-4 w-4" />
-                          Run selected tests
-                        </Button>
-                      </div>
+                      {executionResults.length > 0 ? (
+                        <div className="space-y-3">
+                          {executionResults.map((result) => {
+                            const tc = testCasesFromApi.find((t) => t.id === result.testCaseId)
+                            const isExpanded = expandedResults.has(result.id)
+                            const statusColor =
+                              result.status === 'SUCCESS'
+                                ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400'
+                                : result.status === 'FAILURE'
+                                  ? 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-400'
+                                  : 'bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-400'
 
-                      <div className="rounded-md border border-border overflow-hidden">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="w-12"></TableHead>
-                              <TableHead>Test</TableHead>
-                              <TableHead className="w-32">Type</TableHead>
-                              <TableHead className="w-24">Status</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {testCasesLoading ? (
+                            let methods: SurefireMethodResult[] = []
+                            if (result.testMethodResults) {
+                              try { methods = JSON.parse(result.testMethodResults) } catch { /* ignore */ }
+                            }
+
+                            const durationLabel = result.durationMs != null
+                              ? result.durationMs < 1000
+                                ? `${result.durationMs}ms`
+                                : `${(result.durationMs / 1000).toFixed(1)}s`
+                              : '—'
+
+                            return (
+                              <div key={result.id} className="rounded-lg border border-border bg-card overflow-hidden">
+                                {/* Header row */}
+                                <div
+                                  className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/40"
+                                  onClick={() => setExpandedResults((prev) => {
+                                    const next = new Set(prev)
+                                    if (next.has(result.id)) next.delete(result.id)
+                                    else next.add(result.id)
+                                    return next
+                                  })}
+                                >
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <Badge variant="outline" className={`shrink-0 ${statusColor}`}>
+                                      {result.status}
+                                    </Badge>
+                                    <div className="min-w-0">
+                                      <p className="font-medium text-sm text-foreground truncate">
+                                        {tc?.title ?? `Test #${result.testCaseId}`}
+                                      </p>
+                                      {result.errorMessage && (
+                                        <p className="text-xs text-destructive truncate max-w-xs">
+                                          {result.errorMessage}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-3 shrink-0 text-xs text-muted-foreground">
+                                    {methods.length > 0 && (
+                                      <span className="font-medium">
+                                        {methods.filter(m => m.status === 'PASS').length}/{methods.length} passed
+                                      </span>
+                                    )}
+                                    <span>{durationLabel}</span>
+                                    <Badge variant="outline" className="font-mono text-xs">
+                                      {tc?.type ?? result.testType ?? '—'}
+                                    </Badge>
+                                    <span className="text-muted-foreground">{isExpanded ? '▲' : '▼'}</span>
+                                  </div>
+                                </div>
+
+                                {/* Expanded details */}
+                                {isExpanded && (
+                                  <div className="border-t border-border px-4 py-3 space-y-4 bg-muted/20">
+
+                                    {/* Method-level results (Surefire) */}
+                                    {methods.length > 0 && (
+                                      <div>
+                                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                                          Methods ({methods.length})
+                                        </p>
+                                        <div className="rounded-md border border-border overflow-hidden">
+                                          <Table>
+                                            <TableHeader>
+                                              <TableRow>
+                                                <TableHead>Method</TableHead>
+                                                <TableHead className="w-20">Status</TableHead>
+                                                <TableHead className="w-24">Duration</TableHead>
+                                                <TableHead>Message</TableHead>
+                                              </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                              {methods.map((m, idx) => (
+                                                <TableRow key={idx}>
+                                                  <TableCell className="font-mono text-xs">{m.method}</TableCell>
+                                                  <TableCell>
+                                                    <Badge
+                                                      variant="outline"
+                                                      className={
+                                                        m.status === 'PASS'
+                                                          ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400'
+                                                          : m.status === 'FAIL'
+                                                            ? 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-400'
+                                                            : 'bg-orange-100 text-orange-800'
+                                                      }
+                                                    >
+                                                      {m.status}
+                                                    </Badge>
+                                                  </TableCell>
+                                                  <TableCell className="text-xs text-muted-foreground">
+                                                    {m.durationMs < 1000 ? `${m.durationMs}ms` : `${(m.durationMs / 1000).toFixed(1)}s`}
+                                                  </TableCell>
+                                                  <TableCell className="text-xs text-muted-foreground max-w-xs truncate">
+                                                    {m.message ?? '—'}
+                                                  </TableCell>
+                                                </TableRow>
+                                              ))}
+                                            </TableBody>
+                                          </Table>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* AI Analysis */}
+                                    {result.aiAnalysis && (
+                                      <div>
+                                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                                          AI Analysis
+                                        </p>
+                                        <div className="rounded-md bg-card border border-border p-3 text-xs text-foreground whitespace-pre-wrap max-h-48 overflow-y-auto">
+                                          {result.aiAnalysis}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Error + Logs */}
+                                    {result.errorMessage && (
+                                      <div>
+                                        <p className="text-xs font-semibold text-destructive uppercase tracking-wide mb-1">Error</p>
+                                        <p className="text-xs text-destructive">{result.errorMessage}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      ) : testCasesLoading ? (
+                        <p className="text-sm text-muted-foreground">Loading results...</p>
+                      ) : testCasesFromApi.length > 0 ? (
+                        /* No execution results yet — show test cases with status */
+                        <div className="rounded-md border border-border overflow-hidden">
+                          <Table>
+                            <TableHeader>
                               <TableRow>
-                                <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">
-                                  Loading test cases...
-                                </TableCell>
+                                <TableHead className="w-12"></TableHead>
+                                <TableHead>Test case</TableHead>
+                                <TableHead className="w-32">Type</TableHead>
+                                <TableHead className="w-24">Status</TableHead>
+                                <TableHead className="w-20"></TableHead>
                               </TableRow>
-                            ) : testCasesFromApi.length === 0 ? (
-                              <TableRow>
-                                <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">
-                                  No test cases found for this campaign
-                                </TableCell>
-                              </TableRow>
-                            ) : (
-                              testCasesFromApi.map((tc) => {
+                            </TableHeader>
+                            <TableBody>
+                              {testCasesFromApi.map((tc) => {
                                 const testIdStr = String(tc.id)
                                 const checked = selectedTestIds.includes(testIdStr)
+                                const isRunning = campaign?.status === 'Running'
                                 return (
                                   <TableRow key={tc.id}>
                                     <TableCell>
@@ -1692,24 +1917,114 @@ export default function CampaignDetailsPage() {
                                       </div>
                                     </TableCell>
                                     <TableCell>
-                                      <Badge variant="outline" className="font-mono text-xs">
-                                        {tc.type || 'UNKNOWN'}
-                                      </Badge>
+                                      <Badge variant="outline" className="font-mono text-xs">{tc.type || 'UNKNOWN'}</Badge>
                                     </TableCell>
                                     <TableCell>
-                                      <Badge
-                                        variant={tc.executionStatus === 'FINISHED' ? 'default' : tc.executionStatus === 'ERROR' ? 'destructive' : 'secondary'}
-                                      >
+                                      <Badge variant={tc.executionStatus === 'FINISHED' ? 'default' : tc.executionStatus === 'ERROR' ? 'destructive' : 'secondary'}>
                                         {tc.executionStatus || 'Not run'}
                                       </Badge>
                                     </TableCell>
+                                    <TableCell>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 text-xs text-destructive hover:text-destructive"
+                                        disabled={isRunning || removingTestId === tc.id}
+                                        onClick={() => handleRemoveTestCase(tc.id)}
+                                      >
+                                        {removingTestId === tc.id ? '...' : 'Retirer'}
+                                      </Button>
+                                    </TableCell>
                                   </TableRow>
                                 )
-                              })
-                            )}
-                          </TableBody>
-                        </Table>
-                      </div>
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No results yet. Run the campaign to see detailed results.</p>
+                      )}
+
+                      {/* ── Add test cases section ── */}
+                      {campaign && campaign.status !== 'Running' && (
+                        <div className="mt-6 pt-4 border-t border-border">
+                          <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-sm font-semibold text-foreground">Ajouter des tests</h3>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={loadAvailableTestCases}
+                              disabled={availableLoading}
+                            >
+                              {availableLoading ? 'Chargement...' : 'Rafraîchir'}
+                            </Button>
+                          </div>
+
+                          {availableTestCases.length === 0 && !availableLoading ? (
+                            <p className="text-xs text-muted-foreground">
+                              {availableTestCases.length === 0
+                                ? 'Tous les tests du projet sont déjà dans cette campagne. Cliquez Rafraîchir pour vérifier.'
+                                : 'Aucun test disponible.'}
+                            </p>
+                          ) : availableLoading ? (
+                            <p className="text-xs text-muted-foreground">Chargement des tests disponibles...</p>
+                          ) : (
+                            <>
+                              <div className="rounded-md border border-border overflow-hidden max-h-60 overflow-y-auto">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead className="w-12"></TableHead>
+                                      <TableHead>Test case</TableHead>
+                                      <TableHead className="w-32">Type</TableHead>
+                                      <TableHead className="w-24">Suite</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {availableTestCases.map((tc) => {
+                                      const idStr = String(tc.id)
+                                      const checked = selectedAvailableIds.includes(idStr)
+                                      return (
+                                        <TableRow key={tc.id}>
+                                          <TableCell>
+                                            <Checkbox
+                                              checked={checked}
+                                              onCheckedChange={(next) => {
+                                                setSelectedAvailableIds((prev) =>
+                                                  next === true
+                                                    ? [...prev, idStr]
+                                                    : prev.filter((x) => x !== idStr)
+                                                )
+                                              }}
+                                            />
+                                          </TableCell>
+                                          <TableCell>
+                                            <span className="font-medium text-sm">{tc.title}</span>
+                                          </TableCell>
+                                          <TableCell>
+                                            <Badge variant="outline" className="font-mono text-xs">{tc.type || '—'}</Badge>
+                                          </TableCell>
+                                          <TableCell className="text-xs text-muted-foreground">
+                                            {(tc as any).suiteName ?? '—'}
+                                          </TableCell>
+                                        </TableRow>
+                                      )
+                                    })}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                              <Button
+                                className="mt-2 gap-2"
+                                size="sm"
+                                disabled={selectedAvailableIds.length === 0 || addingTests}
+                                onClick={handleAddTestCases}
+                              >
+                                {addingTests ? 'Ajout en cours...' : `Ajouter ${selectedAvailableIds.length} test(s)`}
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
 
@@ -1849,6 +2164,58 @@ export default function CampaignDetailsPage() {
         </div>
 
         {/* Discovery dialog and schema viewer removed with endpoints feature */}
+
+        {/* ── Run Mode Dialog ── */}
+        <Dialog open={showRunDialog} onOpenChange={setShowRunDialog}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Lancer la campagne</DialogTitle>
+              <DialogDescription>
+                Choisissez quels tests exécuter.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <p className="text-sm text-muted-foreground">
+                Cette campagne contient <strong>{testCasesFromApi.length}</strong> cas de test.
+                {selectedTestIds.length > 0 && (
+                  <span> Vous avez sélectionné <strong>{selectedTestIds.length}</strong> test(s).</span>
+                )}
+              </p>
+              <div className="grid gap-2">
+                <Button
+                  className="w-full justify-start gap-3"
+                  variant="outline"
+                  onClick={() => runCampaignWithMode('ALL')}
+                  disabled={runSubmitting}
+                >
+                  <Play size={16} />
+                  <div className="text-left">
+                    <div className="font-medium">Exécuter tous les tests</div>
+                    <div className="text-xs text-muted-foreground">Relance les {testCasesFromApi.length} cas de test</div>
+                  </div>
+                </Button>
+                <Button
+                  className="w-full justify-start gap-3"
+                  variant="outline"
+                  onClick={() => runCampaignWithMode('SELECTED')}
+                  disabled={runSubmitting || selectedTestIds.length === 0}
+                >
+                  <CheckCircle2 size={16} />
+                  <div className="text-left">
+                    <div className="font-medium">
+                      Exécuter la sélection ({selectedTestIds.length})
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {selectedTestIds.length === 0
+                        ? 'Cochez des tests dans le tableau pour activer cette option'
+                        : `Exécute uniquement les ${selectedTestIds.length} tests sélectionnés`}
+                    </div>
+                  </div>
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   )

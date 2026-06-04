@@ -84,8 +84,8 @@ import java.util.stream.Collectors;
 public class ReportService {
 
     private static final String LOGO_TEXT = "TestPlatform";
-    private static final int LOG_PREVIEW_CHARS = 200;
-    private static final int ERROR_PREVIEW_CHARS = 200;
+    private static final int LOG_PREVIEW_CHARS = 800;
+    private static final int ERROR_PREVIEW_CHARS = 400;
 
     private static final DeviceRgb NAVY = new DeviceRgb(0x1B, 0x2A, 0x4A);
     private static final DeviceRgb GOLD = new DeviceRgb(0xD4, 0xAF, 0x37);
@@ -103,6 +103,7 @@ public class ReportService {
     private final com.pfe.platform.msexecution.repository.EnvironmentRepository environmentRepository;
     private final TestCaseRepository testCaseRepository;
     private final TestSuiteRepository testSuiteRepository;
+    private final LlmAnalysisService llmAnalysisService;
 
     private final RestTemplate restTemplate = new RestTemplate();
 
@@ -335,8 +336,7 @@ public class ReportService {
             if (summary.aiAnalysis() == null || summary.aiAnalysis().isBlank()) {
                 continue;
             }
-            String trimmed = truncate(summary.aiAnalysis(), 200);
-            fragments.add("- " + safeValue(summary.testName()) + ": " + trimmed);
+            fragments.add("- " + safeValue(summary.testName()) + ":\n" + summary.aiAnalysis().trim());
         }
         return fragments.isEmpty() ? "Aucune recommandation spécifique" : String.join("\n", fragments);
     }
@@ -384,7 +384,7 @@ public class ReportService {
         for (Long suiteId : suiteIds) {
             try {
                 ResponseEntity<List<ExternalTestCaseInfo>> response = restTemplate.exchange(
-                        msGestionUrl + "/api/suites/" + suiteId + "/testcases",
+                        msGestionUrl + "/api/internal/suites/" + suiteId + "/testcases",
                         HttpMethod.GET,
                         new HttpEntity<>(authorizationHeaders(authorizationHeader)),
                         new ParameterizedTypeReference<>() {}
@@ -581,8 +581,9 @@ public class ReportService {
 
     private Optional<ExternalCampaignInfo> fetchCampaignInfo(Long projectId, Long campaignId, String authorizationHeader) {
         try {
+            // Use /api/internal/ — no SecurityUtils check, no user context needed
             ResponseEntity<ExternalCampaignInfo> response = restTemplate.exchange(
-                    msGestionUrl + "/api/projects/" + projectId + "/campaigns/" + campaignId,
+                    msGestionUrl + "/api/internal/projects/" + projectId + "/campaigns/" + campaignId,
                     HttpMethod.GET,
                     new HttpEntity<>(authorizationHeaders(authorizationHeader)),
                     ExternalCampaignInfo.class
@@ -597,7 +598,7 @@ public class ReportService {
     private Optional<ExternalProjectInfo> fetchProjectInfo(Long projectId, String authorizationHeader) {
         try {
             ResponseEntity<ExternalProjectInfo> response = restTemplate.exchange(
-                    msGestionUrl + "/api/projects/" + projectId,
+                    msGestionUrl + "/api/internal/projects/" + projectId,
                     HttpMethod.GET,
                     new HttpEntity<>(authorizationHeaders(authorizationHeader)),
                     ExternalProjectInfo.class
@@ -612,7 +613,7 @@ public class ReportService {
     private Optional<ExternalEnvironmentInfo> fetchEnvironmentInfo(Long projectId, Long environmentId, String authorizationHeader) {
         try {
             ResponseEntity<ExternalEnvironmentInfo> response = restTemplate.exchange(
-                    msGestionUrl + "/api/projects/" + projectId + "/environments/" + environmentId,
+                    msGestionUrl + "/api/internal/projects/" + projectId + "/environments/" + environmentId,
                     HttpMethod.GET,
                     new HttpEntity<>(authorizationHeaders(authorizationHeader)),
                     ExternalEnvironmentInfo.class
@@ -706,16 +707,7 @@ public class ReportService {
     private void addExecutiveSummary(Document document, PdfDocument pdfDocument, ReportData data, PdfFont regularFont, PdfFont boldFont) {
         document.add(new Paragraph("Resume executif").setFont(boldFont).setFontSize(18).setMarginBottom(8));
 
-        PdfPage page = pdfDocument.getLastPage();
-        Rectangle pageSize = page.getPageSize();
-        float leftMargin = document.getLeftMargin();
-        float rightMargin = document.getRightMargin();
-        float usableWidth = pageSize.getWidth() - leftMargin - rightMargin;
-        float gaugeColumnWidth = usableWidth * 0.28f;
-        float centerX = pageSize.getLeft() + leftMargin + (gaugeColumnWidth / 2f);
-        float centerY = pageSize.getTop() - document.getTopMargin() - 120f;
-        drawGauge(pdfDocument, data.successRate(), centerX, centerY, 48f);
-
+        // ── KPI table (5 columns) ──────────────────────────────────────────────
         Table metrics = new Table(new float[]{2, 2, 2, 2, 2});
         metrics.setWidth(UnitValue.createPercentValue(100));
         metrics.addHeaderCell(metricHeader("Total", boldFont));
@@ -728,16 +720,27 @@ public class ReportService {
         metrics.addCell(metricValue(String.valueOf(data.failureCount()), boldFont, FAILURE));
         metrics.addCell(metricValue(String.valueOf(data.errorCount()), boldFont, WARNING));
         metrics.addCell(metricValue(formatDuration(data.campaign().durationMs()), boldFont, NAVY));
+        document.add(metrics.setMarginBottom(8));
 
-        Table summaryRow = new Table(new float[]{1.4f, 3.6f});
-        summaryRow.setWidth(UnitValue.createPercentValue(100));
-        summaryRow.addCell(new Cell()
-            .setBorder(Border.NO_BORDER)
-            .add(new Paragraph("Taux de reussite").setFont(boldFont).setFontSize(10))
-            .add(new Paragraph(" ").setFont(regularFont).setFontSize(10).setMarginTop(64))
-        );
-        summaryRow.addCell(new Cell().setBorder(Border.NO_BORDER).add(metrics));
-        document.add(summaryRow.setMarginTop(6));
+        // ── Success rate gauge (flow-based, no canvas coordinate issues) ────────
+        double rate = Math.min(100.0, Math.max(0.0, data.successRate()));
+        DeviceRgb gaugeColor = rate >= 80 ? SUCCESS : rate >= 50 ? WARNING : FAILURE;
+        float filled = (float) Math.min(95.0, Math.max(5.0, rate));
+        float empty  = 100f - filled;
+
+        Table gaugeBar = new Table(new float[]{filled, empty});
+        gaugeBar.setWidth(UnitValue.createPercentValue(100));
+        Cell filledCell = new Cell().setHeight(22).setBackgroundColor(gaugeColor)
+                .setBorder(Border.NO_BORDER)
+                .add(new Paragraph(String.format(Locale.US, "%.0f%%", rate))
+                        .setFont(boldFont).setFontSize(11).setFontColor(ColorConstants.WHITE)
+                        .setTextAlignment(TextAlignment.CENTER));
+        Cell emptyCell  = new Cell().setHeight(22).setBackgroundColor(new DeviceRgb(230, 230, 230))
+                .setBorder(Border.NO_BORDER).add(new Paragraph(""));
+        gaugeBar.addCell(rate > 2 ? filledCell : emptyCell.setBackgroundColor(FAILURE));
+        if (rate > 2 && rate < 98) gaugeBar.addCell(emptyCell);
+        document.add(new Paragraph("Taux de reussite").setFont(boldFont).setFontSize(10).setMarginBottom(2));
+        document.add(gaugeBar.setMarginBottom(6));
 
         document.add(new Paragraph("Evolution vs campagne precedente: " + safeValue(data.previousComparisonText()))
                 .setFont(regularFont).setFontSize(11).setMarginTop(10));
@@ -792,7 +795,9 @@ public class ReportService {
         envTable.setWidth(UnitValue.createPercentValue(100));
         addContextRow(envTable, "URL Web", safeValue(data.localEnvironment() != null ? data.localEnvironment().getBaseUrlWeb() : null), boldFont, regularFont);
         addContextRow(envTable, "URL API", safeValue(data.localEnvironment() != null ? data.localEnvironment().getBaseUrlApi() : null), boldFont, regularFont);
-        addContextRow(envTable, "Variables", safeValue(data.localEnvironment() != null ? data.localEnvironment().getVariables() : null), boldFont, regularFont);
+        addContextRow(envTable, "Repository", safeValue(data.localEnvironment() != null ? data.localEnvironment().getGitRepoUrl() : null), boldFont, regularFont);
+        addContextRow(envTable, "Branche", safeValue(data.localEnvironment() != null ? data.localEnvironment().getGitBranch() : null), boldFont, regularFont);
+        addContextRow(envTable, "Base de donnees", safeValue(data.localEnvironment() != null ? data.localEnvironment().getDatabaseType() : null), boldFont, regularFont);
         document.add(envTable);
     }
 
@@ -816,7 +821,11 @@ public class ReportService {
             addContextRow(meta, "Type", safeValue(summary.type()), boldFont, regularFont);
             addContextRow(meta, "Duree", formatDuration(summary.durationMs()), boldFont, regularFont);
             addContextRow(meta, "Script", summary.generated() ? "IA" : safeValue(summary.scriptPath()), boldFont, regularFont);
-            addContextRow(meta, "Erreur", truncate(summary.errorMessage(), ERROR_PREVIEW_CHARS), boldFont, regularFont);
+            // Show error type + first meaningful error line instead of generic "Maven exit code: 1"
+            String errorType = llmAnalysisService.detectErrorType(summary.logs(), summary.errorMessage());
+            String firstError = extractFirstError(summary.logs(), summary.errorMessage());
+            String errorDisplay = "[" + errorType + "] " + firstError;
+            addContextRow(meta, "Erreur", truncate(errorDisplay, ERROR_PREVIEW_CHARS), boldFont, regularFont);
             document.add(meta);
 
             if ("WEB".equalsIgnoreCase(summary.type()) && ("FAILURE".equals(summary.status()) || "ERROR".equals(summary.status()))) {
@@ -854,9 +863,9 @@ public class ReportService {
             Table box = new Table(new float[]{1.6f, 4.4f});
             box.setWidth(UnitValue.createPercentValue(100));
             box.setBackgroundColor(LIGHT_GRAY);
-            box.addCell(contextHeader("Logs (extrait)", boldFont));
+            box.addCell(contextHeader("Erreurs extraites", boldFont));
             box.addCell(new Cell().setBackgroundColor(LIGHT_GRAY).setBorder(new SolidBorder(ColorConstants.WHITE, 1))
-                    .add(new Paragraph(extractTail(summary.logs(), LOG_PREVIEW_CHARS))
+                    .add(new Paragraph(llmAnalysisService.extractRelevantErrors(summary.logs()))
                             .setFont(monoFont).setFontSize(9)));
             box.addCell(contextHeader("Analyse IA", boldFont));
             String analysis = summary.aiAnalysis() != null && !summary.aiAnalysis().isBlank()
@@ -969,7 +978,7 @@ public class ReportService {
             typeTable.addHeaderCell(contextHeader("Duree moyenne", boldFont));
             for (Map.Entry<String, Double> entry : data.averageDurationByType().entrySet()) {
                 typeTable.addCell(contextValue(entry.getKey(), regularFont));
-                float pct = (float) Math.max(5d, (entry.getValue() / max) * 100d);
+                float pct = (float) Math.min(95d, Math.max(5d, (entry.getValue() / max) * 100d));
                 Table bar = new Table(new float[]{pct, 100f - pct});
                 bar.setWidth(UnitValue.createPercentValue(100));
                 bar.addCell(new Cell().setBorder(Border.NO_BORDER).setBackgroundColor(INFO)
@@ -1021,30 +1030,21 @@ public class ReportService {
         }
     }
 
-    private void drawGauge(PdfDocument pdfDocument, double successRate, float centerX, float centerY, float radius) {
-        PdfPage page = pdfDocument.getLastPage();
-        Rectangle pageSize = page.getPageSize();
-        PdfCanvas canvas = new PdfCanvas(page);
-        canvas.saveState();
-        canvas.setLineWidth(6f);
-        canvas.setStrokeColor(new DeviceRgb(230, 230, 230));
-        canvas.circle(centerX, centerY, radius);
-        canvas.stroke();
-
-        float angle = (float) (360.0 * Math.min(Math.max(successRate, 0.0), 100.0) / 100.0);
-        canvas.setStrokeColor(SUCCESS);
-        canvas.arc(centerX - radius, centerY - radius, centerX + radius, centerY + radius, 90, -angle);
-        canvas.stroke();
-        canvas.restoreState();
-
-        Canvas textCanvas = new Canvas(canvas, pageSize);
-        textCanvas.showTextAligned(new Paragraph(String.format(Locale.US, "%.0f%%", successRate))
-                .setFontSize(12).setFontColor(NAVY),
-                centerX, centerY - 5, TextAlignment.CENTER);
-        textCanvas.showTextAligned(new Paragraph("Taux de reussite")
-                .setFontSize(9).setFontColor(ColorConstants.GRAY),
-            centerX, centerY - 20, TextAlignment.CENTER);
-        textCanvas.close();
+    /**
+     * Extracts the first meaningful [ERROR] line from Maven logs.
+     * Falls back to the errorMessage if no [ERROR] line is found.
+     */
+    private String extractFirstError(String logs, String errorMessage) {
+        if (logs != null) {
+            for (String line : logs.split("\\r?\\n")) {
+                String trimmed = line.trim();
+                if (trimmed.startsWith("[ERROR]") && !trimmed.contains("[Help")
+                        && !trimmed.contains("-> [Help") && trimmed.length() > 10) {
+                    return trimmed.replaceFirst("^\\[ERROR\\]\\s*", "");
+                }
+            }
+        }
+        return errorMessage != null && !errorMessage.isBlank() ? errorMessage : "—";
     }
 
     private void addContextRow(Table table, String label, String value, PdfFont boldFont, PdfFont regularFont) {

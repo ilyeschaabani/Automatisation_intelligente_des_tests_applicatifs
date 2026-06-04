@@ -18,7 +18,10 @@ export const projectService = {
     const { data } = await axiosClient.put(`/api/projects/${id}`, payload);
     return data;
   },
-  archive: async (id: number): Promise<void> => {
+  delete: async (id: number): Promise<void> => {
     await axiosClient.delete(`/api/projects/${id}`);
+  },
+  archive: async (id: number): Promise<void> => {
+    await axiosClient.patch(`/api/projects/${id}/archive`);
   },
 };

@@ -16,6 +16,7 @@ public class TestCaseResponse {
     private String springProfile;
     private Integer priority;
     private String riskLevel;
+    private String gitRepoUrl;
     private String scriptPath;
     private String testData;
     private String tags;
@@ -26,4 +27,5 @@ public class TestCaseResponse {
     private String generatedCode;
     private Boolean generated;
     private String databaseType;
+    private String targetClassName;
 }

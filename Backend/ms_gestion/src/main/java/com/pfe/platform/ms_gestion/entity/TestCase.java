@@ -42,6 +42,9 @@ public class TestCase {
     @Enumerated(EnumType.STRING)
     private RiskLevel riskLevel; // CRITICAL, HIGH, MEDIUM, LOW
 
+    @Column(name = "git_repo_url")
+    private String gitRepoUrl;
+
     private String scriptPath;
 
     @Column(columnDefinition = "JSONB")
@@ -60,6 +63,9 @@ public class TestCase {
     private Boolean generated = false;
 
     private Boolean flaky = false;
+
+    @Column(name = "target_class_name")
+    private String targetClassName;
 
     private LocalDateTime createdAt = LocalDateTime.now();
 

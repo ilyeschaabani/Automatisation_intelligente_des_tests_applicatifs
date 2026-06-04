@@ -7,4 +7,5 @@ import java.util.List;
 
 public interface TestCaseRepository extends JpaRepository<TestCase, Long> {
     List<TestCase> findBySuiteId(Long suiteId);
+    List<TestCase> findBySuiteProjectId(Long projectId);
 }

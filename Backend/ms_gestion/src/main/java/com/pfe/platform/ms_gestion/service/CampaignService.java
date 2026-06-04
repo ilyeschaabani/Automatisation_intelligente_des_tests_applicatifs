@@ -232,6 +232,80 @@ public class CampaignService {
         }
     }
 
+    /**
+     * Returns test cases belonging to the project that are NOT yet in the campaign.
+     * Used to display available tests that can be added to an existing campaign.
+     */
+    public List<TestCaseWithStatusResponse> getAvailableTestCases(Long projectId, Long campaignId) {
+        Campaign campaign = getCampaignOrThrow(campaignId, projectId);
+        checkMembership(campaign.getProject(), SecurityUtils.getCurrentUserId());
+
+        // IDs already in the campaign
+        List<Long> alreadyIn = campaignTestCaseRepository.findByCampaignId(campaignId)
+                .stream().map(ctc -> ctc.getTestCase().getId()).toList();
+
+        // All test cases in the project (through suites)
+        List<TestCase> allProjectTestCases = testCaseRepository.findBySuiteProjectId(projectId);
+
+        return allProjectTestCases.stream()
+                .filter(tc -> !alreadyIn.contains(tc.getId()))
+                .map(tc -> mapTestCaseToResponse(tc, null))
+                .toList();
+    }
+
+    /**
+     * Adds one or more test cases to an existing campaign.
+     * Blocked if the campaign is currently RUNNING.
+     */
+    @Transactional
+    public void addTestCasesToCampaign(Long projectId, Long campaignId, List<Long> testCaseIds) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        Campaign campaign = getCampaignOrThrow(campaignId, projectId);
+        checkProjectRole(campaign.getProject(), userId, ProjectMember.Role.ADMIN, ProjectMember.Role.TESTER);
+
+        if (campaign.getStatus() == Campaign.CampaignStatus.RUNNING) {
+            throw new RuntimeException("Impossible d'ajouter des tests à une campagne en cours d'exécution.");
+        }
+
+        // Start execution order after current max
+        int nextOrder = 1;
+        Integer currentMax = campaignTestCaseRepository.findMaxExecutionOrderByCampaignId(campaignId);
+        if (currentMax != null) nextOrder = currentMax + 1;
+
+        for (Long testCaseId : testCaseIds) {
+            // Skip duplicates
+            if (campaignTestCaseRepository.existsByCampaignIdAndTestCaseId(campaignId, testCaseId)) continue;
+
+            TestCase tc = testCaseRepository.findById(testCaseId)
+                    .orElseThrow(() -> new RuntimeException("Cas de test introuvable : " + testCaseId));
+            if (!tc.getSuite().getProject().getId().equals(projectId)) {
+                throw new RuntimeException("Le cas de test " + testCaseId + " n'appartient pas au projet");
+            }
+
+            CampaignTestCase ctc = new CampaignTestCase();
+            ctc.setCampaign(campaign);
+            ctc.setTestCase(tc);
+            ctc.setExecutionOrder(nextOrder++);
+            campaignTestCaseRepository.save(ctc);
+        }
+    }
+
+    /**
+     * Removes a test case from an existing campaign.
+     * Blocked if the campaign is currently RUNNING.
+     */
+    @Transactional
+    public void removeTestCaseFromCampaign(Long projectId, Long campaignId, Long testCaseId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        Campaign campaign = getCampaignOrThrow(campaignId, projectId);
+        checkProjectRole(campaign.getProject(), userId, ProjectMember.Role.ADMIN, ProjectMember.Role.TESTER);
+
+        if (campaign.getStatus() == Campaign.CampaignStatus.RUNNING) {
+            throw new RuntimeException("Impossible de retirer un test d'une campagne en cours d'exécution.");
+        }
+        campaignTestCaseRepository.deleteByCampaignIdAndTestCaseId(campaignId, testCaseId);
+    }
+
     @Transactional
     public void delete(Long projectId, Long campaignId) {
         Long userId = SecurityUtils.getCurrentUserId();

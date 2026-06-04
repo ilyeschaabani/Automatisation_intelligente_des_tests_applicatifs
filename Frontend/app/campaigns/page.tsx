@@ -266,6 +266,7 @@ export default function CampaignsPage() {
                   passed={stats?.passed ?? 0}
                   failed={stats?.failed ?? 0}
                   lastRun={stats?.lastRun ?? formatLastRun(campaign.finishedAt ?? campaign.startedAt ?? campaign.createdAt)}
+                  onDelete={() => setCampaigns((prev) => prev.filter((c) => c.id !== campaign.id))}
                 />
                   )
                 })()
