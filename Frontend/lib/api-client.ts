@@ -92,6 +92,23 @@ export type ExecutionResultBackendDto = {
   testMethodResults?: string | null // JSON array of SurefireMethodResult
 }
 
+export type UxNavigationStepDto = {
+  id: number
+  stepNumber: number
+  stepName: string | null
+  actionPerformed: string | null
+  observation: string | null
+  pageUrl: string | null
+  pageTitle: string | null
+  screenshotBase64: string | null
+  /** CLICK | FILL | SCROLL | DONE | SKIP */
+  actionType?: string | null
+  /** CSS selector or visible text of the target element */
+  selector?: string | null
+  /** Value typed (only for FILL actions) */
+  fillValue?: string | null
+}
+
 export type UxEvaluationDto = {
   id: number
   projectId: number | null
@@ -109,6 +126,7 @@ export type UxEvaluationDto = {
   errorMessage?: string | null
   createdAt: string
   executedAt?: string | null
+  navigationSteps?: UxNavigationStepDto[]
 }
 
 export type CampaignStatusBackendDto = {
@@ -225,6 +243,25 @@ export async function executeUxEvaluation(id: number): Promise<void> {
 
 export async function downloadUxEvaluationReport(id: number): Promise<Blob> {
   return downloadFunctionalEvaluationReport(id)
+}
+
+/** Stop a running evaluation */
+export async function stopFunctionalEvaluation(id: number): Promise<void> {
+  const token = getAccessToken()
+  const response = await fetch(`/api/functional-evaluation/${encodeURIComponent(String(id))}/stop`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!response.ok) throw new Error('Échec de l\'arrêt')
+}
+
+/** Poll navigation steps for a running evaluation (live view) */
+export async function getEvaluationSteps(id: number): Promise<UxNavigationStepDto[]> {
+  const token = getAccessToken()
+  return requestJson<UxNavigationStepDto[]>(`/api/functional-evaluation/${id}/steps`, {
+    cache: 'no-store',
+    headers: { Authorization: `Bearer ${token}` },
+  })
 }
 
 export function getAccessToken(): string {

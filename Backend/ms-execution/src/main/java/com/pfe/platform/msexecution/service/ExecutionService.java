@@ -194,6 +194,26 @@ public class ExecutionService {
             log.warn("No test cases found for campaign! Marking as finished successfully.");
         }
 
+        // Sort by execution priority: CRITICAL > HIGH > MEDIUM > LOW > unset
+        // Within same risk level, lower priority number runs first (P1 before P2)
+        if (!ctcList.isEmpty()) {
+            List<Long> tcIds = ctcList.stream().map(CampaignTestCase::getTestCaseId).toList();
+            Map<Long, TestCase> tcById = testCaseRepository.findAllById(tcIds).stream()
+                    .collect(java.util.stream.Collectors.toMap(TestCase::getId, t -> t));
+            ctcList = ctcList.stream()
+                    .sorted(java.util.Comparator.comparingInt(
+                            (CampaignTestCase ctc) -> computeExecutionScore(tcById.get(ctc.getTestCaseId()))
+                    ).reversed())
+                    .toList();
+            log.info("[CAMPAIGN {}] Test cases sorted by execution priority (score: {})",
+                    campaignId,
+                    ctcList.stream()
+                           .map(ctc -> tcById.get(ctc.getTestCaseId()))
+                           .filter(java.util.Objects::nonNull)
+                           .map(tc -> tc.getId() + "→" + computeExecutionScore(tc))
+                           .collect(java.util.stream.Collectors.joining(", ")));
+        }
+
         // Map to cache suite repositories (clone once per unique url#branch)
         // Key format: <gitRepoUrl>#<branch>
         Map<String, Path> suiteRepoMap = new HashMap<>();
@@ -1815,6 +1835,35 @@ spring.jpa.hibernate.ddl-auto=create-drop
         if (err.isBlank()) return out;
         if (out.isBlank()) return err;
         return out + System.lineSeparator() + "----- STDERR -----" + System.lineSeparator() + err;
+    }
+
+    /**
+     * Execution priority score — higher score runs first.
+     *
+     * Risk level dominates (weight=10): CRITICAL=4, HIGH=3, MEDIUM=2, LOW=1, unset=0.
+     * Priority refines within same risk level: P1→+10pts, P2→+9pts, … P10→+1pt, unset→+0pts.
+     *
+     * Examples:
+     *   CRITICAL + P1 = 50  (runs first)
+     *   CRITICAL + P5 = 46
+     *   HIGH     + P1 = 40
+     *   MEDIUM   + P3 = 28
+     *   LOW      + P1 = 20
+     *   unset    + P1 = 10
+     *   unset    + unset = 0  (runs last)
+     */
+    private int computeExecutionScore(TestCase tc) {
+        if (tc == null) return 0;
+        int riskScore = switch (tc.getRiskLevel() != null ? tc.getRiskLevel().toUpperCase() : "") {
+            case "CRITICAL" -> 4;
+            case "HIGH"     -> 3;
+            case "MEDIUM"   -> 2;
+            case "LOW"      -> 1;
+            default         -> 0;
+        };
+        int p = tc.getPriority() != null && tc.getPriority() > 0 ? tc.getPriority() : 0;
+        int priorityScore = p > 0 ? Math.max(0, 11 - p) : 0;
+        return riskScore * 10 + priorityScore;
     }
 
     private int approximateLineCount(String text) {

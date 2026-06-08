@@ -37,6 +37,11 @@ public class TestCase {
     private Boolean flaky = false;
     private Integer maxDurationSeconds;
 
+    @Column(name = "risk_level")
+    private String riskLevel;
+
+    private Integer priority;
+
     @Column(columnDefinition = "JSONB")
     @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private String testData;
@@ -129,4 +134,10 @@ public class TestCase {
 
     public String getTestData() { return testData; }
     public void setTestData(String testData) { this.testData = testData; }
+
+    public String getRiskLevel() { return riskLevel; }
+    public void setRiskLevel(String riskLevel) { this.riskLevel = riskLevel; }
+
+    public Integer getPriority() { return priority; }
+    public void setPriority(Integer priority) { this.priority = priority; }
 }

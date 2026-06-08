@@ -36,10 +36,10 @@ public class UxEvaluation {
     @Column(name = "platform", nullable = false)
     private Platform platform;
 
-    @Column(name = "url")
+    @Column(name = "url", columnDefinition = "text")
     private String url;
 
-    @Column(name = "description")
+    @Column(name = "description", columnDefinition = "text")
     private String description;
 
     @Enumerated(EnumType.STRING)
@@ -58,7 +58,7 @@ public class UxEvaluation {
     @Column(name = "logs", columnDefinition = "text")
     private String logs;
 
-    @Column(name = "screenshot_url")
+    @Column(name = "screenshot_url", columnDefinition = "text")
     private String screenshotUrl;
 
     @Column(name = "duration_ms")

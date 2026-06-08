@@ -88,8 +88,10 @@ public class LlmService {
             - Ne mets PAS de markdown, PAS de backticks, PAS de blocs ```.
             - Commence TOUJOURS par la déclaration 'package'.
             - Utilise TestNG (org.testng.annotations.*) : pas de JUnit.
-            - Le code doit contenir : package, imports complets, une classe publique, et des méthodes @Test.
-            - Utilise des assertions TestNG (org.testng.Assert.*).
+            - CHAQUE méthode de test DOIT avoir l'annotation @Test (org.testng.annotations.Test). Sans @Test, TestNG ne l'exécute pas.
+            - Les assertions TestNG s'utilisent avec un import STATIQUE : import static org.testng.Assert.*;
+              CORRECT   : import static org.testng.Assert.*;  puis  assertNotNull(x);
+              INCORRECT : import org.testng.Assert.*;          (non-static — ne compile pas)
             - N'ajoute JAMAIS de commentaires ou d'explications en dehors du code Java.
             """;
 
@@ -153,12 +155,14 @@ public class LlmService {
                 && ("UNIT".equals(normalizedType) || "INTEGRATION".equals(normalizedType))) {
             skeletonBlock = """
 
-                CLASSE SOURCE À TESTER (squelette extrait automatiquement du repo) :
+                CLASSE SOURCE À TESTER :
                 ```java
                 %s
                 ```
-                - Importe et utilise EXACTEMENT cette classe dans ton test (même package, même nom de méthodes).
-                - N'invente pas de méthodes qui n'existent pas dans ce squelette.
+                ⚠ Le package affiché ci-dessus EST LE PACKAGE SOURCE — NE PAS le copier dans le test.
+                  Le package du test est TOUJOURS soit "package suites.unit;" soit "package suites.integration;"
+                - Importe cette classe avec son chemin complet, utilise ses méthodes telles quelles.
+                - N'invente pas de méthodes absentes du squelette.
                 """.formatted(classSkeleton);
         }
 
@@ -206,96 +210,196 @@ public class LlmService {
 
         String specifics = switch (normalizedType) {
             case "UNIT" -> """
-                CONSIGNES UNIT (test unitaire pur) :
+                Génère un test UNIT en complétant ce squelette. Remplace les {placeholders} uniquement.
 
-                RÈGLE ABSOLUE SUR LE PACKAGE :
-                - Le test sera écrit dans src/test/java/suites/unit/ du projet source cloné.
-                - DONC le package OBLIGATOIRE est : package suites.unit;
-                - N'utilise JAMAIS le package du projet source comme package du test.
+                SQUELETTE (respecte-le exactement — le package est TOUJOURS suites.unit) :
+                package suites.unit;
 
-                RÈGLE ABSOLUE SUR LES IMPORTS :
-                - Le test est compilé DANS le projet source — tu as accès à toutes ses classes.
-                - Déduis les imports full-qualified depuis le package du squelette fourni.
-                  Exemple : si le squelette montre "package com.pfe.platform.ms_gestion.service;"
-                  alors importe : import com.pfe.platform.ms_gestion.service.TestCaseService;
-                  et aussi : import com.pfe.platform.ms_gestion.repository.TestCaseRepository; etc.
-                - Importe chaque classe utilisée avec son chemin complet.
+                import {basePackage}.service.{TestedClass};
+                import {basePackage}.repository.*;
+                import {basePackage}.entity.*;
+                import {basePackage}.dto.request.*;
+                import {basePackage}.dto.response.*;
+                import org.mockito.*;
+                import org.testng.annotations.*;
+                import static org.testng.Assert.*;
+                import static org.mockito.Mockito.*;
+                import java.util.Optional;
 
-                RÈGLES MOCKITO + TESTNG :
-                - N'utilise PAS Spring (pas de @SpringBootTest, pas d'@Autowired).
-                - Mocke TOUTES les dépendances avec @Mock (repositories, services, SecurityUtils).
-                - Utilise @InjectMocks pour la classe sous test — JAMAIS de new() explicite.
-                  CORRECT   : @InjectMocks private TestSuiteService testSuiteService;
-                  INCORRECT : @InjectMocks private TestSuiteService testSuiteService = new TestSuiteService();
-                - Si la méthode testée appelle SecurityUtils.getCurrentUserId(), ajoute OBLIGATOIREMENT :
+                public class {TestedClass}Test {
+
+                    private AutoCloseable mocks;  // TOUJOURS présent
+
+                    @Mock private {Repo1} {repo1Field};  // un @Mock par dépendance du service
+                    @InjectMocks private {TestedClass} sut;  // PAS de = new {TestedClass}()
+
+                    @BeforeMethod
+                    public void setUp() throws Exception {
+                        mocks = MockitoAnnotations.openMocks(this);  // stocker la référence
+                    }
+
+                    @AfterMethod
+                    public void tearDown() throws Exception {
+                        mocks.close();  // TOUJOURS fermer — ne pas laisser vide
+                    }
+
+                    @Test
+                    public void test_{methodName}_{scenario}() {
+                        // given — configure les mocks (jamais thenReturn(null) pour save())
+                        // when  — appelle sut.{methodName}(...)
+                        // then  — assertNotNull(result) ET verify(repo).save(any())
+                    }
+                }
+
+                RÈGLES pour remplir les placeholders :
+                - @Mock : un par champ final visible dans le squelette source (repositories, services)
+                - Pour save() : thenReturn(entité avec setId(1L) et les champs du testData) — jamais null
+                - Pour findById() : thenReturn(Optional.of(entité)) ou Optional.empty() selon le scénario
+                - Si la méthode utilise SecurityUtils.getCurrentUserId() : ajouter AVANT @BeforeMethod :
                     private MockedStatic<SecurityUtils> mockedSecurity;
-                    @BeforeMethod public void setUp() {
-                        mocks = MockitoAnnotations.openMocks(this);
-                        mockedSecurity = Mockito.mockStatic(SecurityUtils.class);
-                        mockedSecurity.when(SecurityUtils::getCurrentUserId).thenReturn(1L);
-                    }
-                    @AfterMethod public void tearDown() throws Exception {
-                        mockedSecurity.close(); mocks.close();
-                    }
-                - OBLIGATOIRE : génère TOUJOURS cette structure setUp/tearDown si SecurityUtils est utilisé.
-                - Mock TOUS les repositories utilisés par la méthode (findById, save, existsBy...).
-                - Si la méthode cherche un projet : mock projectRepository.findById(projectId).thenReturn(Optional.of(project)).
-                - Si la méthode vérifie les droits : mock projectMemberRepository.findByProjectIdAndUserId(...).thenReturn(Optional.of(member)).
-                - UTILISE les valeurs du testData dans le test : si testData contient name='X', crée request.setName("X").
-                - Chaque test vérifie un résultat (assertEquals/assertNotNull) ET les interactions (verify).
-                - Pour les méthodes retournant Optional, mocke avec Optional.of(...) ou Optional.empty().
+                    import {basePackage}.security.SecurityUtils;
+                  Et dans setUp() : mockedSecurity = mockStatic(SecurityUtils.class);
+                                    mockedSecurity.when(SecurityUtils::getCurrentUserId).thenReturn(1L);
+                  Et dans tearDown() : mockedSecurity.close();  (avant mocks.close())
                 """;
 
-            case "INTEGRATION" -> """
-                CONSIGNES INTEGRATION (test d'intégration Spring) :
+            case "INTEGRATION" -> ("""
+                Génère un test INTEGRATION en complétant ce squelette. Respecte-le à la lettre.
 
-                RÈGLE ABSOLUE SUR LE PACKAGE :
-                - Le test sera écrit dans src/test/java/suites/integration/ du projet source cloné.
-                - DONC le package OBLIGATOIRE est : package suites.integration;
-                - N'utilise JAMAIS le package du projet source comme package du test.
+                SQUELETTE (structure fixe — NE PAS modifier les annotations ni les imports) :
+                package suites.integration;
 
-                RÈGLE ABSOLUE SUR LES IMPORTS :
-                - Le test est compilé DANS le projet source — toutes ses classes sont disponibles.
-                - Déduis les imports depuis le package du squelette fourni.
-                  Exemple : si le squelette montre "package com.pfe.platform.ms_gestion.repository;"
-                  alors importe : import com.pfe.platform.ms_gestion.repository.TestCaseRepository;
-                - Importe chaque classe utilisée avec son chemin complet.
-
-                IMPORTS OBLIGATOIRES (ajoute-les tous) :
+                import {basePackage}.entity.*;
+                import {basePackage}.repository.*;
+                import {basePackage}.service.*;
+                import {basePackage}.dto.request.*;
+                import {basePackage}.dto.response.*;
+                import org.springframework.beans.factory.annotation.Autowired;
                 import org.springframework.boot.test.context.SpringBootTest;
+                import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+                import org.springframework.security.core.context.SecurityContextHolder;
+                import org.springframework.security.core.context.SecurityContextImpl;
                 import org.springframework.test.context.ActiveProfiles;
                 import org.springframework.test.context.TestPropertySource;
                 import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
-                import org.springframework.beans.factory.annotation.Autowired;
                 import org.springframework.transaction.annotation.Transactional;
+                import java.util.Collections;
+                import org.testng.annotations.AfterMethod;
+                import org.testng.annotations.BeforeMethod;
+                import org.testng.annotations.Test;
+                import static org.testng.Assert.*;
 
-                RÈGLES SPRING TEST :
-                - La classe doit étendre AbstractTestNGSpringContextTests.
-                - Annote la classe avec @SpringBootTest et @ActiveProfiles("test").
-                - Ne mocke PAS les repositories : injecte-les avec @Autowired.
-                """ + integrationDbRule + """
-                - Annote la classe avec @Transactional pour rollback automatique après chaque test.
-                - Assertions complètes (assertNotNull, assertEquals, etc.).
-                """;
+                @SpringBootTest
+                @ActiveProfiles("test")
+                @Transactional
+                """ + buildTestPropertySourceAnnotation(normalizedDatabaseType) + """
+
+                public class {ClassName}Test extends AbstractTestNGSpringContextTests {
+
+                    private final Long TEST_USER_ID = 1L;
+                    private Long suiteId;
+
+                    @Autowired private {TestedService} testedService;
+                    @Autowired private ProjectRepository projectRepository;
+                    @Autowired private TestSuiteRepository testSuiteRepository;
+                    @Autowired private ProjectMemberRepository projectMemberRepository;
+
+                    @BeforeMethod
+                    public void setUp() {
+                        SecurityContextHolder.setContext(new SecurityContextImpl(
+                            new UsernamePasswordAuthenticationToken(TEST_USER_ID, null, Collections.emptyList())
+                        ));
+                        Project project = new Project();
+                        project.setName("Test"); project.setDescription("desc");
+                        project = projectRepository.save(project);
+                        TestSuite suite = new TestSuite();
+                        suite.setName("Suite"); suite.setProject(project);
+                        suite.setType(TestSuite.TestType.INTEGRATION);
+                        suite = testSuiteRepository.save(suite);
+                        suiteId = suite.getId();
+                        ProjectMember member = new ProjectMember();
+                        member.setProject(project); member.setUserId(TEST_USER_ID);
+                        member.setRole(ProjectMember.Role.ADMIN);
+                        projectMemberRepository.save(member);
+                    }
+
+                    @AfterMethod
+                    public void tearDown() { SecurityContextHolder.clearContext(); }
+
+                    @Test
+                    public void test_{methodName}_{scenario}() {
+                        // TON CODE ICI
+                    }
+                }
+
+                RÈGLES pour remplir les placeholders :
+                - {basePackage} : déduis-le depuis "package ..." dans le squelette fourni — copie-le EXACTEMENT, ne l'invente pas
+                - {TestedService} : la classe du service visible dans le squelette (ex: TestCaseService)
+                - {ClassName} : nom de la classe testée (ex: TestCaseService → TestCaseServiceTest)
+                - Champs du Request : utilise UNIQUEMENT les clés du testData fourni comme noms de setters
+                  Exemple : testData={"title":"X","type":"INTEGRATION"} → request.setTitle("X"); request.setType("INTEGRATION");
+                  INTERDIT : inventer des setters comme setName(), setActive(), setFlaky() s'ils ne sont pas dans testData
+                  INTERDIT : utiliser des enums internes (XxxRequest.RiskLevel.LOW) — les champs sont des String
+                - Pour les suites INTEGRATION, la request DOIT avoir setGeneratedCode("package suites.integration; public class Stub {}")
+                  OU setDescriptionAI("...") — sans l'un des deux, le service lève une erreur 400
+                - Assertions minimales : assertNotNull(response); assertEquals(response.getTitle(), valeurAttendue);
+                """);
 
             case "WEB" -> """
-                                CONSIGNES WEB (E2E Web) :
-                                Tu es un expert en automatisation de tests web avec Selenium et TestNG.
+                Génère un test E2E Web en complétant ce squelette. Respecte-le à la lettre.
 
-                                RÈGLES STRICTES (tu dois les respecter) :
-                                - Utilise ChromeDriver en mode headless avec WebDriverManager.
-                                - Lis l'URL de base avec System.getProperty("BASE_URL").
-                                - Inclus @BeforeMethod (créer le driver) et @AfterMethod (driver.quit()).
-                                - Utilise des sélecteurs By.id, By.name, By.cssSelector.
-                                - Inclus TOUS les imports nécessaires.
-                                - Encadre les assertions dans un try/catch.
-                                    En cas d'échec (AssertionError), appelle takeScreenshot(driver, "NomDuTest") puis relance l'erreur.
-                                - Implémente une méthode takeScreenshot(WebDriver driver, String testName) qui :
-                                    - Vérifie (driver instanceof TakesScreenshot)
-                                    - Récupère les bytes (OutputType.BYTES)
-                                    - Sauvegarde un PNG dans un dossier relatif "screenshots" (à créer si absent)
-                                    - Retourne le chemin absolu du fichier
-                                - Réponds UNIQUEMENT avec le code Java (un seul fichier), sans aucune explication.
+                SQUELETTE :
+                package suites.herapp;
+
+                import io.github.bonigarcia.wdm.WebDriverManager;
+                import org.openqa.selenium.*;
+                import org.openqa.selenium.chrome.ChromeDriver;
+                import org.openqa.selenium.chrome.ChromeOptions;
+                import org.testng.annotations.*;
+                import static org.testng.Assert.*;
+                import java.io.*;
+                import java.nio.file.*;
+
+                public class {ClassName}Test {
+
+                    private WebDriver driver;
+                    private final String BASE_URL = System.getProperty("BASE_URL", "http://localhost:3000");
+
+                    @BeforeMethod
+                    public void setUp() {
+                        WebDriverManager.chromedriver().setup();
+                        ChromeOptions opts = new ChromeOptions();
+                        opts.addArguments("--headless", "--no-sandbox", "--disable-dev-shm-usage");
+                        driver = new ChromeDriver(opts);
+                        driver.manage().window().maximize();
+                    }
+
+                    @AfterMethod
+                    public void tearDown() {
+                        if (driver != null) driver.quit();
+                    }
+
+                    private String takeScreenshot(String testName) throws IOException {
+                        if (!(driver instanceof TakesScreenshot ts)) return "";
+                        byte[] bytes = ts.getScreenshotAs(OutputType.BYTES);
+                        Path dir = Paths.get("screenshots"); Files.createDirectories(dir);
+                        Path file = dir.resolve(testName + "_" + System.currentTimeMillis() + ".png");
+                        Files.write(file, bytes);
+                        return file.toAbsolutePath().toString();
+                    }
+
+                    @Test
+                    public void test_{scenario}() {
+                        // TON CODE ICI
+                        // en cas d'AssertionError : try { ... } catch (AssertionError e) { takeScreenshot("test_{scenario}"); throw e; }
+                    }
+                }
+
+                RÈGLES pour remplir les placeholders :
+                - {ClassName} : nom fonctionnel du test (ex: Login, Checkout)
+                - Utilise BASE_URL comme point d'entrée de toutes les navigations
+                - Sélecteurs : By.id > By.cssSelector > By.xpath (dans cet ordre de préférence)
+                - Chaque interaction importante → takeScreenshot() en cas d'échec
                 """;
 
             case "API" -> """
@@ -375,7 +479,82 @@ public class LlmService {
                 """;
         };
 
+        // ── Resolve placeholders using information already available on the server ──
+        // The LLM should never guess what {basePackage} or {TestedService} are —
+        // we extract them from the skeleton and inject them directly into the prompt.
+        String basePackage   = extractBasePackage(classSkeleton);
+        String testedClass   = extractClassName(classSkeleton);
+        String scenarioLabel = scenarioType != null ? scenarioType.toLowerCase() : "test";
+        String methodLabel   = methodName   != null ? methodName                 : "method";
+
+        specifics = specifics
+            .replace("{basePackage}",   basePackage  != null ? basePackage  : "com.example")
+            .replace("{TestedService}", testedClass  != null ? testedClass  : "ServiceUnderTest")
+            .replace("{ClassName}",     testedClass  != null ? testedClass  : "TestedClass")
+            .replace("{methodName}",    methodLabel)
+            .replace("{scenario}",      scenarioLabel);
+
         return commonRules + mongoIntegrationRules + header + skeletonBlock + testDataBlock + scenarioBlock + "\n" + specifics + "\n" + "Génère maintenant le code Java.";
+    }
+
+    /**
+     * Extracts the base package from a skeleton like:
+     *   "package com.pfe.platform.ms_gestion.service;" → "com.pfe.platform.ms_gestion"
+     * Removes the last segment (service/repository/etc.) to get the root module package.
+     */
+    private String extractBasePackage(String skeleton) {
+        if (skeleton == null || skeleton.isBlank()) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern
+            .compile("^\\s*package\\s+([\\w.]+)\\s*;", java.util.regex.Pattern.MULTILINE)
+            .matcher(skeleton);
+        if (!m.find()) return null;
+        String pkg = m.group(1); // e.g. "com.pfe.platform.ms_gestion.service"
+        int lastDot = pkg.lastIndexOf('.');
+        return lastDot > 0 ? pkg.substring(0, lastDot) : pkg;
+    }
+
+    /**
+     * Extracts the simple class name from a skeleton like:
+     *   "public class TestCaseService {" → "TestCaseService"
+     */
+    private String extractClassName(String skeleton) {
+        if (skeleton == null || skeleton.isBlank()) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern
+            .compile("(?:public\\s+)?(?:abstract\\s+)?(?:class|interface)\\s+(\\w+)")
+            .matcher(skeleton);
+        return m.find() ? m.group(1) : null;
+    }
+
+    /** Returns the actual Java @TestPropertySource annotation code for the class header. */
+    private String buildTestPropertySourceAnnotation(String dbType) {
+        return switch (dbType == null ? "" : dbType.trim().toUpperCase()) {
+            case "POSTGRESQL" -> """
+                @TestPropertySource(properties = {
+                    "spring.datasource.url=jdbc:tc:postgresql:14:///testdb",
+                    "spring.datasource.driverClassName=org.testcontainers.jdbc.ContainerDatabaseDriver",
+                    "spring.datasource.username=sa",
+                    "spring.datasource.password=",
+                    "spring.jpa.hibernate.ddl-auto=create-drop"
+                })""";
+            case "MYSQL" -> """
+                @TestPropertySource(properties = {
+                    "spring.datasource.url=jdbc:tc:mysql:8.0.33:///testdb",
+                    "spring.datasource.driverClassName=org.testcontainers.jdbc.ContainerDatabaseDriver",
+                    "spring.datasource.username=sa",
+                    "spring.datasource.password=",
+                    "spring.jpa.hibernate.ddl-auto=create-drop"
+                })""";
+            case "MONGODB" -> ""; // MongoDB uses @BeforeSuite + System.setProperty — handled separately
+            default -> """
+                @TestPropertySource(properties = {
+                    "spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
+                    "spring.datasource.driverClassName=org.h2.Driver",
+                    "spring.datasource.username=sa",
+                    "spring.datasource.password=",
+                    "spring.jpa.hibernate.ddl-auto=create-drop",
+                    "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect"
+                })""";
+        };
     }
 
     private String buildIntegrationDbRule(String dbType) {

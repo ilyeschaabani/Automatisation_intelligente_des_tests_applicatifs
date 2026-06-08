@@ -7,6 +7,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.List;
 
 @Data
 @Builder
@@ -30,7 +32,15 @@ public class UxEvaluationDto {
     private LocalDateTime createdAt;
     private LocalDateTime executedAt;
 
+    /** Navigation steps — populated only on detail endpoint */
+    @Builder.Default
+    private List<UxNavigationStepDto> navigationSteps = Collections.emptyList();
+
     public static UxEvaluationDto fromEntity(UxEvaluation e) {
+        return fromEntity(e, Collections.emptyList());
+    }
+
+    public static UxEvaluationDto fromEntity(UxEvaluation e, List<UxNavigationStepDto> steps) {
         return UxEvaluationDto.builder()
                 .id(e.getId())
                 .projectId(e.getProjectId())
@@ -48,6 +58,7 @@ public class UxEvaluationDto {
                 .errorMessage(e.getErrorMessage())
                 .createdAt(e.getCreatedAt())
                 .executedAt(e.getExecutedAt())
+                .navigationSteps(steps != null ? steps : Collections.emptyList())
                 .build();
     }
 }

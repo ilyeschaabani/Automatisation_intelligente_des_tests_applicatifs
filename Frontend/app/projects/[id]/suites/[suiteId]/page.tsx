@@ -238,8 +238,13 @@ export default function SuiteTestCasesPage() {
   const [wizardSkeleton, setWizardSkeleton] = useState<string>('')
   const [projectEnvs, setProjectEnvs] = useState<Environment[]>([])
 
-  // Scenario builder state (Step 2-4 after wizard)
+  // Scenario builder state (Step 2-4 after wizard) — create dialog
   const [showScenarioBuilder, setShowScenarioBuilder] = useState(false)
+
+  // Edit dialog wizard state (mirrors create flow)
+  const [editShowWizard, setEditShowWizard] = useState(false)
+  const [editWizardSkeleton, setEditWizardSkeleton] = useState<string>('')
+  const [editShowScenarioBuilder, setEditShowScenarioBuilder] = useState(false)
 
   // Parse owner/repo from a GitHub URL like https://github.com/owner/repo
   const parseGitHubUrl = (url: string): { owner: string; repo: string } | null => {
@@ -581,6 +586,9 @@ export default function SuiteTestCasesPage() {
     })
     setSelectedRepoKey('')
     setRepoInitialized(false)
+    setEditShowWizard(false)
+    setEditWizardSkeleton('')
+    setEditShowScenarioBuilder(false)
   }
 
   const openDelete = (testCase: TestCase) => {
@@ -595,7 +603,6 @@ export default function SuiteTestCasesPage() {
       return null
     }
 
-    const isIntegration = suiteType === 'INTEGRATION'
     const showTestData = suiteType !== 'UNIT'
     const mode = effectiveMode
 
@@ -605,52 +612,33 @@ export default function SuiteTestCasesPage() {
       return null
     }
 
-    const priorityRaw = formState.priority.trim()
     const maxDurationRaw = formState.maxDurationSeconds.trim()
-    const priority = priorityRaw ? Number(priorityRaw) : undefined
     const maxDurationSeconds = maxDurationRaw ? Number(maxDurationRaw) : undefined
-
-    if (priorityRaw && !Number.isFinite(priority)) {
-      setFormError('Priority must be a number.')
-      return null
-    }
 
     if (maxDurationRaw && !Number.isFinite(maxDurationSeconds)) {
       setFormError('Max duration must be a number.')
       return null
     }
 
+    const priorityRaw = formState.priority.trim()
+    const priority = priorityRaw ? Number(priorityRaw) : undefined
+    if (priorityRaw && (!Number.isFinite(priority) || priority! < 1)) {
+      setFormError('Priority must be a positive number (1 = highest).')
+      return null
+    }
+
     const payload: CreateTestCaseRequest = {
       title,
-      description: formState.description.trim() || undefined,
+      // For AI mode: use the AI description as the test case description
+      description: mode === 'AI' ? (aiState.descriptionAI.trim() || undefined) : (formState.description.trim() || undefined),
       type: suiteType,
-      gitRepoUrl: formState.gitRepoUrl.trim() || undefined,
-      springProfile: isIntegration ? (formState.springProfile.trim() || undefined) : undefined,
-      databaseType: isIntegration ? (formState.databaseType.trim() || undefined) : undefined,
-      priority,
       riskLevel: formState.riskLevel ? (formState.riskLevel as RiskLevel) : undefined,
+      priority,
+      gitRepoUrl: formState.gitRepoUrl.trim() || undefined,
       scriptPath: formState.scriptPath.trim() || undefined,
       testData: showTestData ? (formState.testData.trim() || undefined) : undefined,
-      tags: formState.tags.trim() || undefined,
       maxDurationSeconds,
       targetClassName: formState.targetClassName.trim() || undefined,
-    }
-
-    if (!isIntegration) {
-      delete (payload as any).springProfile
-    }
-    if (!showTestData) {
-      delete (payload as any).testData
-    }
-
-    if (isIntegration) {
-      const dbt = formState.databaseType.trim()
-      if (!dbt) {
-        setFormError('databaseType is required for INTEGRATION suites')
-        return null
-      }
-      // ensure uppercase normalized value
-      payload.databaseType = dbt.toUpperCase()
     }
 
     // Three cases for code handling:
@@ -842,7 +830,6 @@ export default function SuiteTestCasesPage() {
                       <TableHead>Title</TableHead>
                       <TableHead>Type</TableHead>
                       <TableHead>Priority</TableHead>
-                      <TableHead>Risk</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Created</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -853,8 +840,26 @@ export default function SuiteTestCasesPage() {
                       <TableRow key={testCase.id}>
                         <TableCell className="font-medium">{testCase.title}</TableCell>
                         <TableCell>{testCase.type}</TableCell>
-                        <TableCell>{testCase.priority ?? '—'}</TableCell>
-                        <TableCell>{testCase.riskLevel ?? '—'}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5">
+                            {testCase.riskLevel ? (
+                              <Badge variant="outline" className={
+                                testCase.riskLevel === 'CRITICAL' ? 'border-red-400 text-red-700 bg-red-50' :
+                                testCase.riskLevel === 'HIGH'     ? 'border-orange-400 text-orange-700 bg-orange-50' :
+                                testCase.riskLevel === 'MEDIUM'   ? 'border-yellow-400 text-yellow-700 bg-yellow-50' :
+                                'border-green-400 text-green-700 bg-green-50'
+                              }>
+                                {testCase.riskLevel}
+                              </Badge>
+                            ) : null}
+                            {testCase.priority != null ? (
+                              <span className="text-xs text-muted-foreground font-mono">P{testCase.priority}</span>
+                            ) : null}
+                            {!testCase.riskLevel && testCase.priority == null ? (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            ) : null}
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-2">
                             <Badge variant={testCase.active ? 'default' : 'secondary'}>
@@ -893,8 +898,7 @@ export default function SuiteTestCasesPage() {
         submitLabel="Create test case"
         isSubmitting={isSubmitting}
         disableSubmit={
-          (showAiSection && Boolean(aiState.generatedCode && aiState.generatedCode.trim()) && !aiState.codeValidated) ||
-          (suite?.type === 'INTEGRATION' && !formState.databaseType)
+          showAiSection && Boolean(aiState.generatedCode && aiState.generatedCode.trim()) && !aiState.codeValidated
         }
         size="xl"
         onSubmit={submitCreate}
@@ -909,17 +913,19 @@ export default function SuiteTestCasesPage() {
             required
           />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="case-description">Description</Label>
-          <Textarea
-            id="case-description"
-            value={formState.description}
-            onChange={(event) =>
-              setFormState((prev) => ({ ...prev, description: event.target.value }))
-            }
-            placeholder="Optional description"
-          />
-        </div>
+        {!forceAiForSuite ? (
+          <div className="space-y-2">
+            <Label htmlFor="case-description">Description</Label>
+            <Textarea
+              id="case-description"
+              value={formState.description}
+              onChange={(event) =>
+                setFormState((prev) => ({ ...prev, description: event.target.value }))
+              }
+              placeholder="Optional description"
+            />
+          </div>
+        ) : null}
         <div className="space-y-2">
           <Label>Mode</Label>
           {forceAiForSuite ? (
@@ -956,14 +962,8 @@ export default function SuiteTestCasesPage() {
                   onCancel={() => setShowWizard(false)}
                   onComplete={(result: WizardResult) => {
                     setShowWizard(false)
-                    setFormState((prev) => ({
-                      ...prev,
-                      targetClassName: result.targetClassName,
-                      testData: result.testData,
-                    }))
+                    setFormState((prev) => ({ ...prev, targetClassName: result.targetClassName }))
                     setWizardSkeleton(result.skeleton)
-                    setAiState((prev) => ({ ...prev, descriptionAI: result.descriptionAI }))
-                    // Show ScenarioBuilder (Steps 2-4) instead of generating immediately
                     setShowScenarioBuilder(true)
                   }}
                 />
@@ -1114,49 +1114,44 @@ export default function SuiteTestCasesPage() {
             </div>
           </div>
         ) : null}
-        <div className="space-y-2">
-          <Label>Risk level</Label>
-          <Select
-            value={formState.riskLevel || 'UNSET'}
-            onValueChange={(value) =>
-              setFormState((prev) => ({
-                ...prev,
-                riskLevel: value === 'UNSET' ? '' : (value as RiskLevel),
-              }))
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select risk" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="UNSET">None</SelectItem>
-              <SelectItem value="CRITICAL">CRITICAL</SelectItem>
-              <SelectItem value="HIGH">HIGH</SelectItem>
-              <SelectItem value="MEDIUM">MEDIUM</SelectItem>
-              <SelectItem value="LOW">LOW</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-3">
           <div className="space-y-2">
-            <Label htmlFor="case-priority">Priority</Label>
+            <Label>Risk level</Label>
+            <Select
+              value={formState.riskLevel || 'UNSET'}
+              onValueChange={(v) => setFormState((prev) => ({ ...prev, riskLevel: v === 'UNSET' ? '' : (v as RiskLevel) }))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Risk" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="UNSET">— None</SelectItem>
+                <SelectItem value="CRITICAL">🔴 CRITICAL</SelectItem>
+                <SelectItem value="HIGH">🟠 HIGH</SelectItem>
+                <SelectItem value="MEDIUM">🟡 MEDIUM</SelectItem>
+                <SelectItem value="LOW">🟢 LOW</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="case-priority">Priority <span className="text-muted-foreground text-xs">(1 = highest)</span></Label>
             <Input
               id="case-priority"
+              type="number"
+              min={1}
               value={formState.priority}
-              onChange={(event) =>
-                setFormState((prev) => ({ ...prev, priority: event.target.value }))
-              }
+              onChange={(e) => setFormState((prev) => ({ ...prev, priority: e.target.value }))}
               placeholder="1"
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="case-duration">Max duration (seconds)</Label>
+            <Label htmlFor="case-duration">Max duration (s)</Label>
             <Input
               id="case-duration"
+              type="number"
+              min={1}
               value={formState.maxDurationSeconds}
-              onChange={(event) =>
-                setFormState((prev) => ({ ...prev, maxDurationSeconds: event.target.value }))
-              }
+              onChange={(e) => setFormState((prev) => ({ ...prev, maxDurationSeconds: e.target.value }))}
               placeholder="120"
             />
           </div>
@@ -1248,47 +1243,6 @@ export default function SuiteTestCasesPage() {
           </>
         ) : null}
 
-        {suite?.type === 'INTEGRATION' ? (
-          <div className="space-y-2">
-            <Label htmlFor="case-spring-profile">Spring profile</Label>
-            <Input
-              id="case-spring-profile"
-              value={formState.springProfile}
-              onChange={(event) =>
-                setFormState((prev) => ({ ...prev, springProfile: event.target.value }))
-              }
-              placeholder="test"
-            />
-          </div>
-        ) : null}
-        {suite?.type === 'INTEGRATION' ? (
-          <div className="space-y-2">
-            <Label htmlFor="case-database-type">Database type</Label>
-            <Select
-              value={formState.databaseType || 'UNSET'}
-              onValueChange={(value) => setFormState((prev) => ({ ...prev, databaseType: value }))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select database" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="POSTGRESQL">POSTGRESQL</SelectItem>
-                <SelectItem value="MYSQL">MYSQL</SelectItem>
-                <SelectItem value="H2">H2</SelectItem>
-                <SelectItem value="MONGODB">MONGODB</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        ) : null}
-        <div className="space-y-2">
-          <Label htmlFor="case-tags">Tags</Label>
-          <Input
-            id="case-tags"
-            value={formState.tags}
-            onChange={(event) => setFormState((prev) => ({ ...prev, tags: event.target.value }))}
-            placeholder="smoke,auth"
-          />
-        </div>
         {suite?.type !== 'UNIT' ? (
           <div className="space-y-2">
             <Label htmlFor="case-data">Test data (JSON)</Label>
@@ -1311,8 +1265,7 @@ export default function SuiteTestCasesPage() {
         submitLabel="Save changes"
         isSubmitting={isSubmitting}
         disableSubmit={
-          (showAiSection && Boolean(aiState.generatedCode && aiState.generatedCode.trim()) && !aiState.codeValidated) ||
-          (suite?.type === 'INTEGRATION' && !formState.databaseType)
+          showAiSection && Boolean(aiState.generatedCode && aiState.generatedCode.trim()) && !aiState.codeValidated
         }
         size="xl"
         onSubmit={submitEdit}
@@ -1362,40 +1315,119 @@ export default function SuiteTestCasesPage() {
         </div>
         {showAiSection ? (
           <>
-            {(suite?.type === 'UNIT' || suite?.type === 'INTEGRATION') && (
-              <div className="space-y-2">
-                <Label>
-                  Target class <span className="text-muted-foreground text-xs">(optional — improves AI accuracy)</span>
-                </Label>
-                <Input
-                  value={formState.targetClassName}
-                  onChange={(e) => setFormState((prev) => ({ ...prev, targetClassName: e.target.value }))}
-                  placeholder="e.g. UserService"
+            {isUnitOrIntegration && sourceGitInfo ? (
+              editShowWizard ? (
+                <SourceClassWizard
+                  owner={sourceGitInfo.owner}
+                  repo={sourceGitInfo.repo}
+                  branch={sourceBranch}
+                  onCancel={() => setEditShowWizard(false)}
+                  onComplete={(result: WizardResult) => {
+                    setEditShowWizard(false)
+                    setFormState((prev) => ({ ...prev, targetClassName: result.targetClassName }))
+                    setEditWizardSkeleton(result.skeleton)
+                    setEditShowScenarioBuilder(true)
+                  }}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Simple class name to test. The AI will extract its method signatures from the source repo and generate a real test.
-                </p>
-              </div>
+              ) : editShowScenarioBuilder ? (
+                <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-2">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge variant="secondary" className="font-mono text-xs">{formState.targetClassName}</Badge>
+                    <Button
+                      type="button" variant="ghost" size="sm" className="h-5 text-xs ml-auto"
+                      onClick={() => { setEditShowScenarioBuilder(false); setEditShowWizard(true); setEditWizardSkeleton(''); setFormState(prev => ({ ...prev, targetClassName: '' })) }}
+                    >
+                      Changer de classe
+                    </Button>
+                  </div>
+                  <ScenarioBuilder
+                    skeleton={editWizardSkeleton}
+                    testDataJson={formState.testData}
+                    onCancel={() => { setEditShowScenarioBuilder(false); setEditWizardSkeleton('') }}
+                    onComplete={(result: ScenarioResult, validatedTestData: string) => {
+                      setEditShowScenarioBuilder(false)
+                      setFormState(prev => ({ ...prev, testData: validatedTestData }))
+                      setAiState(prev => ({ ...prev, descriptionAI: result.expectedBehavior }))
+                      void generateScript(result)
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {formState.targetClassName ? (
+                    <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2">
+                      <span className="text-xs text-muted-foreground">Target class:</span>
+                      <Badge variant="secondary" className="font-mono">{formState.targetClassName}</Badge>
+                      <Button
+                        type="button" variant="ghost" size="sm" className="ml-auto h-6 text-xs"
+                        onClick={() => { setEditShowWizard(true); setEditWizardSkeleton(''); setFormState(prev => ({ ...prev, targetClassName: '' })) }}
+                      >
+                        Change
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button" variant="outline" className="w-full gap-2 border-dashed"
+                      onClick={() => setEditShowWizard(true)}
+                    >
+                      <Wand2 size={15} />
+                      Browse source class & describe test
+                    </Button>
+                  )}
+                  {formState.targetClassName && (
+                    <>
+                      <div className="space-y-2">
+                        <Label>AI description <span className="text-destructive">*</span></Label>
+                        <Textarea
+                          value={aiState.descriptionAI}
+                          onChange={(e) => setAiState((prev) => ({ ...prev, descriptionAI: e.target.value }))}
+                          placeholder="Describe what the test should do"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button type="button" variant="outline" onClick={() => generateScript()} disabled={generating}>
+                          {generating ? 'Generating…' : 'Generate script'}
+                        </Button>
+                        {aiState.generatedCode && (
+                          <Button type="button" variant="ghost" onClick={() => setAiState(prev => ({ ...prev, generatedCode: '', codeValidated: false }))}>
+                            Regenerate
+                          </Button>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )
+            ) : (
+              <>
+                {isUnitOrIntegration && !sourceGitInfo && (
+                  <div className="rounded-md border border-orange-200 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-800 px-3 py-2">
+                    <p className="text-xs text-orange-800 dark:text-orange-300">
+                      No source repository configured on this project's environment.
+                    </p>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label>AI description{forceAiForSuite ? ' *' : ''}</Label>
+                  <Textarea
+                    value={aiState.descriptionAI}
+                    onChange={(e) => setAiState((prev) => ({ ...prev, descriptionAI: e.target.value }))}
+                    placeholder="Describe what the test should do in natural language"
+                    required={showAiSection}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" onClick={() => generateScript()} disabled={generating}>
+                    {generating ? 'Generating…' : 'Generate script'}
+                  </Button>
+                  {aiState.generatedCode && (
+                    <Button type="button" variant="ghost" onClick={() => setAiState(prev => ({ ...prev, generatedCode: '', codeValidated: false }))}>
+                      Regenerate
+                    </Button>
+                  )}
+                </div>
+              </>
             )}
-            <div className="space-y-2">
-              <Label>AI description{forceAiForSuite ? ' *' : ''}</Label>
-              <Textarea
-                value={aiState.descriptionAI}
-                onChange={(e) => setAiState((prev) => ({ ...prev, descriptionAI: e.target.value }))}
-                placeholder="Describe what the test should do in natural language"
-                required={showAiSection}
-              />
-            </div>
-            <div className="flex gap-2 mb-2">
-              <Button type="button" variant="outline" onClick={() => generateScript()} disabled={generating}>
-                {generating ? 'Generating…' : 'Generate script'}
-              </Button>
-              {aiState.generatedCode ? (
-                <Button type="button" onClick={() => setAiState((prev) => ({ ...prev, generatedCode: '', codeValidated: false }))} variant="ghost">
-                  Regenerate
-                </Button>
-              ) : null}
-            </div>
           </>
         ) : null}
 
@@ -1423,48 +1455,43 @@ export default function SuiteTestCasesPage() {
             </div>
           </div>
         ) : null}
-        <div className="space-y-2">
-          <Label>Risk level</Label>
-          <Select
-            value={formState.riskLevel || 'UNSET'}
-            onValueChange={(value) =>
-              setFormState((prev) => ({
-                ...prev,
-                riskLevel: value === 'UNSET' ? '' : (value as RiskLevel),
-              }))
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select risk" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="UNSET">None</SelectItem>
-              <SelectItem value="CRITICAL">CRITICAL</SelectItem>
-              <SelectItem value="HIGH">HIGH</SelectItem>
-              <SelectItem value="MEDIUM">MEDIUM</SelectItem>
-              <SelectItem value="LOW">LOW</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-3">
           <div className="space-y-2">
-            <Label htmlFor="case-edit-priority">Priority</Label>
+            <Label>Risk level</Label>
+            <Select
+              value={formState.riskLevel || 'UNSET'}
+              onValueChange={(v) => setFormState((prev) => ({ ...prev, riskLevel: v === 'UNSET' ? '' : (v as RiskLevel) }))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Risk" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="UNSET">— None</SelectItem>
+                <SelectItem value="CRITICAL">🔴 CRITICAL</SelectItem>
+                <SelectItem value="HIGH">🟠 HIGH</SelectItem>
+                <SelectItem value="MEDIUM">🟡 MEDIUM</SelectItem>
+                <SelectItem value="LOW">🟢 LOW</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="case-edit-priority">Priority <span className="text-muted-foreground text-xs">(1 = highest)</span></Label>
             <Input
               id="case-edit-priority"
+              type="number"
+              min={1}
               value={formState.priority}
-              onChange={(event) =>
-                setFormState((prev) => ({ ...prev, priority: event.target.value }))
-              }
+              onChange={(e) => setFormState((prev) => ({ ...prev, priority: e.target.value }))}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="case-edit-duration">Max duration (seconds)</Label>
+            <Label htmlFor="case-edit-duration">Max duration (s)</Label>
             <Input
               id="case-edit-duration"
+              type="number"
+              min={1}
               value={formState.maxDurationSeconds}
-              onChange={(event) =>
-                setFormState((prev) => ({ ...prev, maxDurationSeconds: event.target.value }))
-              }
+              onChange={(e) => setFormState((prev) => ({ ...prev, maxDurationSeconds: e.target.value }))}
             />
           </div>
         </div>
@@ -1554,46 +1581,6 @@ export default function SuiteTestCasesPage() {
           </>
         ) : null}
 
-        {suite?.type === 'INTEGRATION' ? (
-          <div className="space-y-2">
-            <Label htmlFor="case-edit-spring-profile">Spring profile</Label>
-            <Input
-              id="case-edit-spring-profile"
-              value={formState.springProfile}
-              onChange={(event) =>
-                setFormState((prev) => ({ ...prev, springProfile: event.target.value }))
-              }
-              placeholder="test"
-            />
-          </div>
-        ) : null}
-        {suite?.type === 'INTEGRATION' ? (
-          <div className="space-y-2">
-            <Label htmlFor="case-edit-database-type">Database type</Label>
-            <Select
-              value={formState.databaseType || 'UNSET'}
-              onValueChange={(value) => setFormState((prev) => ({ ...prev, databaseType: value }))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select database" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="POSTGRESQL">POSTGRESQL</SelectItem>
-                <SelectItem value="MYSQL">MYSQL</SelectItem>
-                <SelectItem value="H2">H2</SelectItem>
-                <SelectItem value="MONGODB">MONGODB</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        ) : null}
-        <div className="space-y-2">
-          <Label htmlFor="case-edit-tags">Tags</Label>
-          <Input
-            id="case-edit-tags"
-            value={formState.tags}
-            onChange={(event) => setFormState((prev) => ({ ...prev, tags: event.target.value }))}
-          />
-        </div>
         {suite?.type !== 'UNIT' ? (
           <div className="space-y-2">
             <Label htmlFor="case-edit-data">Test data (JSON)</Label>
