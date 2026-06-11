@@ -30,10 +30,6 @@ public class LlmService {
         return generateTestCode(type, description, databaseType, classSkeleton, testData, null, null, null);
     }
 
-    /**
-     * Full structured generation: method + scenario + expectedBehavior give the LLM
-     * enough context to produce a precise, targeted test instead of a generic one.
-     */
     public String generateTestCode(String type, String description, String databaseType,
                                    String classSkeleton, String testData,
                                    String methodName, String scenarioType, String expectedBehavior) {
@@ -114,39 +110,14 @@ public class LlmService {
                 - N'utilise PAS d'annotations Testcontainers/JUnit comme @Testcontainers, @Container, @DynamicPropertySource.
                 - Le code final doit être directement compilable, autonome, et inclure tous les imports nécessaires.
 
-                EXEMPLE DE STRUCTURE À SUIVRE (guide, adapte les noms métier) :
-                // import org.springframework.beans.factory.annotation.Autowired;
-                // import org.springframework.boot.test.context.SpringBootTest;
-                // import org.springframework.test.context.ActiveProfiles;
-                // import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
-                // import org.testng.Assert;
-                // import org.testng.annotations.BeforeSuite;
-                // import org.testng.annotations.Test;
-                // import org.testcontainers.containers.MongoDBContainer;
-                //
-                // @SpringBootTest
-                // @ActiveProfiles("test")
-                // public class UserRepositoryIntegrationTest extends AbstractTestNGSpringContextTests {
-                //
-                //     private static final MongoDBContainer mongo = new MongoDBContainer("mongo:7.0");
-                //
-                //     @BeforeSuite(alwaysRun = true)
-                //     public void beforeSuite() {
-                //         if (!mongo.isRunning()) {
-                //             mongo.start();
-                //         }
-                //         System.setProperty("spring.data.mongodb.uri", mongo.getReplicaSetUrl());
-                //     }
-                //
-                //     @Autowired
-                //     private UserRepository userRepository;
-                //
-                //     @Test
-                //     public void shouldSaveUser() {
-                //         UserEntity saved = userRepository.save(new UserEntity(null, "alice@example.com"));
-                //         Assert.assertNotNull(saved.getId());
-                //     }
-                // }
+                EXEMPLE DE STRUCTURE :
+                @SpringBootTest @ActiveProfiles("test")
+                public class XxxRepositoryIntegrationTest extends AbstractTestNGSpringContextTests {
+                    private static final MongoDBContainer mongo = new MongoDBContainer("mongo:7.0");
+                    @BeforeSuite(alwaysRun = true) public void beforeSuite() { if (!mongo.isRunning()) mongo.start(); System.setProperty("spring.data.mongodb.uri", mongo.getReplicaSetUrl()); }
+                    @Autowired private XxxRepository repo;
+                    @Test public void shouldSave() { ... Assert.assertNotNull(saved.getId()); }
+                }
                 """;
         }
 
@@ -180,7 +151,6 @@ public class LlmService {
                 """.formatted(testData);
         }
 
-        // ── Structured scenario block (highest priority — overrides vague description) ──
         String scenarioBlock = "";
         if (methodName != null && !methodName.isBlank()) {
             String scenarioLabel = resolveScenarioLabel(scenarioType);
@@ -479,9 +449,6 @@ public class LlmService {
                 """;
         };
 
-        // ── Resolve placeholders using information already available on the server ──
-        // The LLM should never guess what {basePackage} or {TestedService} are —
-        // we extract them from the skeleton and inject them directly into the prompt.
         String basePackage   = extractBasePackage(classSkeleton);
         String testedClass   = extractClassName(classSkeleton);
         String scenarioLabel = scenarioType != null ? scenarioType.toLowerCase() : "test";
@@ -497,11 +464,6 @@ public class LlmService {
         return commonRules + mongoIntegrationRules + header + skeletonBlock + testDataBlock + scenarioBlock + "\n" + specifics + "\n" + "Génère maintenant le code Java.";
     }
 
-    /**
-     * Extracts the base package from a skeleton like:
-     *   "package com.pfe.platform.ms_gestion.service;" → "com.pfe.platform.ms_gestion"
-     * Removes the last segment (service/repository/etc.) to get the root module package.
-     */
     private String extractBasePackage(String skeleton) {
         if (skeleton == null || skeleton.isBlank()) return null;
         java.util.regex.Matcher m = java.util.regex.Pattern
@@ -513,10 +475,6 @@ public class LlmService {
         return lastDot > 0 ? pkg.substring(0, lastDot) : pkg;
     }
 
-    /**
-     * Extracts the simple class name from a skeleton like:
-     *   "public class TestCaseService {" → "TestCaseService"
-     */
     private String extractClassName(String skeleton) {
         if (skeleton == null || skeleton.isBlank()) return null;
         java.util.regex.Matcher m = java.util.regex.Pattern
@@ -525,7 +483,6 @@ public class LlmService {
         return m.find() ? m.group(1) : null;
     }
 
-    /** Returns the actual Java @TestPropertySource annotation code for the class header. */
     private String buildTestPropertySourceAnnotation(String dbType) {
         return switch (dbType == null ? "" : dbType.trim().toUpperCase()) {
             case "POSTGRESQL" -> """

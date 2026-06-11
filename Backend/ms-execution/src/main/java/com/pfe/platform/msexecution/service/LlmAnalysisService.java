@@ -107,18 +107,12 @@ public class LlmAnalysisService {
         }
     }
 
-    /**
-     * Extracts the most relevant error lines from Maven/test output.
-     * Instead of blindly truncating from the start (which misses errors at the end),
-     * this method prioritizes [ERROR] lines and surrounding context.
-     */
     public String extractRelevantErrors(String logs) {
         if (logs == null || logs.isBlank()) return "";
 
         StringBuilder relevant = new StringBuilder();
         String[] lines = logs.split("\\r?\\n");
 
-        // Pass 1: collect all [ERROR] lines
         for (String line : lines) {
             if (line.contains("[ERROR]") || line.contains("COMPILATION ERROR")
                     || line.contains("cannot find symbol") || line.contains("is not applicable")
@@ -128,7 +122,7 @@ public class LlmAnalysisService {
             }
         }
 
-        // Pass 2: if still empty or very short, fall back to the last 60 lines
+        // Fallback: dernières 60 lignes si peu d'erreurs trouvées
         if (relevant.length() < 100) {
             int start = Math.max(0, lines.length - 60);
             StringBuilder tail = new StringBuilder();
@@ -141,9 +135,6 @@ public class LlmAnalysisService {
         return truncate(relevant.toString(), MAX_LOG_CHARS);
     }
 
-    /**
-     * Detects whether the failure is a compilation error, assertion failure, runtime exception, or timeout.
-     */
     public String detectErrorType(String logs, String errorMessage) {
         if (logs == null) logs = "";
         if (errorMessage == null) errorMessage = "";

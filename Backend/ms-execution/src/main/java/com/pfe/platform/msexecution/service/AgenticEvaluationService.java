@@ -60,8 +60,6 @@ public class AgenticEvaluationService {
         log.info("[UX-AGENT {}] Stop requested", evaluationId);
     }
 
-    // ─── Public entry points ────────────────────────────────────────────────
-
     public UxEvaluation createEvaluation(String url, String description, Long projectId) {
         UxEvaluation evaluation = UxEvaluation.builder()
                 .url(url)
@@ -106,7 +104,7 @@ public class AgenticEvaluationService {
         streamService.sendInfo(evaluationId, "🚀 Démarrage de l'évaluation UX (moteur IA : " + backend + ")");
         log.info("[UX-AGENT {}] Using vision backend: {}", evaluationId, backend);
         try {
-            // ── 1. Setup ChromeDriver ──────────────────────────────────────
+            // Configuration ChromeDriver
             WebDriverManager.chromedriver().setup();
             ChromeOptions opts = new ChromeOptions();
             opts.addArguments(
@@ -139,7 +137,7 @@ public class AgenticEvaluationService {
             driver = new ChromeDriver(opts);
             driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(15));
 
-            // ── 2. Load initial page ───────────────────────────────────────
+            // Chargement de la page initiale
             log.info("[UX-AGENT {}] Navigating to {}", evaluationId, evaluation.getUrl());
             streamService.sendInfo(evaluationId, "🌐 Ouverture de " + evaluation.getUrl() + "…");
             driver.get(evaluation.getUrl());
@@ -148,7 +146,7 @@ public class AgenticEvaluationService {
             List<String> history = new ArrayList<>();
             int consecutiveEmptyResponses = 0;
 
-            // ── 3. Agentic loop ────────────────────────────────────────────
+            // Boucle agentique
             for (int i = 1; i <= maxSteps; i++) {
                 // Check if stop was requested (in-memory flag OR DB status changed)
                 if (stopRequested.remove(evaluationId) || isStoppedInDb(evaluationId)) {
@@ -165,26 +163,26 @@ public class AgenticEvaluationService {
                 String currentUrl = driver.getCurrentUrl();
                 String pageTitle = driver.getTitle();
 
-                // ── Stream screenshot to frontend ──────────────────────────
+                // Envoi du screenshot au frontend
                 streamService.sendScreenshot(evaluationId, screenshot);
                 streamService.sendThinking(evaluationId, i, currentUrl, pageTitle);
 
-                // Rate limit: wait between calls (free-tier models need spacing)
+                // Délai inter-appels pour le rate limit
                 if (i > 1) {
                     log.info("[UX-AGENT {}] Waiting 10s for rate limit…", evaluationId);
                     Thread.sleep(10_000);
                 }
 
-                // Ask Gemini: "What do you see? What should we do next?"
+                // Analyse IA du screenshot
                 String prompt = buildActionPrompt(currentUrl, pageTitle, history, i, maxSteps,
                         evaluation.getDescription());
                 String geminiResponse = visionProvider.analyzeScreenshot(screenshot, prompt);
 
-                // Send which backend was used (so the tester knows)
+                // Info backend utilisé
                 streamService.send(evaluationId,
                         com.pfe.platform.msexecution.dto.StreamEvent.backendInfo(visionProvider.getLastUsedBackend()));
 
-                // Check stop again after Gemini call (can take 10-20s)
+                // Vérification d'arrêt après l'appel IA
                 if (stopRequested.remove(evaluationId) || isStoppedInDb(evaluationId)) {
                     log.info("[UX-AGENT {}] Stop detected after Gemini call", evaluationId);
                     steps.add(saveStep(evaluationId, i, "Exploration arrêtée par le testeur",
@@ -194,14 +192,12 @@ public class AgenticEvaluationService {
                     break;
                 }
 
-                // ── Handle empty Gemini response with max-retry guard ──────
+                // Gestion des réponses vides avec garde de retry
                 if (geminiResponse == null || geminiResponse.isBlank()) {
                     consecutiveEmptyResponses++;
                     log.warn("[UX-AGENT {}] Gemini no response at step {} (consecutive: {})",
                             evaluationId, i, consecutiveEmptyResponses);
 
-                    // Allow up to 5 consecutive failures before giving up
-                    // (free-tier models have tight rate limits)
                     if (consecutiveEmptyResponses >= 5) {
                         log.error("[UX-AGENT {}] Stopping after {} consecutive failures",
                                 evaluationId, consecutiveEmptyResponses);
@@ -217,8 +213,7 @@ public class AgenticEvaluationService {
                         break;
                     }
 
-                    // Retry same step after a longer wait (free-tier rate limits reset per minute)
-                    int waitSecs = 20 + (consecutiveEmptyResponses * 5); // 25s, 30s, 35s, 40s
+                    int waitSecs = 20 + (consecutiveEmptyResponses * 5);
                     streamService.sendInfo(evaluationId,
                             "⏳ Rate limit atteint (tentative " + consecutiveEmptyResponses
                             + "/5) — nouvelle tentative dans " + waitSecs + "s…");
@@ -238,12 +233,12 @@ public class AgenticEvaluationService {
                 // Parse the decision
                 AgentDecision decision = parseDecision(geminiResponse);
 
-                // ── Stream observation ──────────────────────────────────────
+                // Envoi de l'observation
                 if (decision.observation != null) {
                     streamService.sendObservation(evaluationId, i, decision.observation, currentUrl, pageTitle);
                 }
 
-                // ── Handle NEEDS_INPUT — pause and wait for human ──────────
+                // Intervention humaine si nécessaire
                 if ("NEEDS_INPUT".equalsIgnoreCase(decision.actionType)) {
                     String question = decision.question != null ? decision.question
                             : "J'ai besoin d'informations pour continuer. Pouvez-vous m'aider ?";
@@ -277,11 +272,11 @@ public class AgenticEvaluationService {
                     continue;
                 }
 
-                // ── Stream action ───────────────────────────────────────────
+                // Envoi de l'action au frontend
                 streamService.sendAction(evaluationId, i,
                         decision.actionType, decision.selector, decision.value, decision.reason);
 
-                // Save step to DB
+                // Sauvegarde de l'étape
                 UxNavigationStep step = saveStep(evaluationId, i,
                         decision.observation, decision.reason,
                         currentUrl, pageTitle, rawScreenshot, geminiResponse,
@@ -291,14 +286,14 @@ public class AgenticEvaluationService {
                 history.add("Étape " + i + " (" + currentUrl + "): " + decision.observation
                         + " → Action: " + decision.reason);
 
-                // Check if Gemini decided to stop
+                // Vérification fin d'exploration
                 if ("DONE".equalsIgnoreCase(decision.actionType)) {
                     log.info("[UX-AGENT {}] Gemini decided to stop exploring", evaluationId);
                     streamService.sendInfo(evaluationId, "✅ L'IA a terminé l'exploration");
                     break;
                 }
 
-                // Execute the action
+                // Exécution de l'action
                 boolean actionOk = executeAction(driver, decision);
                 streamService.sendActionResult(evaluationId, i, actionOk,
                         actionOk ? "Action exécutée avec succès"
@@ -312,17 +307,17 @@ public class AgenticEvaluationService {
 
                 streamService.sendStepDone(evaluationId, i, maxSteps);
 
-                // Wait for page to settle
+                // Attente stabilisation page
                 Thread.sleep(1500);
                 waitForPageLoad(driver);
             }
 
-            // ── 4. Final UX analysis ───────────────────────────────────────
+            // Génération du rapport final
             log.info("[UX-AGENT {}] Generating final UX report ({} steps)", evaluationId, steps.size());
             streamService.sendInfo(evaluationId, "📝 Génération du rapport UX en cours…");
             String finalReport = buildFinalReport(evaluation.getUrl(), steps, evaluation.getDescription());
 
-            // ── 5. Save results ────────────────────────────────────────────
+            // Sauvegarde des résultats
             evaluation.setAiAnalysis(finalReport);
             evaluation.setDurationMs(Duration.between(startedAt, Instant.now()).toMillis());
             evaluation.setStatus(Status.COMPLETED);
@@ -348,7 +343,7 @@ public class AgenticEvaluationService {
         }
     }
 
-    // ─── Prompt builders ────────────────────────────────────────────────────
+    // Construction des prompts
 
     private String buildActionPrompt(String url, String pageTitle,
                                      List<String> history, int step, int maxSteps,
@@ -439,7 +434,7 @@ public class AgenticEvaluationService {
         return visionProvider.analyzeText(prompt);
     }
 
-    // ─── Action execution ───────────────────────────────────────────────────
+    // Exécution des actions Selenium
 
     private boolean executeAction(WebDriver driver, AgentDecision decision) {
         try {
@@ -478,39 +473,35 @@ public class AgenticEvaluationService {
         }
     }
 
-    /**
-     * Try to find an element by CSS selector first, then by link text,
-     * then by partial text, then by XPath contains.
-     */
     private WebElement findElement(WebDriver driver, String selector) {
         if (selector == null || selector.isBlank()) return null;
 
-        // 1. Try as CSS selector
+        // CSS selector
         try {
             WebElement el = driver.findElement(By.cssSelector(selector));
             if (el.isDisplayed()) return el;
         } catch (Exception ignored) {}
 
-        // 2. Try as exact link text
+        // Texte exact du lien
         try {
             WebElement el = driver.findElement(By.linkText(selector));
             if (el.isDisplayed()) return el;
         } catch (Exception ignored) {}
 
-        // 3. Try as partial link text
+        // Texte partiel du lien
         try {
             WebElement el = driver.findElement(By.partialLinkText(selector));
             if (el.isDisplayed()) return el;
         } catch (Exception ignored) {}
 
-        // 4. Try XPath: any element containing this text
+        // XPath par contenu texte
         try {
             String xpath = "//*[contains(text(),'" + selector.replace("'", "\\'") + "')]";
             WebElement el = driver.findElement(By.xpath(xpath));
             if (el.isDisplayed()) return el;
         } catch (Exception ignored) {}
 
-        // 5. Try XPath: button or link with this text
+        // XPath bouton ou lien
         try {
             String xpath = "//button[contains(.,'" + selector.replace("'", "\\'")
                     + "')] | //a[contains(.,'" + selector.replace("'", "\\'") + "')]";
@@ -518,11 +509,11 @@ public class AgenticEvaluationService {
             if (el.isDisplayed()) return el;
         } catch (Exception ignored) {}
 
-        log.warn("Element not found for selector: {}", selector);
+        log.warn("Élément introuvable pour le sélecteur: {}", selector);
         return null;
     }
 
-    // ─── Decision parser ────────────────────────────────────────────────────
+    // Parsing de la décision IA
 
     private AgentDecision parseDecision(String geminiResponse) {
         AgentDecision decision = new AgentDecision();
@@ -613,7 +604,7 @@ public class AgenticEvaluationService {
         return null;
     }
 
-    // ─── Helpers ────────────────────────────────────────────────────────────
+    // Méthodes utilitaires
 
     private boolean isStoppedInDb(Long evaluationId) {
         return evaluationRepository.findById(evaluationId)
@@ -629,10 +620,7 @@ public class AgenticEvaluationService {
         } catch (Exception ignored) {}
     }
 
-    /**
-     * Compress screenshot to JPEG at 50% quality and scale down to 800px wide.
-     * This dramatically reduces token usage with Gemini Vision.
-     */
+    /** Compression du screenshot (JPEG 60%, max 800px largeur) pour réduire la taille envoyée à l'API. */
     private byte[] compressScreenshot(byte[] pngBytes) {
         try {
             BufferedImage original = ImageIO.read(new ByteArrayInputStream(pngBytes));
@@ -691,15 +679,13 @@ public class AgenticEvaluationService {
         return stepRepository.save(step);
     }
 
-    // ─── Inner types ────────────────────────────────────────────────────────
-
     private static class AgentDecision {
         String observation;
         String actionType;
         String selector;
         String value;
         String reason;
-        String question; // for NEEDS_INPUT
-        String hint;     // optional example for NEEDS_INPUT
+        String question;
+        String hint;
     }
 }

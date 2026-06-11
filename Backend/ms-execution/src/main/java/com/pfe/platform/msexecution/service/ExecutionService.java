@@ -128,9 +128,6 @@ public class ExecutionService {
         runCampaign(campaignId, null);
     }
 
-    /**
-     * @param selectedTestCaseIds if non-null and non-empty, only these test cases are executed
-     */
     @Async
     public void runCampaign(Long campaignId, List<Long> selectedTestCaseIds) {
         log.info("=== STARTING CAMPAIGN EXECUTION FOR ID: {} ===", campaignId);
@@ -194,8 +191,7 @@ public class ExecutionService {
             log.warn("No test cases found for campaign! Marking as finished successfully.");
         }
 
-        // Sort by execution priority: CRITICAL > HIGH > MEDIUM > LOW > unset
-        // Within same risk level, lower priority number runs first (P1 before P2)
+        // Tri par priorité d'exécution
         if (!ctcList.isEmpty()) {
             List<Long> tcIds = ctcList.stream().map(CampaignTestCase::getTestCaseId).toList();
             Map<Long, TestCase> tcById = testCaseRepository.findAllById(tcIds).stream()
@@ -214,14 +210,8 @@ public class ExecutionService {
                            .collect(java.util.stream.Collectors.joining(", ")));
         }
 
-        // Map to cache suite repositories (clone once per unique url#branch)
-        // Key format: <gitRepoUrl>#<branch>
         Map<String, Path> suiteRepoMap = new HashMap<>();
-        log.info("[CAMPAIGN {}] Suite repo cache initialized (key=url#branch)", campaignId);
-
-        // Cache built-in template extractions for WEB/API suites without gitRepoUrl
         Map<Long, Path> suiteTemplateMap = new HashMap<>();
-        log.info("[CAMPAIGN {}] Suite template cache initialized (key=suiteId)", campaignId);
 
         boolean globalSuccess = true;
         int executedCount = 0;
@@ -243,7 +233,6 @@ public class ExecutionService {
                     continue;
                 }
 
-                // Fix 1: skip inactive test cases
                 if (Boolean.FALSE.equals(tc.getActive())) {
                     log.info("[CAMPAIGN {}] TestCase {} is inactive, skipping", campaignId, tc.getId());
                     continue;
@@ -388,7 +377,7 @@ public class ExecutionService {
 
                 log.info("Executing test: {} ({})", tc.getId(),
                         tc.getGenerated() ? "GENERATED-" + tc.getId() : tc.getScriptPath());
-                // Fix 2: retry x2 for flaky tests
+                // Retry pour les tests flaky
                 ExecutionResult result = executeRealTest(tc, env, workDir, campaignId);
                 if (Boolean.TRUE.equals(tc.getFlaky())
                         && (result.getStatus() == ExecutionResult.ResultStatus.FAILURE
@@ -457,7 +446,7 @@ public class ExecutionService {
             campaign.setCurrentStep("Saving execution result");
             campaign.setFinishedAt(LocalDateTime.now());
             campaignRepository.save(campaign);
-            // Trigger asynchronous generation and storage of campaign report
+            // Génération du rapport PDF
             try {
                 reportStorageService.generateAndStoreAsync(campaignId, null);
             } catch (Exception e) {
@@ -522,9 +511,9 @@ public class ExecutionService {
         return null;
     }
 
-    // --- Préparation du dépôt d'exécution (Git externe ou template IA intégré) ---
+    // Préparation du dépôt d'exécution
     private Path prepareRepository(Project project, Campaign campaign, Environment env) throws IOException, GitAPIException {
-        // Fix 3: gitRepoUrl is now on Environment (primary) — project.gitRepoUrl is legacy fallback
+        // gitRepoUrl depuis l'environnement, fallback sur le projet
         String gitUrl = (env != null && env.getGitRepoUrl() != null && !env.getGitRepoUrl().isBlank())
                 ? env.getGitRepoUrl()
                 : project.getGitRepoUrl();
@@ -534,7 +523,7 @@ public class ExecutionService {
             return prepareBuiltInTemplate();
         }
 
-        // Branch comes from the environment (all config is on the environment now)
+        // Branche depuis l'environnement
         String branch = (env != null && env.getGitBranch() != null && !env.getGitBranch().isBlank())
                 ? env.getGitBranch()
                 : "main";
@@ -706,7 +695,7 @@ public class ExecutionService {
 
     private Path cloneRepository(String repoUrl, String branch) throws GitAPIException, IOException {
         Path dir = createTempDir("exec-");
-        // Embed token in URL for fine-grained PAT compatibility (avoids JGit CredentialsProvider quirks)
+        // Authentification PAT dans l'URL pour les repos privés
         String effectiveUrl = (githubToken != null && !githubToken.isBlank() && repoUrl.startsWith("https://"))
                 ? repoUrl.replace("https://", "https://oauth2:" + githubToken + "@")
                 : repoUrl;
@@ -766,7 +755,7 @@ public class ExecutionService {
                 }
             }
 
-            // Workdir sanity + snapshot (helps detect wrong modulePath / wrong repo root)
+            // Vérification du répertoire de travail
             if (workDir == null) {
                 throw new IllegalStateException("workDir is null");
             }
@@ -782,14 +771,14 @@ public class ExecutionService {
 
             CURRENT_EXECUTION_DIR.set(workDir);
 
-            // Ensure screenshots folder exists (tests write PNGs here on failure).
+            // Création du dossier screenshots
             try {
                 Files.createDirectories(workDir.resolve("screenshots"));
             } catch (Exception e) {
                 log.debug("[TESTCASE {}] Unable to pre-create screenshots dir under {}: {}", tc.getId(), workDir, e.toString());
             }
 
-            // Fix 7: declare testDataFile early so it is in scope for buildMavenCommand
+            // Écriture du fichier testData
             Path testDataFile = null;
             if (tc.getTestData() != null && !tc.getTestData().isBlank()) {
                 try {
@@ -878,7 +867,7 @@ public class ExecutionService {
             }
             log.debug("Final class name for Maven: {}", className);
 
-            // Explicit wrapper check to avoid silent hangs/timeouts.
+            // Vérification du Maven wrapper
             Path wrapper = findMavenWrapper(workDir);
             if (wrapper == null) {
                 String message = "Maven wrapper not found (mvnw.cmd/mvnw) from workDir up to root: " + workDir;
@@ -892,10 +881,10 @@ public class ExecutionService {
 
             log.info("[TESTCASE {}] Using Maven wrapper: {}", tc.getId(), wrapper);
 
-            // Ensure a default Spring Boot test profile exists for integration tests.
+            // Configuration du profil de test pour les tests d'intégration
             TestCase.TestType effectiveType = tc.getType() != null ? tc.getType() : TestCase.TestType.WEB;
             if (effectiveType == TestCase.TestType.INTEGRATION) {
-                // Fix 4: databaseType — tc level overrides env level
+                // databaseType: priorité test case > environnement
                 String dbType = (tc.getDatabaseType() != null && !tc.getDatabaseType().isBlank())
                         ? tc.getDatabaseType()
                         : (env != null ? env.getDatabaseType() : null);
@@ -915,7 +904,7 @@ public class ExecutionService {
                 // Apply DB-specific test properties
                 ensureTestProperties(workDir, dbType);
 
-                // Only ensure H2-specific pom dialect when databaseType is H2
+                // Dialecte H2 dans le pom si nécessaire
                 if ("H2".equalsIgnoreCase(dbType)) {
                     try {
                         ensureH2DialectInPom(pom);
@@ -926,7 +915,7 @@ public class ExecutionService {
             }
 
             List<String> command = buildMavenCommand(tc, env, workDir, className, wrapper, testDataFile);
-            // Fix 8: inject appVersion if available
+            // Injection de la version applicative
             if (campaignId != null) {
                 Campaign campaignForVersion = campaignRepository.findById(campaignId).orElse(null);
                 if (campaignForVersion != null && campaignForVersion.getAppVersion() != null
@@ -957,7 +946,7 @@ public class ExecutionService {
                     tc.getId(),
                     mavenTimeoutMinutes
             );
-            // Fix 6: per-test timeout from maxDurationSeconds, fallback to global
+            // Timeout par test ou global
             long effectiveTimeoutMinutes = (tc.getMaxDurationSeconds() != null && tc.getMaxDurationSeconds() > 0)
                     ? Math.max(1, (long) Math.ceil(tc.getMaxDurationSeconds() / 60.0))
                     : mavenTimeoutMinutes;
@@ -972,7 +961,7 @@ public class ExecutionService {
                     finished
             );
 
-            // Ensure gobblers have time to drain remaining output.
+            // Attente fin de lecture des flux
             joinQuietly(outThread, 10_000);
             joinQuietly(errThread, 10_000);
 
@@ -1008,7 +997,7 @@ public class ExecutionService {
                 log.debug("[TESTCASE {}] Maven output (first {} chars): {}", tc.getId(), max, combinedOutput.substring(0, max));
             }
 
-            // Parse Surefire XML for per-method results
+            // Parsing des rapports Surefire
             try {
                 String methodResults = parseSurefireReports(workDir);
                 if (methodResults != null) {
@@ -1025,7 +1014,7 @@ public class ExecutionService {
                 log.error("[TESTCASE {}] Maven output (first 500 lines, truncated):\n{}", tc.getId(), firstLines(combinedOutput, 500, 20_000));
             }
 
-            // If this was a UX test, extract UX_SUMMARY from logs and analyze with LLM
+            // Analyse UX si applicable
             if (tc.getType() == TestCase.TestType.FUNCTIONAL_WEB || tc.getType() == TestCase.TestType.FUNCTIONAL_MOBILE) {
                 String testSummary = extractUxSummary(combinedOutput);
                 if (testSummary != null && !testSummary.isBlank()) {
@@ -1049,7 +1038,7 @@ public class ExecutionService {
                 result.setDurationMs(System.currentTimeMillis() - start);
             }
 
-            // Attach screenshot for failed E2E runs (WEB) when present.
+            // Capture d'écran pour les échecs E2E
             attachLatestScreenshotIfPresent(result, workDir, start);
 
             CURRENT_EXECUTION_DIR.remove();
@@ -1498,12 +1487,12 @@ public class ExecutionService {
         TestCase.TestType testType = tc.getType() != null ? tc.getType() : TestCase.TestType.WEB;
         String baseUrl = resolveBaseUrl(testType, env);
 
-        // Fix 4: databaseType — tc level overrides env level
+        // databaseType: priorité test case > environnement
         String effectiveDbType = (tc.getDatabaseType() != null && !tc.getDatabaseType().isBlank())
                 ? tc.getDatabaseType()
                 : (env != null ? env.getDatabaseType() : null);
 
-        // Fix 5: springProfile from tc, fallback to "test"
+        // Profil Spring actif
         String effectiveProfile = (tc.getSpringProfile() != null && !tc.getSpringProfile().isBlank())
                 ? tc.getSpringProfile()
                 : "test";
@@ -1533,13 +1522,12 @@ public class ExecutionService {
                 break;
         }
 
-        // Fix 7: testData file path
+        // Chemin du fichier testData
         if (testDataFile != null && Files.exists(testDataFile)) {
             command.add("-Dtest.data.file=" + testDataFile.toAbsolutePath());
         }
 
-        // Fix 8: appVersion from campaign
-        // (passed in via env.variables field as workaround — injected by caller if needed)
+        // Version applicative (depuis la campagne)
 
         return command;
     }
@@ -1837,21 +1825,7 @@ spring.jpa.hibernate.ddl-auto=create-drop
         return out + System.lineSeparator() + "----- STDERR -----" + System.lineSeparator() + err;
     }
 
-    /**
-     * Execution priority score — higher score runs first.
-     *
-     * Risk level dominates (weight=10): CRITICAL=4, HIGH=3, MEDIUM=2, LOW=1, unset=0.
-     * Priority refines within same risk level: P1→+10pts, P2→+9pts, … P10→+1pt, unset→+0pts.
-     *
-     * Examples:
-     *   CRITICAL + P1 = 50  (runs first)
-     *   CRITICAL + P5 = 46
-     *   HIGH     + P1 = 40
-     *   MEDIUM   + P3 = 28
-     *   LOW      + P1 = 20
-     *   unset    + P1 = 10
-     *   unset    + unset = 0  (runs last)
-     */
+    /** Score de priorité d'exécution : riskLevel (x10) + priority inversée. */
     private int computeExecutionScore(TestCase tc) {
         if (tc == null) return 0;
         int riskScore = switch (tc.getRiskLevel() != null ? tc.getRiskLevel().toUpperCase() : "") {
@@ -2029,9 +2003,7 @@ spring.jpa.hibernate.ddl-auto=create-drop
         return null;
     }
 
-    /**
-     * Find the most recently modified PNG file under the workDir's screenshots folder (no time filtering).
-     */
+    /** Dernier screenshot PNG dans le dossier screenshots. */
     private Path findLatestScreenshot(Path workDir) {
         if (workDir == null) return null;
         Path screenshots = findScreenshotsDir(workDir);
@@ -2051,9 +2023,7 @@ spring.jpa.hibernate.ddl-auto=create-drop
         }
     }
 
-    /**
-     * Copy screenshot file to a permanent configured directory and update result.screenshotUrl.
-     */
+    /** Copie du screenshot vers le répertoire permanent. */
     private void copyScreenshotToPermanent(Path src, ExecutionResult result) throws IOException {
         if (src == null || result == null) return;
 
@@ -2073,12 +2043,7 @@ spring.jpa.hibernate.ddl-auto=create-drop
         log.info("Copied screenshot {} -> {}", src, out);
     }
 
-    /**
-     * Parses all Surefire XML report files under target/surefire-reports/
-     * and returns a JSON array of per-method results.
-     * Format: [{"method":"testCreate","status":"PASS","durationMs":123},
-     *          {"method":"testDelete","status":"FAIL","message":"expected...","stacktrace":"..."}]
-     */
+    /** Parse les rapports Surefire XML et retourne un tableau JSON des résultats par méthode. */
     private String parseSurefireReports(Path workDir) {
         if (workDir == null) return null;
         Path reportsDir = workDir.resolve("target/surefire-reports");

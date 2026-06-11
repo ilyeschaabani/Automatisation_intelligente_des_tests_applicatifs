@@ -143,14 +143,14 @@ export function ScenarioBuilder({ skeleton, testDataJson, requestSchemaName, onC
   const [selectedMethod, setSelectedMethod] = useState<MethodInfo | null>(null)
   const [scenario, setScenario] = useState<ScenarioType | null>(null)
 
-  // Step 4a — test data generation
+  // Données de test
   const [requestFields, setRequestFields] = useState<SchemaField[]>([])
   const [generatingTestData, setGeneratingTestData] = useState(false)
   const [validatedTestData, setValidatedTestData] = useState<string>(testDataJson)
   const [testDataError, setTestDataError] = useState<string | null>(null)
   const [testDataValidated, setTestDataValidated] = useState(false)
 
-  // Step 4b — assertions
+  // Assertions
   const [assertions, setAssertions] = useState<AssertionItem[]>([])
   const [exceptionSpec, setExceptionSpec] = useState<ExceptionSpec>({ exceptionType: 'RuntimeException', messageContains: '' })
   const [schemaLoading, setSchemaLoading] = useState(false)

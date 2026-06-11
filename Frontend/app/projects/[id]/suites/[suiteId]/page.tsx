@@ -641,12 +641,7 @@ export default function SuiteTestCasesPage() {
       targetClassName: formState.targetClassName.trim() || undefined,
     }
 
-    // Three cases for code handling:
-    // 1. If generatedCode exists (and validated) -> send it
-    // 2. If project.aiProject with description -> backend regenerates
-    // 3. Otherwise -> manual mode with scriptPath
     if (mode === 'AI') {
-      // AI mode: either persist edited code or request generation from description.
       if (aiState.generatedCode && aiState.generatedCode.trim()) {
         if (!aiState.codeValidated) {
           setFormError('You must validate the generated script before saving.')
