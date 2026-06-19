@@ -977,6 +977,7 @@ export default function SuiteTestCasesPage() {
                   <ScenarioBuilder
                     skeleton={wizardSkeleton}
                     testDataJson={formState.testData}
+                    suiteId={suiteId}
                     onCancel={() => { setShowScenarioBuilder(false); setWizardSkeleton(''); setFormState(prev => ({ ...prev, targetClassName: '' })) }}
                     onComplete={(result: ScenarioResult, validatedTestData: string) => {
                       setShowScenarioBuilder(false)
@@ -1338,6 +1339,7 @@ export default function SuiteTestCasesPage() {
                   <ScenarioBuilder
                     skeleton={editWizardSkeleton}
                     testDataJson={formState.testData}
+                    suiteId={suiteId}
                     onCancel={() => { setEditShowScenarioBuilder(false); setEditWizardSkeleton('') }}
                     onComplete={(result: ScenarioResult, validatedTestData: string) => {
                       setEditShowScenarioBuilder(false)

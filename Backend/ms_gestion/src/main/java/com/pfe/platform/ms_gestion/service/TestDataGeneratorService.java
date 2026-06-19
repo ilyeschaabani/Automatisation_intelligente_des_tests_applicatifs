@@ -1,6 +1,7 @@
 package com.pfe.platform.ms_gestion.service;
 
 import com.pfe.platform.ms_gestion.dto.request.GenerateTestDataRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -12,34 +13,56 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class TestDataGeneratorService {
 
     private final RestTemplate restTemplate = new RestTemplate();
-    private static final String OLLAMA_URL = "http://localhost:11434/api/generate";
-    private static final String MODEL = "deepseek-coder:6.7b";
+
+    @org.springframework.beans.factory.annotation.Value("${ollama.url:http://localhost:11434/api/generate}")
+    private String ollamaUrl;
+
+    @org.springframework.beans.factory.annotation.Value("${ollama.model:qwen3-coder-next:cloud}")
+    private String model;
 
     public String generateTestData(GenerateTestDataRequest request) {
+        log.info("[TestDataGenerator] Building prompt for method={}, scenario={}", request.getMethodName(), request.getScenarioType());
+        log.info("[TestDataGenerator] Fields count={}", request.getFields() != null ? request.getFields().size() : 0);
         String prompt = buildPrompt(request);
+        log.info("[TestDataGenerator] Prompt built ({} chars)", prompt.length());
+        log.debug("[TestDataGenerator] Full prompt:\n{}", prompt);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
 
         Map<String, Object> body = Map.of(
-                "model", MODEL,
+                "model", model,
                 "prompt", prompt,
                 "stream", false
         );
 
-        ResponseEntity<Map> response = restTemplate.postForEntity(
-                OLLAMA_URL,
-                new HttpEntity<>(body, headers),
-                Map.class
-        );
+        log.info("[TestDataGenerator] Calling Ollama model={} at url={}", model, ollamaUrl);
+        try {
+            ResponseEntity<Map> response = restTemplate.postForEntity(
+                    ollamaUrl,
+                    new HttpEntity<>(body, headers),
+                    Map.class
+            );
 
-        if (response.getBody() != null && response.getBody().containsKey("response")) {
-            String raw = (String) response.getBody().get("response");
-            return extractJson(raw);
+            log.info("[TestDataGenerator] Ollama response status={}", response.getStatusCode());
+            if (response.getBody() != null && response.getBody().containsKey("response")) {
+                String raw = (String) response.getBody().get("response");
+                log.info("[TestDataGenerator] Raw LLM response ({} chars): {}", raw != null ? raw.length() : 0,
+                        raw != null && raw.length() > 500 ? raw.substring(0, 500) + "..." : raw);
+                String json = extractJson(raw);
+                log.info("[TestDataGenerator] Extracted JSON: {}", json);
+                return json;
+            } else {
+                log.warn("[TestDataGenerator] Ollama response body missing 'response' key. Body={}", response.getBody());
+            }
+        } catch (Exception e) {
+            log.error("[TestDataGenerator] Ollama call FAILED: {}", e.getMessage(), e);
+            throw new RuntimeException("Ollama call failed: " + e.getMessage(), e);
         }
         throw new RuntimeException("Ollama n'a pas retourné de test data.");
     }
@@ -47,7 +70,10 @@ public class TestDataGeneratorService {
     private String buildPrompt(GenerateTestDataRequest req) {
         String scenario = req.getScenarioType() != null ? req.getScenarioType().toUpperCase() : "HAPPY_PATH";
         String method   = req.getMethodName() != null ? req.getMethodName() : "la méthode";
-        String fields   = buildFieldsDescription(req.getFields());
+
+        boolean hasFields = req.getFields() != null && !req.getFields().isEmpty();
+        boolean hasSkeleton = req.getSkeleton() != null && !req.getSkeleton().isBlank();
+        String fields = hasFields ? buildFieldsDescription(req.getFields()) : null;
 
         String scenarioInstructions = switch (scenario) {
             case "HAPPY_PATH" -> """
@@ -101,24 +127,37 @@ public class TestDataGeneratorService {
                 """;
         };
 
-        return """
-                Tu es un expert en tests logiciels Java.
-                Génère un objet JSON de données de test pour la méthode '%s'.
+        StringBuilder prompt = new StringBuilder();
+        prompt.append("Tu es un expert en tests logiciels Java.\n");
+        prompt.append("Génère un objet JSON de données de test pour la méthode '").append(method).append("'.\n\n");
 
-                CHAMPS DU FORMULAIRE (issus du schéma API Swagger) :
-                %s
+        if (hasFields) {
+            prompt.append("CHAMPS DU FORMULAIRE (issus du schéma API Swagger) :\n").append(fields).append("\n\n");
+        } else if (hasSkeleton) {
+            prompt.append("Aucun schéma Swagger disponible. Analyse le code source ci-dessous pour déduire ");
+            prompt.append("les paramètres de la méthode '").append(method).append("' et génère un JSON ");
+            prompt.append("contenant toutes les valeurs nécessaires pour l'appeler.\n\n");
+            prompt.append("CODE SOURCE :\n");
+            String skeletonTrimmed = req.getSkeleton().length() > 2000
+                    ? req.getSkeleton().substring(0, 2000) + "\n... (truncated)"
+                    : req.getSkeleton();
+            prompt.append(skeletonTrimmed).append("\n\n");
+        } else {
+            prompt.append("Génère un JSON de test data représentatif pour cette méthode.\n\n");
+        }
 
-                %s
-
+        prompt.append(scenarioInstructions).append("\n");
+        prompt.append("""
                 RÈGLES ABSOLUES :
                 - Réponds UNIQUEMENT avec le JSON brut, sans texte avant ni après.
                 - Pas de markdown, pas de backticks, pas d'explication.
                 - Le JSON doit être valide et parseable.
-                - N'inclus PAS les champs de sortie comme id, suiteId, createdAt, generatedCode.
+                - N'inclus PAS les champs de sortie comme id, createdAt, generatedCode.
                 - Commence directement par { et termine par }.
 
                 Génère maintenant le JSON de test data :
-                """.formatted(method, fields, scenarioInstructions);
+                """);
+        return prompt.toString();
     }
 
     private String buildFieldsDescription(List<GenerateTestDataRequest.FieldSchema> fields) {

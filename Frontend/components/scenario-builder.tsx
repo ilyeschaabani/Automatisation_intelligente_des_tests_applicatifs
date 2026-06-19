@@ -45,6 +45,7 @@ interface ScenarioBuilderProps {
   skeleton: string
   testDataJson: string        // initial JSON from test data field (can be overridden)
   requestSchemaName?: string  // e.g. "CreateTestCaseRequest" — for test data generation
+  suiteId?: number            // used to extract DTO fields from git when Swagger unavailable
   onComplete: (result: ScenarioResult, validatedTestData: string) => void
   onCancel: () => void
 }
@@ -137,7 +138,7 @@ function parseTestData(json: string): Record<string, string> {
 
 type Step = 2 | 3 | '4a' | '4b'
 
-export function ScenarioBuilder({ skeleton, testDataJson, requestSchemaName, onComplete, onCancel }: ScenarioBuilderProps) {
+export function ScenarioBuilder({ skeleton, testDataJson, requestSchemaName, suiteId, onComplete, onCancel }: ScenarioBuilderProps) {
   const [step, setStep] = useState<Step>(2)
   const [methods, setMethods] = useState<MethodInfo[]>([])
   const [selectedMethod, setSelectedMethod] = useState<MethodInfo | null>(null)
@@ -155,6 +156,22 @@ export function ScenarioBuilder({ skeleton, testDataJson, requestSchemaName, onC
   const [exceptionSpec, setExceptionSpec] = useState<ExceptionSpec>({ exceptionType: 'RuntimeException', messageContains: '' })
   const [schemaLoading, setSchemaLoading] = useState(false)
   const [schemaError, setSchemaError] = useState<string | null>(null)
+
+  async function fetchDtoFields(className: string): Promise<SchemaField[]> {
+    if (!suiteId || !className) return []
+    try {
+      const r = await fetch('/api/llm/extract-dto-fields', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ suiteId, className }),
+      })
+      if (!r.ok) return []
+      const data = await r.json()
+      return (data.fields ?? []) as SchemaField[]
+    } catch {
+      return []
+    }
+  }
 
   // Parse methods from skeleton on mount
   useEffect(() => {
@@ -189,43 +206,38 @@ export function ScenarioBuilder({ skeleton, testDataJson, requestSchemaName, onC
       flaky:     'false',
     }
 
+    const buildFromFields = (fields: SchemaField[]) => {
+      return fields.map(f => {
+        const tdValue = testData[f.name] ?? testData[f.name.toLowerCase()] ?? null
+        const smartDefault = SMART_DEFAULTS[f.name] ?? null
+        const isOutputOnly = OUTPUT_ONLY.has(f.name)
+        const value = tdValue ?? smartDefault ?? (isOutputOnly ? 'NOT_NULL' : '')
+        const enabled = tdValue !== null || smartDefault !== null || f.required
+        return { field: f.name, type: f.type, enumValues: f.enumValues ?? [], value, enabled, required: f.required }
+      })
+    }
+
     fetch(`/api/llm/swagger?schema=${encodeURIComponent(returnType)}`)
-      .then(r => r.ok ? r.json() : Promise.reject(r.statusText))
-      .then((data: { fields?: SchemaField[] }) => {
-        if (!data.fields?.length) {
-          setAssertions([])
+      .then(r => r.ok ? r.json() : null)
+      .then(async (data: { fields?: SchemaField[] } | null) => {
+        if (data?.fields?.length) {
+          setAssertions(buildFromFields(data.fields))
           return
         }
-        const built: AssertionItem[] = data.fields.map(f => {
-          // ── Source 1: testData JSON (exact match or case-insensitive match) ──
-          const tdValue = testData[f.name] ?? testData[f.name.toLowerCase()] ?? null
-
-          // ── Source 2: smart defaults for well-known fields ──
-          const smartDefault = SMART_DEFAULTS[f.name] ?? null
-
-          // ── Source 3: output-only fields → assert "not null" ──
-          const isOutputOnly = OUTPUT_ONLY.has(f.name)
-
-          // Priority: testData > smartDefault > NOT_NULL (output-only) > empty
-          const value = tdValue ?? smartDefault ?? (isOutputOnly ? 'NOT_NULL' : '')
-
-          // Auto-enable: has testData value, OR smart default, OR is required
-          const enabled = tdValue !== null || smartDefault !== null || f.required
-
-          return {
-            field: f.name,
-            type: f.type,
-            enumValues: f.enumValues ?? [],
-            value,
-            enabled,
-            required: f.required,
-          }
-        })
-        setAssertions(built)
+        const dtoFields = await fetchDtoFields(returnType)
+        if (dtoFields.length > 0) {
+          setAssertions(buildFromFields(dtoFields))
+        } else {
+          setAssertions(buildAssertionsFromTestData(testData))
+        }
       })
-      .catch(() => {
-        setSchemaError('Impossible de charger le schéma depuis Swagger')
-        setAssertions([])
+      .catch(async () => {
+        const dtoFields = await fetchDtoFields(returnType)
+        if (dtoFields.length > 0) {
+          setAssertions(buildFromFields(dtoFields))
+        } else {
+          setAssertions(buildAssertionsFromTestData(testData))
+        }
       })
       .finally(() => setSchemaLoading(false))
   }, [selectedMethod, scenario, testDataJson])
@@ -244,18 +256,30 @@ export function ScenarioBuilder({ skeleton, testDataJson, requestSchemaName, onC
 
     // Fetch REQUEST schema fields first, then generate test data
     const schemaToFetch = requestSchemaName ?? inferRequestSchemaName(selectedMethod?.returnType ?? '')
+    console.log('[ScenarioBuilder] returnType=', selectedMethod?.returnType, 'requestSchemaName=', requestSchemaName, '→ schemaToFetch=', schemaToFetch)
     setStep('4a')
 
     try {
-      // Fetch REQUEST schema from Swagger
+      // Fetch REQUEST schema: try Swagger first, then DTO extraction from git
       let fields: SchemaField[] = []
       if (schemaToFetch) {
+        console.log('[ScenarioBuilder] Fetching Swagger schema:', schemaToFetch)
         const r = await fetch(`/api/llm/swagger?schema=${encodeURIComponent(schemaToFetch)}`)
         if (r.ok) {
           const data = await r.json()
           fields = data.fields ?? []
-          setRequestFields(fields)
         }
+      }
+      if (fields.length === 0) {
+        const requestDtoName = inferRequestDtoName(selectedMethod)
+        if (requestDtoName) {
+          console.log('[ScenarioBuilder] Swagger empty — extracting DTO fields for:', requestDtoName)
+          fields = await fetchDtoFields(requestDtoName)
+        }
+      }
+      if (fields.length > 0) {
+        setRequestFields(fields)
+        console.log('[ScenarioBuilder] Request fields resolved:', fields.length)
       }
 
       // Generate test data using LLM
@@ -272,6 +296,7 @@ export function ScenarioBuilder({ skeleton, testDataJson, requestSchemaName, onC
           required: f.required,
         })),
       }
+      console.log('[ScenarioBuilder] generate-testdata payload:', JSON.stringify(payload).substring(0, 500))
 
       const res = await fetch('/api/llm/generate-testdata', {
         method: 'POST',
@@ -279,14 +304,18 @@ export function ScenarioBuilder({ skeleton, testDataJson, requestSchemaName, onC
         body: JSON.stringify(payload),
       })
 
+      console.log('[ScenarioBuilder] generate-testdata response status:', res.status)
       if (res.ok) {
         const data = await res.json()
+        console.log('[ScenarioBuilder] Generated testData:', data.testData)
         setValidatedTestData(data.testData ?? '{}')
       } else {
-        // Fallback: use existing testDataJson or empty object
+        const errText = await res.text()
+        console.error('[ScenarioBuilder] generate-testdata FAILED:', res.status, errText)
         setValidatedTestData(testDataJson || '{}')
       }
-    } catch {
+    } catch (err) {
+      console.error('[ScenarioBuilder] Error in handleScenarioSelect:', err)
       setValidatedTestData(testDataJson || '{}')
     } finally {
       setGeneratingTestData(false)
@@ -295,10 +324,43 @@ export function ScenarioBuilder({ skeleton, testDataJson, requestSchemaName, onC
 
   /** Infer the request schema name from the response type name */
   function inferRequestSchemaName(returnType: string): string {
-    // "TestCaseResponse" → "CreateTestCaseRequest"
-    // "ProjectResponse"  → "CreateProjectRequest"
     const base = extractReturnType(returnType).replace(/Response$/, '')
     return base ? `Create${base}Request` : ''
+  }
+
+  /** Infer the request DTO class name from method params (e.g. "OrderRequest" from "OrderRequest request") */
+  function inferRequestDtoName(method: MethodInfo | null): string | null {
+    if (!method?.params) return null
+    const params = method.params.split(',').map(p => p.trim())
+    for (const param of params) {
+      const parts = param.split(/\s+/)
+      if (parts.length >= 2) {
+        const typeName = parts[0]
+        if (typeName.endsWith('Request') || typeName.endsWith('Dto') || typeName.endsWith('DTO')) {
+          return typeName
+        }
+      }
+    }
+    // Fallback: infer from method name (createOrder → OrderRequest)
+    const match = method.name.match(/^(?:create|add|update|save)(\w+)$/i)
+    if (match) {
+      return match[1] + 'Request'
+    }
+    return null
+  }
+
+  function buildAssertionsFromTestData(testData: Record<string, unknown>): AssertionItem[] {
+    return Object.entries(testData)
+      .filter(([key]) => !['id', 'createdAt', 'updatedAt'].includes(key))
+      .filter(([, val]) => typeof val !== 'object' || val === null)
+      .map(([key, val]) => ({
+        field: key,
+        type: typeof val === 'number' ? 'number' : typeof val === 'boolean' ? 'boolean' : 'string',
+        enumValues: [],
+        value: val != null ? String(val) : '',
+        enabled: val != null,
+        required: false,
+      }))
   }
 
   const handleValidateTestData = () => {
@@ -327,20 +389,39 @@ export function ScenarioBuilder({ skeleton, testDataJson, requestSchemaName, onC
     const OUTPUT_ONLY = new Set(['id', 'suiteId', 'projectId', 'createdAt', 'updatedAt'])
     const SMART_DEFAULTS: Record<string, string> = { active: 'true', generated: 'true', flaky: 'false' }
 
-    fetch(`/api/llm/swagger?schema=${encodeURIComponent(returnType)}`)
-      .then(r => r.ok ? r.json() : Promise.reject(r.statusText))
-      .then((data: { fields?: SchemaField[] }) => {
-        const built: AssertionItem[] = (data.fields ?? []).map(f => {
-          const tdValue      = testData[f.name] ?? testData[f.name.toLowerCase()] ?? null
-          const smartDefault = SMART_DEFAULTS[f.name] ?? null
-          const isOutputOnly = OUTPUT_ONLY.has(f.name)
-          const value        = tdValue ?? smartDefault ?? (isOutputOnly ? 'NOT_NULL' : '')
-          const enabled      = tdValue !== null || smartDefault !== null || f.required
-          return { field: f.name, type: f.type, enumValues: f.enumValues ?? [], value, enabled, required: f.required }
-        })
-        setAssertions(built)
+    const buildFromFields = (fields: SchemaField[]) => {
+      return fields.map(f => {
+        const tdValue      = testData[f.name] ?? testData[f.name.toLowerCase()] ?? null
+        const smartDefault = SMART_DEFAULTS[f.name] ?? null
+        const isOutputOnly = OUTPUT_ONLY.has(f.name)
+        const value        = tdValue ?? smartDefault ?? (isOutputOnly ? 'NOT_NULL' : '')
+        const enabled      = tdValue !== null || smartDefault !== null || f.required
+        return { field: f.name, type: f.type, enumValues: f.enumValues ?? [], value, enabled, required: f.required }
       })
-      .catch(() => { setSchemaError('Impossible de charger le schéma de réponse'); setAssertions([]) })
+    }
+
+    fetch(`/api/llm/swagger?schema=${encodeURIComponent(returnType)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(async (data: { fields?: SchemaField[] } | null) => {
+        if (data?.fields?.length) {
+          setAssertions(buildFromFields(data.fields))
+          return
+        }
+        const dtoFields = await fetchDtoFields(returnType)
+        if (dtoFields.length > 0) {
+          setAssertions(buildFromFields(dtoFields))
+        } else {
+          setAssertions(buildAssertionsFromTestData(testData))
+        }
+      })
+      .catch(async () => {
+        const dtoFields = await fetchDtoFields(returnType)
+        if (dtoFields.length > 0) {
+          setAssertions(buildFromFields(dtoFields))
+        } else {
+          setAssertions(buildAssertionsFromTestData(testData))
+        }
+      })
       .finally(() => setSchemaLoading(false))
   }
 
@@ -541,7 +622,7 @@ export function ScenarioBuilder({ skeleton, testDataJson, requestSchemaName, onC
                 </div>
               )}
               {schemaError && (
-                <p className="text-xs text-destructive">{schemaError}</p>
+                <p className="text-xs text-muted-foreground italic">{schemaError}</p>
               )}
               {!schemaLoading && assertions.length > 0 && (
                 <>

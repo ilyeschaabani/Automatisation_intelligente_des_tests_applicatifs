@@ -143,9 +143,16 @@ public class ReportService {
             document.add(new AreaBreak(AreaBreakType.NEXT_PAGE));
 
             addAiAnalysis(document, reportData, boldFont, monoFont);
-            document.add(new AreaBreak(AreaBreakType.NEXT_PAGE));
 
-            addUxEvaluationSection(document, reportData, boldFont, monoFont);
+            if (hasAiCorrections(reportData)) {
+                document.add(new AreaBreak(AreaBreakType.NEXT_PAGE));
+                addAiCorrectionsSection(document, reportData, boldFont, monoFont, regularFont);
+            }
+
+            if (hasUxTests(reportData)) {
+                document.add(new AreaBreak(AreaBreakType.NEXT_PAGE));
+                addUxEvaluationSection(document, reportData, boldFont, monoFont);
+            }
             document.add(new AreaBreak(AreaBreakType.NEXT_PAGE));
 
             addMetricsSection(document, reportData, boldFont, regularFont);
@@ -533,7 +540,9 @@ public class ReportService {
                 executionResult != null ? executionResult.getScreenshotUrl() : null,
                 Boolean.TRUE.equals(flaky),
                 Boolean.TRUE.equals(generated),
-                scriptPath
+                scriptPath,
+                executionResult != null ? executionResult.getRetryCount() : null,
+                executionResult != null ? executionResult.getRetryLog() : null
         );
     }
 
@@ -687,10 +696,24 @@ public class ReportService {
                 .setTextAlignment(TextAlignment.CENTER)
                 .setMarginTop(2));
 
-        layout.add(new Paragraph("Date: " + formatDateTime(data.generatedAt()))
+        layout.add(new Paragraph("Debut: " + formatDateTime(data.campaign().startedAt) + "  |  Fin: " + formatDateTime(data.campaign().finishedAt))
                 .setFont(regularFont)
-                .setFontSize(12)
+                .setFontSize(11)
                 .setFontColor(ColorConstants.WHITE)
+                .setTextAlignment(TextAlignment.CENTER)
+                .setMarginTop(2));
+
+        layout.add(new Paragraph("Duree: " + formatDuration(data.campaign().durationMs()))
+                .setFont(regularFont)
+                .setFontSize(11)
+                .setFontColor(ColorConstants.WHITE)
+                .setTextAlignment(TextAlignment.CENTER)
+                .setMarginTop(2));
+
+        layout.add(new Paragraph("Rapport genere le " + formatDateTime(data.generatedAt()))
+                .setFont(regularFont)
+                .setFontSize(10)
+                .setFontColor(new DeviceRgb(180, 180, 180))
                 .setTextAlignment(TextAlignment.CENTER)
                 .setMarginTop(2));
 
@@ -746,6 +769,16 @@ public class ReportService {
                 .setFont(regularFont).setFontSize(11).setMarginTop(10));
         document.add(new Paragraph(safeValue(data.previousCampaignLabel()))
                 .setFont(regularFont).setFontSize(10).setFontColor(ColorConstants.GRAY));
+
+        long aiCorrectedCount = data.allResults().stream()
+                .filter(s -> s.retryCount() != null && s.retryCount() > 0).count();
+        if (aiCorrectedCount > 0) {
+            long aiFixedSuccess = data.allResults().stream()
+                    .filter(s -> s.retryCount() != null && s.retryCount() > 0 && "SUCCESS".equals(s.status())).count();
+            document.add(new Paragraph("Corrections IA: " + aiCorrectedCount + " test(s) corrige(s) automatiquement, "
+                    + aiFixedSuccess + " avec succes")
+                    .setFont(boldFont).setFontSize(11).setFontColor(WARNING).setMarginTop(6));
+        }
     }
 
     private void addContextPage(Document document, ReportData data, PdfFont boldFont, PdfFont regularFont) {
@@ -808,43 +841,78 @@ public class ReportService {
             return;
         }
 
-        for (TestResultSummary summary : data.allResults()) {
-            Table header = new Table(new float[]{4.6f, 1.4f});
-            header.setWidth(UnitValue.createPercentValue(100));
-            header.addCell(new Cell().setBorder(Border.NO_BORDER)
-                    .add(new Paragraph(safeValue(summary.testName())).setFont(boldFont).setFontSize(13)));
-            header.addCell(statusBadgeCell(summary.status(), boldFont));
-            document.add(header.setMarginTop(6));
+        // Suite-level summary table
+        document.add(new Paragraph("Synthese par suite").setFont(boldFont).setFontSize(13).setMarginBottom(6));
+        Table suiteSum = new Table(new float[]{3.0f, 1.2f, 1.2f, 1.2f, 1.4f});
+        suiteSum.setWidth(UnitValue.createPercentValue(100));
+        suiteSum.addHeaderCell(contextHeader("Suite", boldFont));
+        suiteSum.addHeaderCell(contextHeader("Total", boldFont));
+        suiteSum.addHeaderCell(contextHeader("Succes", boldFont));
+        suiteSum.addHeaderCell(contextHeader("Echecs", boldFont));
+        suiteSum.addHeaderCell(contextHeader("Taux", boldFont));
+        for (Map.Entry<String, List<TestResultSummary>> entry : data.resultsBySuite().entrySet()) {
+            int total = entry.getValue().size();
+            int pass = (int) entry.getValue().stream().filter(s -> "SUCCESS".equals(s.status())).count();
+            int fail = total - pass;
+            double rate = total == 0 ? 0.0 : pass * 100.0 / total;
+            suiteSum.addCell(contextValue(entry.getKey(), regularFont));
+            suiteSum.addCell(contextValue(String.valueOf(total), regularFont));
+            suiteSum.addCell(contextValue(String.valueOf(pass), regularFont));
+            suiteSum.addCell(contextValue(String.valueOf(fail), regularFont));
+            DeviceRgb rateColor = rate >= 80 ? SUCCESS : rate >= 50 ? WARNING : FAILURE;
+            suiteSum.addCell(new Cell().setBorder(new SolidBorder(ColorConstants.WHITE, 1))
+                    .add(new Paragraph(String.format(Locale.US, "%.0f%%", rate)).setFont(boldFont).setFontSize(9).setFontColor(rateColor)));
+        }
+        document.add(suiteSum.setMarginBottom(12));
 
-            Table meta = new Table(new float[]{1.6f, 2.0f, 1.6f, 2.0f});
-            meta.setWidth(UnitValue.createPercentValue(100));
-            addContextRow(meta, "Type", safeValue(summary.type()), boldFont, regularFont);
-            addContextRow(meta, "Duree", formatDuration(summary.durationMs()), boldFont, regularFont);
-            addContextRow(meta, "Script", summary.generated() ? "IA" : safeValue(summary.scriptPath()), boldFont, regularFont);
-            // Show error type + first meaningful error line instead of generic "Maven exit code: 1"
-            String errorType = llmAnalysisService.detectErrorType(summary.logs(), summary.errorMessage());
-            String firstError = extractFirstError(summary.logs(), summary.errorMessage());
-            String errorDisplay = "[" + errorType + "] " + firstError;
-            addContextRow(meta, "Erreur", truncate(errorDisplay, ERROR_PREVIEW_CHARS), boldFont, regularFont);
-            document.add(meta);
+        // Detailed per-test results grouped by suite
+        for (Map.Entry<String, List<TestResultSummary>> suiteEntry : data.resultsBySuite().entrySet()) {
+            document.add(new Paragraph(suiteEntry.getKey()).setFont(boldFont).setFontSize(14).setMarginTop(10).setMarginBottom(4)
+                    .setBorderBottom(new SolidBorder(NAVY, 1)));
 
-            if ("WEB".equalsIgnoreCase(summary.type()) && ("FAILURE".equals(summary.status()) || "ERROR".equals(summary.status()))) {
-                document.add(new Paragraph("Capture d'ecran").setFont(boldFont).setFontSize(11).setMarginTop(6));
-                if (summary.screenshotUrl() == null || summary.screenshotUrl().isBlank()) {
-                    document.add(new Paragraph("Capture non disponible").setFont(regularFont).setFontSize(10));
+            for (TestResultSummary summary : suiteEntry.getValue()) {
+                Table header = new Table(new float[]{4.0f, 1.0f, 1.0f});
+                header.setWidth(UnitValue.createPercentValue(100));
+                header.addCell(new Cell().setBorder(Border.NO_BORDER)
+                        .add(new Paragraph(safeValue(summary.testName())).setFont(boldFont).setFontSize(12)));
+                if (summary.retryCount() != null && summary.retryCount() > 0) {
+                    header.addCell(new Cell().setBorder(Border.NO_BORDER)
+                            .add(new Paragraph("IA x" + summary.retryCount()).setFont(regularFont).setFontSize(9).setFontColor(WARNING)));
                 } else {
-                    try {
-                        Path screenshotPath = Paths.get(summary.screenshotUrl());
-                        if (Files.exists(screenshotPath) && Files.isRegularFile(screenshotPath)) {
-                            byte[] bytes = Files.readAllBytes(screenshotPath);
-                            Image image = new Image(ImageDataFactory.create(bytes));
-                            image.setAutoScale(true);
-                            document.add(image);
-                        } else {
+                    header.addCell(new Cell().setBorder(Border.NO_BORDER).add(new Paragraph("")));
+                }
+                header.addCell(statusBadgeCell(summary.status(), boldFont));
+                document.add(header.setMarginTop(4));
+
+                Table meta = new Table(new float[]{1.6f, 2.0f, 1.6f, 2.0f});
+                meta.setWidth(UnitValue.createPercentValue(100));
+                addContextRow(meta, "Type", safeValue(summary.type()), boldFont, regularFont);
+                addContextRow(meta, "Duree", formatDuration(summary.durationMs()), boldFont, regularFont);
+                addContextRow(meta, "Script", summary.generated() ? "IA" : safeValue(summary.scriptPath()), boldFont, regularFont);
+                String errorType = llmAnalysisService.detectErrorType(summary.logs(), summary.errorMessage());
+                String firstError = extractFirstError(summary.logs(), summary.errorMessage());
+                String errorDisplay = "[" + errorType + "] " + firstError;
+                addContextRow(meta, "Erreur", truncate(errorDisplay, ERROR_PREVIEW_CHARS), boldFont, regularFont);
+                document.add(meta);
+
+                if ("WEB".equalsIgnoreCase(summary.type()) && ("FAILURE".equals(summary.status()) || "ERROR".equals(summary.status()))) {
+                    document.add(new Paragraph("Capture d'ecran").setFont(boldFont).setFontSize(11).setMarginTop(6));
+                    if (summary.screenshotUrl() == null || summary.screenshotUrl().isBlank()) {
+                        document.add(new Paragraph("Capture non disponible").setFont(regularFont).setFontSize(10));
+                    } else {
+                        try {
+                            Path screenshotPath = Paths.get(summary.screenshotUrl());
+                            if (Files.exists(screenshotPath) && Files.isRegularFile(screenshotPath)) {
+                                byte[] bytes = Files.readAllBytes(screenshotPath);
+                                Image image = new Image(ImageDataFactory.create(bytes));
+                                image.setAutoScale(true);
+                                document.add(image);
+                            } else {
+                                document.add(new Paragraph("Capture non disponible").setFont(regularFont).setFontSize(10));
+                            }
+                        } catch (Exception ex) {
                             document.add(new Paragraph("Capture non disponible").setFont(regularFont).setFontSize(10));
                         }
-                    } catch (Exception ex) {
-                        document.add(new Paragraph("Capture non disponible").setFont(regularFont).setFontSize(10));
                     }
                 }
             }
@@ -1028,6 +1096,43 @@ public class ReportService {
                     .setMarginBottom(6);
             document.add(code);
         }
+    }
+
+    private void addAiCorrectionsSection(Document document, ReportData data, PdfFont boldFont, PdfFont monoFont, PdfFont regularFont) {
+        document.add(new Paragraph("Corrections automatiques par IA").setFont(boldFont).setFontSize(18).setMarginBottom(10));
+        document.add(new Paragraph("L'IA a detecte des erreurs dans certains scripts generes et les a corriges automatiquement.")
+                .setFont(regularFont).setFontSize(10).setMarginBottom(8));
+
+        for (TestResultSummary summary : data.allResults()) {
+            if (summary.retryCount() == null || summary.retryCount() == 0) continue;
+            if (summary.retryLog() == null || summary.retryLog().isBlank()) continue;
+
+            Table header = new Table(new float[]{4.0f, 1.4f, 1.6f});
+            header.setWidth(UnitValue.createPercentValue(100));
+            header.addCell(new Cell().setBorder(Border.NO_BORDER)
+                    .add(new Paragraph(safeValue(summary.testName())).setFont(boldFont).setFontSize(12)));
+            header.addCell(new Cell().setBorder(Border.NO_BORDER)
+                    .add(new Paragraph(summary.retryCount() + " correction(s)").setFont(regularFont).setFontSize(10).setFontColor(WARNING)));
+            header.addCell(statusBadgeCell(summary.status(), boldFont));
+            document.add(header.setMarginTop(8));
+
+            Paragraph retryContent = new Paragraph(summary.retryLog())
+                    .setFont(monoFont)
+                    .setFontSize(8)
+                    .setBackgroundColor(LIGHT_GRAY)
+                    .setMarginBottom(6);
+            document.add(retryContent);
+        }
+    }
+
+    private boolean hasAiCorrections(ReportData data) {
+        return data.allResults().stream()
+                .anyMatch(s -> s.retryCount() != null && s.retryCount() > 0
+                        && s.retryLog() != null && !s.retryLog().isBlank());
+    }
+
+    private boolean hasUxTests(ReportData data) {
+        return data.allResults().stream().anyMatch(this::isUxResult);
     }
 
     /**
@@ -1248,11 +1353,13 @@ public class ReportService {
             String errorMessage,
             String logs,
             String aiAnalysis,
-                String uxAnalysis,
+            String uxAnalysis,
             String screenshotUrl,
             boolean flaky,
             boolean generated,
-            String scriptPath
+            String scriptPath,
+            Integer retryCount,
+            String retryLog
     ) {}
 
     private record SuiteContext(String name, String type, String gitRepoUrl, String gitBranch) {}

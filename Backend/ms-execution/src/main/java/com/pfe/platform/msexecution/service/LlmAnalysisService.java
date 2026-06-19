@@ -11,11 +11,18 @@ import org.springframework.web.client.RestTemplate;
 @Slf4j
 public class LlmAnalysisService {
 
-    private static final String OLLAMA_URL = "http://localhost:11434/api/generate";
-    private static final String MODEL = "deepseek-coder:6.7b";
-    private static final int MAX_SCRIPT_CHARS = 1500;
-    private static final int MAX_LOG_CHARS = 1500;
-    private static final int MAX_ERROR_CHARS = 400;
+    private static final int MAX_SCRIPT_CHARS = 50_000;
+    private static final int MAX_LOG_CHARS = 50_000;
+    private static final int MAX_ERROR_CHARS = 5_000;
+
+    @org.springframework.beans.factory.annotation.Value("${ollama.url:http://localhost:11434/api/generate}")
+    private String ollamaUrl;
+
+    @org.springframework.beans.factory.annotation.Value("${ollama.model:qwen3-coder-next:cloud}")
+    private String model;
+
+    @org.springframework.beans.factory.annotation.Value("${ollama.model.fallback:deepseek-coder:6.7b}")
+    private String fallbackModel;
 
     private final RestTemplate restTemplate = new RestTemplate();
 
@@ -27,28 +34,12 @@ public class LlmAnalysisService {
         String errorType = detectErrorType(logs, errorMessage);
         String prompt = buildPrompt(truncatedScript, truncatedLogs, status, truncatedErrorMessage, errorType);
 
-        try {
-            Map<String, Object> body = Map.of(
-                    "model", MODEL,
-                    "prompt", prompt,
-                    "stream", false
-            );
-
-            Map response = restTemplate.postForObject(OLLAMA_URL, body, Map.class);
-            if (response == null || !response.containsKey("response")) {
-                log.warn("Ollama did not return an analysis response.");
-                return null;
-            }
-
-            Object raw = response.get("response");
-            return raw != null ? raw.toString().trim() : null;
-        } catch (RestClientException ex) {
-            log.warn("Ollama analysis service is unavailable: {}", ex.getMessage());
-            return null;
-        } catch (Exception ex) {
-            log.warn("Unexpected error while analyzing failure logs: {}", ex.getMessage());
-            return null;
+        String result = callOllama(model, prompt);
+        if (result == null) {
+            log.warn("Primary model {} failed for analysis, trying fallback {}", model, fallbackModel);
+            result = callOllama(fallbackModel, prompt);
         }
+        return result;
     }
 
     public String analyze(String logs, String status) {
@@ -83,28 +74,12 @@ public class LlmAnalysisService {
                 + "7. SCORE GLOBAL SUR 10\n\n"
                 + "IMPORTANT : Écris comme un humain, pas comme une machine. Sois naturel, constructif, et utile.";
 
-        try {
-            Map<String, Object> body = Map.of(
-                    "model", MODEL,
-                    "prompt", prompt,
-                    "stream", false
-            );
-
-            Map response = restTemplate.postForObject(OLLAMA_URL, body, Map.class);
-            if (response == null || !response.containsKey("response")) {
-                log.warn("Ollama did not return a functional analysis response.");
-                return "Service d'IA temporairement indisponible";
-            }
-
-            Object raw = response.get("response");
-            return raw != null ? raw.toString().trim() : "Service d'IA temporairement indisponible";
-        } catch (RestClientException ex) {
-            log.warn("Ollama functional analysis service is unavailable: {}", ex.getMessage());
-            return "Service d'IA temporairement indisponible";
-        } catch (Exception ex) {
-            log.warn("Unexpected error while analyzing functional summary: {}", ex.getMessage());
-            return "Service d'IA temporairement indisponible";
+        String result = callOllama(model, prompt);
+        if (result == null) {
+            log.warn("Primary model {} failed for UX analysis, trying fallback {}", model, fallbackModel);
+            result = callOllama(fallbackModel, prompt);
         }
+        return result != null ? result : "Service d'IA temporairement indisponible";
     }
 
     public String extractRelevantErrors(String logs) {
@@ -197,5 +172,25 @@ public class LlmAnalysisService {
 
     private String truncate(String logs) {
         return truncate(logs, MAX_LOG_CHARS);
+    }
+
+    private String callOllama(String targetModel, String prompt) {
+        try {
+            Map<String, Object> body = Map.of(
+                    "model", targetModel,
+                    "prompt", prompt,
+                    "stream", false
+            );
+            Map response = restTemplate.postForObject(ollamaUrl, body, Map.class);
+            if (response == null || !response.containsKey("response")) {
+                log.warn("Ollama did not return a response with model {}", targetModel);
+                return null;
+            }
+            Object raw = response.get("response");
+            return raw != null ? raw.toString().trim() : null;
+        } catch (RestClientException ex) {
+            log.warn("Ollama call failed with model {}: {}", targetModel, ex.getMessage());
+            return null;
+        }
     }
 }

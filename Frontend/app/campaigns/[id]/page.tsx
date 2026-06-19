@@ -442,6 +442,7 @@ export default function CampaignDetailsPage() {
   const [executionUiRunning, setExecutionUiRunning] = useState(false)
   const animationRef = useRef<number | null>(null)
   const lastAnimatedStep = useRef<number | null>(null)
+  const lastRetryStepRef = useRef<string | null>(null)
 
   const stopStepAnimation = () => {
     if (animationRef.current) {
@@ -587,7 +588,20 @@ export default function CampaignDetailsPage() {
           if (cancelled) return
 
           const backendProgress = Number(data.progress ?? 0)
+          const rawStep = String(data.currentStep ?? '')
           const backendStep = stepIndexFromValue(data.currentStep)
+
+          if (rawStep.startsWith('AI_RETRY:') && lastRetryStepRef.current !== rawStep) {
+            lastRetryStepRef.current = rawStep
+            const parts = rawStep.split(':')
+            const testCaseId = parts[1] ?? '?'
+            const attempt = parts[2] ?? '?'
+            toast({
+              title: "Correction IA en cours",
+              description: `L'IA corrige le script du test #${testCaseId} (tentative ${attempt})`,
+              duration: 6000,
+            })
+          }
 
           if (status === 'PENDING') {
             stopStepAnimation()

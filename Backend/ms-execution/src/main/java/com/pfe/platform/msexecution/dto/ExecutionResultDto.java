@@ -18,6 +18,8 @@ public class ExecutionResultDto {
     private String screenshotUrl;
     private String testMethodResults; // JSON array of per-method Surefire results
     private LocalDateTime executedAt;
+    private Integer retryCount;
+    private String retryLog;
 
     public ExecutionResultDto() {
     }
@@ -129,6 +131,12 @@ public class ExecutionResultDto {
     public String getTestMethodResults() { return testMethodResults; }
     public void setTestMethodResults(String testMethodResults) { this.testMethodResults = testMethodResults; }
 
+    public Integer getRetryCount() { return retryCount; }
+    public void setRetryCount(Integer retryCount) { this.retryCount = retryCount; }
+
+    public String getRetryLog() { return retryLog; }
+    public void setRetryLog(String retryLog) { this.retryLog = retryLog; }
+
     public LocalDateTime getExecutedAt() {
         return executedAt;
     }
@@ -153,6 +161,8 @@ public class ExecutionResultDto {
                 entity.getExecutedAt()
         );
         dto.setTestMethodResults(entity.getTestMethodResults());
+        dto.setRetryCount(entity.getRetryCount());
+        dto.setRetryLog(entity.getRetryLog());
         return dto;
     }
 }

@@ -1,336 +1,265 @@
 'use client'
 
+import { useEffect, useState, useCallback } from 'react'
 import { Header } from '@/components/header'
 import { Sidebar } from '@/components/sidebar'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import {
-  Shield,
-  Zap,
-  AlertTriangle,
-  CheckCircle2,
-  Code,
-  Bug,
-  Play,
-  Download,
-  RefreshCw,
+  Shield, LayoutDashboard, Code, Bug, ListChecks,
+  ListFilter, FileText, ClipboardCheck, TrendingDown, Workflow,
+  Package, Loader2, FolderOpen,
 } from 'lucide-react'
 
-const sastScans = [
-  {
-    id: 1,
-    date: '2024-01-15 10:30:00',
-    status: 'completed',
-    vulnerabilities: 3,
-    critical: 0,
-    high: 2,
-    medium: 1,
-    coverage: 92,
-    scanTime: '8 mins',
-  },
-  {
-    id: 2,
-    date: '2024-01-14 10:30:00',
-    status: 'completed',
-    vulnerabilities: 5,
-    critical: 1,
-    high: 2,
-    medium: 2,
-    coverage: 88,
-    scanTime: '7 mins 45s',
-  },
-  {
-    id: 3,
-    date: '2024-01-13 10:30:00',
-    status: 'completed',
-    vulnerabilities: 2,
-    critical: 0,
-    high: 1,
-    medium: 1,
-    coverage: 94,
-    scanTime: '8 mins 15s',
-  },
-]
+import { OverviewCards } from '@/components/security/overview-cards'
+import { SecurityScoreGauge } from '@/components/security/security-score-gauge'
+import { SastCenter } from '@/components/security/sast-center'
+import { DastCenter } from '@/components/security/dast-center'
+import { ScaCenter } from '@/components/security/sca-center'
+import { OwaspTable } from '@/components/security/owasp-table'
+import { VulnerabilityTable } from '@/components/security/vulnerability-table'
+import { ComplianceCards } from '@/components/security/compliance-cards'
+import { SecurityTrends } from '@/components/security/security-trends'
+import { PipelineView } from '@/components/security/pipeline-view'
+import { ReportSection } from '@/components/security/report-section'
 
-const dastFindings = [
-  {
-    id: 1,
-    title: 'SQL Injection Vulnerability - User Login',
-    severity: 'critical',
-    endpoint: '/api/auth/login',
-    parameter: 'username',
-    description: 'Input validation not properly sanitized',
-    status: 'open',
-  },
-  {
-    id: 2,
-    title: 'Missing HTTP Security Headers',
-    severity: 'high',
-    endpoint: '/transactions',
-    parameter: 'response headers',
-    description: 'X-Frame-Options, CSP headers missing',
-    status: 'open',
-  },
-  {
-    id: 3,
-    title: 'Sensitive Data in Logs',
-    severity: 'high',
-    endpoint: '/api/payments',
-    parameter: 'log output',
-    description: 'Credit card numbers logged in plaintext',
-    status: 'in_progress',
-  },
-  {
-    id: 4,
-    title: 'Weak TLS Configuration',
-    severity: 'medium',
-    endpoint: 'API Gateway',
-    parameter: 'ssl/tls',
-    description: 'TLS 1.0 still enabled, should disable',
-    status: 'resolved',
-  },
-  {
-    id: 5,
-    title: 'Session Timeout Not Enforced',
-    severity: 'medium',
-    endpoint: '/dashboard',
-    parameter: 'session',
-    description: 'Session remains active after 24 hours',
-    status: 'open',
-  },
-]
+import { projectService } from '@/services/projects'
+import { fetchExecutionScans, fetchScanVulnerabilities, mapToVulnerability } from '@/lib/security-client'
+import type { Project } from '@/types/ms-gestion'
+import type { Vulnerability, SecurityScore } from '@/types/security'
 
 export default function SecurityPage() {
+  const [projects, setProjects] = useState<Project[]>([])
+  const [selectedProject, setSelectedProject] = useState<string>('')
+  const [loading, setLoading] = useState(false)
+  const [scans, setScans] = useState<any[]>([])
+  const [vulns, setVulns] = useState<Vulnerability[]>([])
+  const [rawVulns, setRawVulns] = useState<any[]>([])
+
+  useEffect(() => {
+    projectService.getAll().then(setProjects).catch(() => {})
+  }, [])
+
+  const loadProjectData = useCallback(async (projectId: string) => {
+    if (!projectId) return
+    setLoading(true)
+    try {
+      const allScans = await fetchExecutionScans(Number(projectId))
+      setScans(allScans)
+
+      const completed = allScans.filter((s: any) => s.status === 'COMPLETED')
+      const allVulns: any[] = []
+      for (const scan of completed) {
+        const v = await fetchScanVulnerabilities(scan.id)
+        allVulns.push(...v)
+      }
+      setRawVulns(allVulns)
+      setVulns(allVulns.map(mapToVulnerability))
+    } catch { /* handled */ }
+    finally { setLoading(false) }
+  }, [])
+
+  useEffect(() => {
+    if (selectedProject) loadProjectData(selectedProject)
+    else { setScans([]); setVulns([]); setRawVulns([]) }
+  }, [selectedProject, loadProjectData])
+
+  const critical = vulns.filter(v => v.severity === 'critical').length
+  const high = vulns.filter(v => v.severity === 'high').length
+  const medium = vulns.filter(v => v.severity === 'medium').length
+  const low = vulns.filter(v => v.severity === 'low').length
+  const total = vulns.length
+
+  const computeScore = (c: number, h: number, m: number, l: number) => {
+    if (c + h + m + l === 0) return 100
+    const penalty = c * 12 + h * 5 + m * 2 + l * 0.5
+    return Math.max(5, Math.round(100 / (1 + penalty / 30)))
+  }
+
+  const sastVulns = vulns.filter(v => v.type === 'SAST')
+  const dastVulns = vulns.filter(v => v.type === 'DAST')
+  const scaVulns = vulns.filter(v => v.type === 'SCA')
+
+  const subScore = (vs: Vulnerability[]) => {
+    if (vs.length === 0) return 100
+    return computeScore(
+      vs.filter(v => v.severity === 'critical').length,
+      vs.filter(v => v.severity === 'high').length,
+      vs.filter(v => v.severity === 'medium').length,
+      vs.filter(v => v.severity === 'low').length,
+    )
+  }
+
+  const score: SecurityScore = {
+    overall: computeScore(critical, high, medium, low),
+    owasp: subScore(vulns),
+    secureCoding: subScore(sastVulns),
+    infrastructure: subScore(dastVulns),
+    dependencies: subScore(scaVulns),
+  }
+
   return (
     <div className="flex h-screen bg-background">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
-        <main className="flex-1 overflow-auto p-8">
-          <div className="max-w-7xl mx-auto">
-            {/* Header */}
-            <div className="flex flex-col gap-4 mb-8">
-              <div>
-                <div className="flex items-center gap-3 mb-2">
-                  <Shield className="w-8 h-8 text-primary" />
-                  <h1 className="text-3xl font-bold text-foreground">
-                    Security Analysis
-                  </h1>
-                </div>
-                <p className="text-muted-foreground">
-                  SAST and DAST security scanning for vulnerabilities and compliance
-                </p>
-              </div>
-            </div>
+        <main className="flex-1 overflow-auto">
+          <div className="max-w-[1440px] mx-auto px-6 py-6 space-y-6">
 
-            {/* SAST Section */}
-            <div className="mb-12">
-              <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Shield className="h-6 w-6 text-primary" />
+                </div>
                 <div>
-                  <h2 className="text-2xl font-bold text-foreground mb-2 flex items-center gap-2">
-                    <Code className="w-6 h-6 text-accent" />
-                    SAST - Static Application Security Testing
-                  </h2>
-                  <p className="text-muted-foreground">
-                    Source code analysis for vulnerabilities and code quality issues
-                  </p>
+                  <h1 className="text-xl font-bold">Security Center</h1>
+                  <p className="text-xs text-muted-foreground">SAST, DAST, SCA — Analyse de securite applicative</p>
                 </div>
-                <Button className="bg-primary hover:bg-primary/90">
-                  <Zap className="w-4 h-4 mr-2" />
-                  Run SAST Scan
-                </Button>
               </div>
-
-              <div className="space-y-4">
-                {sastScans.map((scan) => (
-                  <Card key={scan.id} className="p-6 hover:shadow-md transition-all">
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-6">
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">
-                          SCAN DATE
-                        </p>
-                        <p className="font-medium text-foreground">
-                          {scan.date}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">
-                          CODE COVERAGE
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 bg-secondary rounded-full h-2">
-                            <div
-                              className="h-2 rounded-full bg-green-500"
-                              style={{ width: `${scan.coverage}%` }}
-                            />
-                          </div>
-                          <span className="font-bold text-foreground">
-                            {scan.coverage}%
-                          </span>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">
-                          SCAN TIME
-                        </p>
-                        <p className="font-medium text-foreground">
-                          {scan.scanTime}
-                        </p>
-                      </div>
-                      <div className="md:col-span-2">
-                        <p className="text-xs text-muted-foreground mb-3">
-                          VULNERABILITIES FOUND
-                        </p>
-                        <div className="flex gap-4">
-                          <div>
-                            <Badge
-                              variant="secondary"
-                              className="bg-red-100 text-red-700 mr-2"
-                            >
-                              {scan.critical} CRITICAL
-                            </Badge>
-                          </div>
-                          <div>
-                            <Badge
-                              variant="secondary"
-                              className="bg-orange-100 text-orange-700 mr-2"
-                            >
-                              {scan.high} HIGH
-                            </Badge>
-                          </div>
-                          <div>
-                            <Badge
-                              variant="secondary"
-                              className="bg-yellow-100 text-yellow-700"
-                            >
-                              {scan.medium} MEDIUM
-                            </Badge>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex gap-2 pt-4 border-t border-border">
-                      <Button size="sm" variant="outline">
-                        View Report
-                      </Button>
-                      <Button size="sm" variant="outline">
-                        <Download className="w-4 h-4 mr-2" />
-                        Export
-                      </Button>
-                    </div>
-                  </Card>
-                ))}
+              <div className="flex items-center gap-3">
+                {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                <Select value={selectedProject} onValueChange={setSelectedProject}>
+                  <SelectTrigger className="h-9 w-[220px]">
+                    <SelectValue placeholder="Selectionner un projet" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map(p => (
+                      <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedProject && !loading && (
+                  <Badge variant="outline" className="text-xs">
+                    {scans.length} scans · {vulns.length} vulns
+                  </Badge>
+                )}
               </div>
             </div>
 
-            {/* DAST Section */}
-            <div>
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-2xl font-bold text-foreground mb-2 flex items-center gap-2">
-                    <Bug className="w-6 h-6 text-destructive" />
-                    DAST - Dynamic Application Security Testing
-                  </h2>
-                  <p className="text-muted-foreground">
-                    Runtime security testing of deployed application
-                  </p>
-                </div>
-                <Button className="bg-primary hover:bg-primary/90">
-                  <Play className="w-4 h-4 mr-2" />
-                  Start DAST Scan
-                </Button>
-              </div>
+            <Tabs defaultValue="overview" className="space-y-6">
+              <TabsList className="flex-wrap h-auto gap-1 p-1.5 bg-muted/60 border">
+                <TabsTrigger value="overview" className="text-xs gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <LayoutDashboard className="h-3.5 w-3.5" />Overview
+                </TabsTrigger>
+                <TabsTrigger value="sast" className="text-xs gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <Code className="h-3.5 w-3.5" />SAST
+                </TabsTrigger>
+                <TabsTrigger value="dast" className="text-xs gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <Bug className="h-3.5 w-3.5" />DAST
+                </TabsTrigger>
+                <TabsTrigger value="sca" className="text-xs gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <Package className="h-3.5 w-3.5" />SCA
+                </TabsTrigger>
+                <TabsTrigger value="owasp" className="text-xs gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <ListChecks className="h-3.5 w-3.5" />OWASP Top 10
+                </TabsTrigger>
+                <TabsTrigger value="vulns" className="text-xs gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <ListFilter className="h-3.5 w-3.5" />Vulnerabilities
+                </TabsTrigger>
+                <TabsTrigger value="compliance" className="text-xs gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <ClipboardCheck className="h-3.5 w-3.5" />Compliance
+                </TabsTrigger>
+                <TabsTrigger value="trends" className="text-xs gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <TrendingDown className="h-3.5 w-3.5" />Trends
+                </TabsTrigger>
+                <TabsTrigger value="pipeline" className="text-xs gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <Workflow className="h-3.5 w-3.5" />CI/CD Pipeline
+                </TabsTrigger>
+                <TabsTrigger value="reports" className="text-xs gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <FileText className="h-3.5 w-3.5" />Reports
+                </TabsTrigger>
+              </TabsList>
 
-              <div className="space-y-4">
-                {dastFindings.map((finding) => (
-                  <Card
-                    key={finding.id}
-                    className={`p-6 hover:shadow-md transition-all border-l-4 ${
-                      finding.severity === 'critical'
-                        ? 'border-l-red-600'
-                        : finding.severity === 'high'
-                          ? 'border-l-orange-600'
-                          : 'border-l-yellow-600'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-bold text-foreground mb-2">
-                          {finding.title}
-                        </h3>
-                        <div className="flex flex-wrap gap-2 mb-4">
-                          <Badge
-                            variant="secondary"
-                            className={
-                              finding.severity === 'critical'
-                                ? 'bg-red-100 text-red-700'
-                                : finding.severity === 'high'
-                                  ? 'bg-orange-100 text-orange-700'
-                                  : 'bg-yellow-100 text-yellow-700'
-                            }
-                          >
-                            {finding.severity.toUpperCase()}
-                          </Badge>
-                          <Badge
-                            variant="secondary"
-                            className={
-                              finding.status === 'resolved'
-                                ? 'bg-green-100 text-green-700'
-                                : finding.status === 'in_progress'
-                                  ? 'bg-blue-100 text-blue-700'
-                                  : 'bg-gray-100 text-gray-700'
-                            }
-                          >
-                            {finding.status.toUpperCase()}
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1 font-medium">
-                          ENDPOINT
-                        </p>
-                        <p className="font-mono text-sm text-foreground">
-                          {finding.endpoint}
-                        </p>
+              <TabsContent value="overview" className="space-y-6">
+                {!selectedProject ? (
+                  <EmptyProjectState />
+                ) : (
+                  <>
+                    <OverviewCards vulns={vulns} />
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      <div className="lg:col-span-2">
+                        <OwaspTable />
                       </div>
                       <div>
-                        <p className="text-xs text-muted-foreground mb-1 font-medium">
-                          PARAMETER
-                        </p>
-                        <p className="font-mono text-sm text-foreground">
-                          {finding.parameter}
-                        </p>
+                        <SecurityScoreGauge score={score} />
                       </div>
                     </div>
-
-                    <div className="bg-secondary rounded-lg p-4 mb-4">
-                      <p className="text-xs text-muted-foreground mb-2 font-medium">
-                        DESCRIPTION
-                      </p>
-                      <p className="text-sm text-foreground">
-                        {finding.description}
-                      </p>
+                    <SecurityTrends scans={scans} rawVulns={rawVulns} />
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <PipelineView scans={scans} vulns={vulns} />
+                      <ComplianceCards rawVulns={rawVulns} scans={scans} />
                     </div>
+                  </>
+                )}
+              </TabsContent>
 
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline">
-                        View Details
-                      </Button>
-                      <Button size="sm" variant="outline">
-                        Create Issue
-                      </Button>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            </div>
+              <TabsContent value="sast">
+                <SastCenter />
+              </TabsContent>
+
+              <TabsContent value="dast">
+                <DastCenter />
+              </TabsContent>
+
+              <TabsContent value="sca">
+                <ScaCenter />
+              </TabsContent>
+
+              <TabsContent value="owasp">
+                <OwaspTable />
+              </TabsContent>
+
+              <TabsContent value="vulns">
+                {!selectedProject ? <EmptyProjectState /> : (
+                  <VulnerabilityTable vulns={vulns} />
+                )}
+              </TabsContent>
+
+              <TabsContent value="compliance">
+                {!selectedProject ? <EmptyProjectState /> : (
+                  <ComplianceCards rawVulns={rawVulns} scans={scans} />
+                )}
+              </TabsContent>
+
+              <TabsContent value="trends">
+                {!selectedProject ? <EmptyProjectState /> : (
+                  <SecurityTrends scans={scans} rawVulns={rawVulns} />
+                )}
+              </TabsContent>
+
+              <TabsContent value="pipeline">
+                {!selectedProject ? <EmptyProjectState /> : (
+                  <PipelineView scans={scans} vulns={vulns} />
+                )}
+              </TabsContent>
+
+              <TabsContent value="reports">
+                {!selectedProject ? <EmptyProjectState /> : (
+                  <ReportSection scans={scans} />
+                )}
+              </TabsContent>
+            </Tabs>
           </div>
         </main>
       </div>
+    </div>
+  )
+}
+
+function EmptyProjectState() {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <div className="p-4 rounded-full bg-muted mb-4">
+        <FolderOpen className="h-8 w-8 text-muted-foreground" />
+      </div>
+      <h3 className="text-lg font-semibold mb-1">Aucun projet selectionne</h3>
+      <p className="text-sm text-muted-foreground max-w-md">
+        Selectionnez un projet en haut a droite pour afficher les donnees de securite.
+        Les donnees proviennent des scans reels (SAST, DAST, SCA).
+      </p>
     </div>
   )
 }

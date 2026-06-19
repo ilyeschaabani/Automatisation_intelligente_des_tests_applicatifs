@@ -20,8 +20,11 @@ public class LlmClient {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final RestTemplate restTemplate = new RestTemplate();
-    private final String generateUrl = "http://localhost:11434/api/generate";
-    @Value("${llm.model:deepseek-coder:6.7b}")
+
+    @Value("${ollama.url:http://localhost:11434/api/generate}")
+    private String generateUrl;
+
+    @Value("${ollama.model:qwen3-coder-next:cloud}")
     private String model;
 
     /**

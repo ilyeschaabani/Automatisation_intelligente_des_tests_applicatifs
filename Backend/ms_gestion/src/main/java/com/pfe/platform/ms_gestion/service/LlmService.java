@@ -1,5 +1,8 @@
 package com.pfe.platform.ms_gestion.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -8,541 +11,732 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class LlmService {
 
+    private static final Logger log = LoggerFactory.getLogger(LlmService.class);
+
     private final RestTemplate restTemplate = new RestTemplate();
 
+    @Value("${ollama.url:http://localhost:11434/api/generate}")
+    private String ollamaUrl;
+
+    @Value("${ollama.model:qwen3-coder-next:cloud}")
+    private String model;
+
+    @Value("${ollama.model.fallback:deepseek-coder:6.7b}")
+    private String fallbackModel;
+
     public String generateTestCode(String type, String description) {
-        return generateTestCode(type, description, null, null);
+        return generateTestCode(type, description, null, null, null, null, null, null, null, null);
     }
 
     public String generateTestCode(String type, String description, String databaseType) {
-        return generateTestCode(type, description, databaseType, null);
+        return generateTestCode(type, description, databaseType, null, null, null, null, null, null, null);
     }
 
     public String generateTestCode(String type, String description, String databaseType, String classSkeleton) {
-        return generateTestCode(type, description, databaseType, classSkeleton, null);
+        return generateTestCode(type, description, databaseType, classSkeleton, null, null, null, null, null, null);
     }
 
     public String generateTestCode(String type, String description, String databaseType, String classSkeleton, String testData) {
-        return generateTestCode(type, description, databaseType, classSkeleton, testData, null, null, null);
+        return generateTestCode(type, description, databaseType, classSkeleton, testData, null, null, null, null, null);
     }
 
     public String generateTestCode(String type, String description, String databaseType,
                                    String classSkeleton, String testData,
                                    String methodName, String scenarioType, String expectedBehavior) {
-        String prompt = buildPrompt(type, description, databaseType, classSkeleton, testData,
-                                    methodName, scenarioType, expectedBehavior);
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
-        Map<String, Object> body = Map.of(
-                "model", "deepseek-coder:6.7b",
-                "prompt", prompt,
-                "stream", false
-        );
-
-        HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
-        ResponseEntity<Map> response = restTemplate.postForEntity(
-                "http://localhost:11434/api/generate", request, Map.class);
-
-        if (response.getBody() != null && response.getBody().containsKey("response")) {
-            String raw = (String) response.getBody().get("response");
-            // Supprimer les marqueurs markdown ```java ... ```
-            raw = raw.replaceAll("(?i)```java\\s*", "")
-                    .replaceAll("```", "")
-                    .trim();
-            // Supprimer les tokens spéciaux deepseek-coder qui fuient parfois dans la sortie
-            raw = raw.replaceAll("<｜[^｜]*｜>", "")
-                    .replaceAll("\\|begin▁of▁sentence\\|", "")
-                    .replaceAll("\\|end▁of▁sentence\\|", "")
-                    .trim();
-            return raw;
-        }
-        throw new RuntimeException("Ollama n’a pas renvoyé de code.");
+        return generateTestCode(type, description, databaseType, classSkeleton, testData,
+                                methodName, scenarioType, expectedBehavior, null, null);
     }
 
-    private String buildPrompt(String type, String description, String databaseType, String classSkeleton, String testData) {
-        return buildPrompt(type, description, databaseType, classSkeleton, testData, null, null, null);
+    public String generateTestCode(String type, String description, String databaseType,
+                                   String classSkeleton, String testData,
+                                   String methodName, String scenarioType, String expectedBehavior,
+                                   String fileTree) {
+        return generateTestCode(type, description, databaseType, classSkeleton, testData,
+                                methodName, scenarioType, expectedBehavior, fileTree, null);
+    }
+
+    public String generateTestCode(String type, String description, String databaseType,
+                                   String classSkeleton, String testData,
+                                   String methodName, String scenarioType, String expectedBehavior,
+                                   String fileTree, String dependencySources) {
+        log.info("[LlmService] === Building prompt ===");
+        log.info("[LlmService] type={}, method={}, scenario={}, dbType={}", type, methodName, scenarioType, databaseType);
+        log.info("[LlmService] skeleton={} chars, testData={} chars, fileTree={} chars, deps={} chars",
+                classSkeleton != null ? classSkeleton.length() : 0,
+                testData != null ? testData.length() : 0,
+                fileTree != null ? fileTree.length() : 0,
+                dependencySources != null ? dependencySources.length() : 0);
+
+        String prompt = buildPrompt(type, description, databaseType, classSkeleton, testData,
+                                    methodName, scenarioType, expectedBehavior, fileTree, dependencySources);
+        log.info("[LlmService] Prompt built: {} chars", prompt.length());
+        log.debug("[LlmService] Full prompt:\n{}", prompt);
+
+        log.info("[LlmService] Calling Ollama primary model={} at url={}", model, ollamaUrl);
+        String result = callOllama(model, prompt);
+        if (result == null) {
+            log.warn("[LlmService] Primary model {} failed, trying fallback {}", model, fallbackModel);
+            result = callOllama(fallbackModel, prompt);
+        }
+        if (result == null) {
+            log.error("[LlmService] Both models failed — no code generated");
+            throw new RuntimeException("Ollama n'a pas renvoyé de code.");
+        }
+        log.info("[LlmService] LLM returned {} chars of code", result.length());
+        String normalizedType = type == null ? "" : type.trim().toUpperCase();
+        String validated = postValidate(result, normalizedType);
+        log.info("[LlmService] postValidate done: {} chars (was {} chars)", validated.length(), result.length());
+        return validated;
+    }
+
+    private String postValidate(String code, String type) {
+        if ("UNIT".equals(type)) {
+            code = fixUnitStructure(code);
+        }
+
+        StringBuilder imports = new StringBuilder();
+        boolean modified = false;
+
+        if ("UNIT".equals(type)) {
+            if (!code.contains("import org.mockito.InjectMocks")) {
+                imports.append("import org.mockito.InjectMocks;\n");
+                modified = true;
+            }
+            if (!code.contains("import org.mockito.Mock;") && !code.contains("import org.mockito.Mock\n")) {
+                imports.append("import org.mockito.Mock;\n");
+                modified = true;
+            }
+            if (!code.contains("import org.mockito.MockitoAnnotations")) {
+                imports.append("import org.mockito.MockitoAnnotations;\n");
+                modified = true;
+            }
+            if (code.contains("MockedStatic") && !code.contains("import org.mockito.MockedStatic")) {
+                imports.append("import org.mockito.MockedStatic;\n");
+                modified = true;
+            }
+            if (!code.contains("import static org.mockito.Mockito")) {
+                imports.append("import static org.mockito.Mockito.*;\n");
+                modified = true;
+            }
+            if (!code.contains("import static org.mockito.ArgumentMatchers")) {
+                imports.append("import static org.mockito.ArgumentMatchers.*;\n");
+                modified = true;
+            }
+        }
+
+        if ("INTEGRATION".equals(type)) {
+            if (!code.contains("import org.springframework.test.context.testng.AbstractTestNGSpringContextTests")) {
+                imports.append("import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;\n");
+                modified = true;
+            }
+            if (!code.contains("import org.springframework.boot.test.context.SpringBootTest")) {
+                imports.append("import org.springframework.boot.test.context.SpringBootTest;\n");
+                modified = true;
+            }
+            if (!code.contains("import org.springframework.test.context.ActiveProfiles")) {
+                imports.append("import org.springframework.test.context.ActiveProfiles;\n");
+                modified = true;
+            }
+            if (!code.contains("import org.springframework.beans.factory.annotation.Autowired")) {
+                imports.append("import org.springframework.beans.factory.annotation.Autowired;\n");
+                modified = true;
+            }
+            if (!code.contains("import org.springframework.transaction.annotation.Transactional")) {
+                imports.append("import org.springframework.transaction.annotation.Transactional;\n");
+                modified = true;
+            }
+            if (!code.contains("import org.springframework.test.annotation.Rollback")) {
+                imports.append("import org.springframework.test.annotation.Rollback;\n");
+                modified = true;
+            }
+            if (!code.contains("import org.springframework.test.context.TestPropertySource")) {
+                imports.append("import org.springframework.test.context.TestPropertySource;\n");
+                modified = true;
+            }
+            if (code.contains("SecurityContextHolder") && !code.contains("import org.springframework.security.core.context.SecurityContextHolder")) {
+                imports.append("import org.springframework.security.core.context.SecurityContextHolder;\n");
+                imports.append("import org.springframework.security.core.context.SecurityContextImpl;\n");
+                imports.append("import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;\n");
+                imports.append("import java.util.Collections;\n");
+                modified = true;
+            }
+        }
+
+        if (!code.contains("import static org.testng.Assert")) {
+            imports.append("import static org.testng.Assert.*;\n");
+            modified = true;
+        }
+        if (!code.contains("import java.util.Optional") && code.contains("Optional.of")) {
+            imports.append("import java.util.Optional;\n");
+            modified = true;
+        }
+        if (!code.contains("import java.util.List") && code.contains("List.of")) {
+            imports.append("import java.util.List;\n");
+            modified = true;
+        }
+        if (!code.contains("import java.util.ArrayList") && code.contains("new ArrayList")) {
+            imports.append("import java.util.ArrayList;\n");
+            modified = true;
+        }
+
+        if (modified) {
+            int pkgEnd = code.indexOf(";");
+            if (pkgEnd > 0 && code.substring(0, pkgEnd).contains("package")) {
+                code = code.substring(0, pkgEnd + 1) + "\n\n" + imports + code.substring(pkgEnd + 1);
+            }
+        }
+
+        if ("INTEGRATION".equals(type) && code.contains("AbstractTestNGSpringContextTests")
+                && !code.contains("extends AbstractTestNGSpringContextTests")) {
+            code = code.replaceFirst("public\\s+class\\s+(\\w+)\\s*\\{",
+                    "public class $1 extends AbstractTestNGSpringContextTests {");
+        }
+        if ("INTEGRATION".equals(type) && !code.contains("AbstractTestNGSpringContextTests")
+                && !code.contains("extends ")) {
+            code = code.replaceFirst("public\\s+class\\s+(\\w+)\\s*\\{",
+                    "public class $1 extends AbstractTestNGSpringContextTests {");
+            if (!code.contains("import org.springframework.test.context.testng.AbstractTestNGSpringContextTests")) {
+                int pkgEnd2 = code.indexOf(";");
+                if (pkgEnd2 > 0) {
+                    code = code.substring(0, pkgEnd2 + 1) + "\nimport org.springframework.test.context.testng.AbstractTestNGSpringContextTests;\n" + code.substring(pkgEnd2 + 1);
+                }
+            }
+        }
+
+        if ("INTEGRATION".equals(type)) {
+            code = ensureIntegrationClassAnnotations(code);
+        }
+
+        return code;
+    }
+
+    private String ensureIntegrationClassAnnotations(String code) {
+        String[] required = {"@SpringBootTest", "@ActiveProfiles", "@Transactional", "@Rollback"};
+        StringBuilder missing = new StringBuilder();
+        for (String ann : required) {
+            if (!code.contains(ann)) {
+                missing.append(ann.equals("@ActiveProfiles") ? "@ActiveProfiles(\"test\")\n"
+                        : ann.equals("@Rollback") ? "@Rollback(true)\n"
+                        : ann + "\n");
+            }
+        }
+        if (missing.length() > 0) {
+            java.util.regex.Matcher classMatcher = java.util.regex.Pattern
+                    .compile("(?m)^(\\s*)(public\\s+class\\s+)")
+                    .matcher(code);
+            if (classMatcher.find()) {
+                String indent = classMatcher.group(1);
+                String annotationBlock = missing.toString().lines()
+                        .map(line -> indent + line)
+                        .collect(Collectors.joining("\n")) + "\n";
+                code = code.substring(0, classMatcher.start())
+                        + annotationBlock
+                        + code.substring(classMatcher.start());
+                log.info("[postValidate] Injected missing INTEGRATION annotations: {}",
+                        missing.toString().replace("\n", ", ").trim());
+            }
+        }
+        return code;
+    }
+
+    private String fixUnitStructure(String code) {
+        int fixes = 0;
+
+        // Fix 1: Replace @MockedStatic<X> with private MockedStatic<X>
+        // @MockedStatic is not a real Mockito annotation
+        if (code.contains("@MockedStatic")) {
+            code = code.replaceAll("(?m)^\\s*@MockedStatic<([\\w.]+)>\\s+(\\w+)\\s*;",
+                    "    private MockedStatic<$1> $2;");
+            fixes++;
+            log.info("[postValidate] Fixed @MockedStatic → private MockedStatic");
+        }
+
+        // Fix 2: Replace "service = new XxxService()" or "service = new XxxService(repo1, repo2...)"
+        // and replace with @InjectMocks pattern
+        java.util.regex.Matcher newServiceMatcher = java.util.regex.Pattern
+                .compile("(?m)^\\s*(\\w+)\\s*=\\s*new\\s+(\\w+Service)\\s*\\([^)]*\\)\\s*;")
+                .matcher(code);
+        if (newServiceMatcher.find()) {
+            String fieldName = newServiceMatcher.group(1);
+            String serviceClass = newServiceMatcher.group(2);
+            // Remove the "new XxxService(...)" line
+            code = code.replaceAll("(?m)^\\s*" + java.util.regex.Pattern.quote(fieldName)
+                    + "\\s*=\\s*new\\s+" + serviceClass + "\\s*\\([^)]*\\)\\s*;\\s*\\n?", "");
+            // Remove direct field assignments like "service.repo = repo;"
+            code = code.replaceAll("(?m)^\\s*" + java.util.regex.Pattern.quote(fieldName)
+                    + "\\.\\w+\\s*=\\s*\\w+\\s*;\\s*\\n?", "");
+            // Ensure the field declaration has @InjectMocks
+            java.util.regex.Pattern fieldDeclPattern = java.util.regex.Pattern
+                    .compile("(?m)^(\\s*)(private\\s+)?" + serviceClass + "\\s+" + java.util.regex.Pattern.quote(fieldName) + "\\s*;");
+            java.util.regex.Matcher fieldDeclMatcher = fieldDeclPattern.matcher(code);
+            if (fieldDeclMatcher.find()) {
+                String indent = fieldDeclMatcher.group(1);
+                // Check if @InjectMocks is already on the line above
+                int lineStart = fieldDeclMatcher.start();
+                String before = code.substring(Math.max(0, lineStart - 50), lineStart);
+                if (!before.contains("@InjectMocks")) {
+                    code = code.substring(0, fieldDeclMatcher.start())
+                            + indent + "@InjectMocks\n"
+                            + indent + "private " + serviceClass + " " + fieldName + ";"
+                            + code.substring(fieldDeclMatcher.end());
+                }
+            }
+            fixes++;
+            log.info("[postValidate] Fixed new {}() → @InjectMocks + removed direct field assignments", serviceClass);
+        }
+
+        // Fix 3: Remove any remaining direct field assignments to the @InjectMocks service
+        // Pattern: serviceName.fieldName = mockField; (outside of test methods)
+        // Only remove if they appear in setUp/@BeforeMethod context
+        java.util.regex.Matcher injectMocksMatcher = java.util.regex.Pattern
+                .compile("@InjectMocks\\s+private\\s+\\w+\\s+(\\w+)\\s*;")
+                .matcher(code);
+        if (injectMocksMatcher.find()) {
+            String serviceName = injectMocksMatcher.group(1);
+            String pattern = "(?m)^\\s*" + java.util.regex.Pattern.quote(serviceName) + "\\.\\w+\\s*=\\s*\\w+\\s*;\\s*\\n?";
+            if (code.matches("(?s).*" + pattern + ".*")) {
+                code = code.replaceAll(pattern, "");
+                fixes++;
+                log.info("[postValidate] Removed direct field assignments to {}", serviceName);
+            }
+        }
+
+        if (fixes > 0) {
+            log.info("[postValidate] Applied {} structural fixes for UNIT test", fixes);
+        }
+        return code;
+    }
+
+    private String callOllama(String targetModel, String prompt) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            Map<String, Object> body = Map.of(
+                    "model", targetModel,
+                    "prompt", prompt,
+                    "stream", false
+            );
+
+            log.info("[LlmService] Sending request to Ollama model={} url={} prompt_length={}", targetModel, ollamaUrl, prompt.length());
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
+            ResponseEntity<Map> response = restTemplate.postForEntity(ollamaUrl, request, Map.class);
+
+            log.info("[LlmService] Ollama response status={}", response.getStatusCode());
+            if (response.getBody() != null && response.getBody().containsKey("response")) {
+                String raw = (String) response.getBody().get("response");
+                log.info("[LlmService] Raw response from {}: {} chars", targetModel, raw != null ? raw.length() : 0);
+                String cleaned = cleanResponse(raw);
+                log.info("[LlmService] Cleaned response: {} chars", cleaned != null ? cleaned.length() : 0);
+                return cleaned;
+            }
+            log.warn("[LlmService] Response body missing 'response' key. Body keys={}",
+                    response.getBody() != null ? response.getBody().keySet() : "null");
+            return null;
+        } catch (Exception e) {
+            log.error("[LlmService] Ollama call FAILED with model {}: {}", targetModel, e.getMessage());
+            return null;
+        }
+    }
+
+    private String cleanResponse(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        raw = raw.replaceAll("(?i)```java\\s*", "")
+                .replaceAll("```", "")
+                .trim();
+        raw = raw.replaceAll("<｜[^｜]*｜>", "")
+                .replaceAll("\\|begin▁of▁sentence\\|", "")
+                .replaceAll("\\|end▁of▁sentence\\|", "")
+                .trim();
+        return raw.isBlank() ? null : raw;
     }
 
     private String buildPrompt(String type, String description, String databaseType,
                                 String classSkeleton, String testData,
-                                String methodName, String scenarioType, String expectedBehavior) {
+                                String methodName, String scenarioType, String expectedBehavior,
+                                String fileTree, String dependencySources) {
         String normalizedType = type == null ? "" : type.trim().toUpperCase();
-        String normalizedDescription = description == null ? "" : description.trim();
-        String normalizedDatabaseType = databaseType == null ? "" : databaseType.trim().toUpperCase();
 
-        String commonRules = """
-            Tu es un assistant spécialisé en automatisation de tests Java.
+        StringBuilder prompt = new StringBuilder();
 
-            RÈGLES ABSOLUES (tu dois les respecter) :
-            - Réponds UNIQUEMENT avec du code Java compilable (un seul fichier) : pas de texte, pas de titre.
-            - Ne mets PAS de markdown, PAS de backticks, PAS de blocs ```.
-            - Commence TOUJOURS par la déclaration 'package'.
-            - Utilise TestNG (org.testng.annotations.*) : pas de JUnit.
-            - CHAQUE méthode de test DOIT avoir l'annotation @Test (org.testng.annotations.Test). Sans @Test, TestNG ne l'exécute pas.
-            - Les assertions TestNG s'utilisent avec un import STATIQUE : import static org.testng.Assert.*;
-              CORRECT   : import static org.testng.Assert.*;  puis  assertNotNull(x);
-              INCORRECT : import org.testng.Assert.*;          (non-static — ne compile pas)
-            - N'ajoute JAMAIS de commentaires ou d'explications en dehors du code Java.
-            """;
+        prompt.append("""
+            Tu es un expert en automatisation de tests Java. Tu génères du code de test compilable.
 
-        String header = """
+            AVANT DE CODER, fais mentalement cette analyse (ne l'écris pas, applique-la dans le code) :
+            1. Lis la méthode cible ligne par ligne.
+            2. Pour chaque appel de méthode (y compris les méthodes privées de la même classe), note :
+               - Quel repository/service est appelé ?
+               - Quelle méthode ? (findById, save, existsBy, findByXxxAndYyy...)
+               - Quel type de retour ? (Optional, boolean, Entity, void, List...)
+            3. Pour les méthodes privées : descends dans leur code et répète l'étape 2.
+            4. Résultat : tu obtiens la LISTE COMPLÈTE de tous les mocks nécessaires.
+               CHACUN de ces appels DOIT avoir un when(...).thenReturn(...) dans la section Given.
 
-            CONTEXTE :
-            - Type de test : %s
-            - Description fonctionnelle : %s
-            """.formatted(normalizedType, normalizedDescription);
+            RÈGLES ABSOLUES :
+            - Réponds UNIQUEMENT avec du code Java compilable (un seul fichier).
+            - Pas de markdown, pas de backticks, pas de texte explicatif.
+            - Commence TOUJOURS par la ligne "package".
+            - Utilise TestNG (org.testng.annotations.*), JAMAIS JUnit.
+            - Assertions : import static org.testng.Assert.*;
+            - Chaque méthode de test DOIT avoir @Test.
+            """);
 
-        String mongoIntegrationRules = "";
-        if ("INTEGRATION".equals(normalizedType) && "MONGODB".equals(normalizedDatabaseType)) {
-            mongoIntegrationRules = """
+        if (fileTree != null && !fileTree.isBlank()) {
+            prompt.append("""
 
-                CONSIGNES SUPPLÉMENTAIRES (INTEGRATION + MONGODB) :
-                - La classe doit utiliser TestNG, étendre AbstractTestNGSpringContextTests, et être annotée @SpringBootTest et @ActiveProfiles("test").
-                - Le MongoDBContainer doit être démarré dans une méthode @BeforeSuite(alwaysRun = true).
-                - L'URI MongoDB doit être injectée via System.setProperty("spring.data.mongodb.uri", ...) avant le chargement du contexte Spring.
-                - Ne pas utiliser d'annotations JUnit.
-                - N'utilise PAS d'annotations Testcontainers/JUnit comme @Testcontainers, @Container, @DynamicPropertySource.
-                - Le code final doit être directement compilable, autonome, et inclure tous les imports nécessaires.
-
-                EXEMPLE DE STRUCTURE :
-                @SpringBootTest @ActiveProfiles("test")
-                public class XxxRepositoryIntegrationTest extends AbstractTestNGSpringContextTests {
-                    private static final MongoDBContainer mongo = new MongoDBContainer("mongo:7.0");
-                    @BeforeSuite(alwaysRun = true) public void beforeSuite() { if (!mongo.isRunning()) mongo.start(); System.setProperty("spring.data.mongodb.uri", mongo.getReplicaSetUrl()); }
-                    @Autowired private XxxRepository repo;
-                    @Test public void shouldSave() { ... Assert.assertNotNull(saved.getId()); }
-                }
-                """;
-        }
-
-        String skeletonBlock = "";
-        if (classSkeleton != null && !classSkeleton.isBlank()
-                && ("UNIT".equals(normalizedType) || "INTEGRATION".equals(normalizedType))) {
-            skeletonBlock = """
-
-                CLASSE SOURCE À TESTER :
-                ```java
+                == ARBORESCENCE DES CLASSES JAVA DU PROJET ==
                 %s
-                ```
-                ⚠ Le package affiché ci-dessus EST LE PACKAGE SOURCE — NE PAS le copier dans le test.
-                  Le package du test est TOUJOURS soit "package suites.unit;" soit "package suites.integration;"
-                - Importe cette classe avec son chemin complet, utilise ses méthodes telles quelles.
-                - N'invente pas de méthodes absentes du squelette.
-                """.formatted(classSkeleton);
+
+                RÈGLE CRITIQUE POUR LES IMPORTS :
+                - Utilise cette arborescence pour déterminer le package EXACT de chaque classe.
+                - Exemple : si tu vois "com.example.repository.UserRepository" dans la liste,
+                  alors l'import est : import com.example.repository.UserRepository;
+                - N'INVENTE JAMAIS un package. Si une classe n'est pas dans cette liste, ne l'utilise pas.
+                """.formatted(fileTree));
         }
 
-        String testDataBlock = "";
+        prompt.append("\n== TYPE DE TEST : ").append(normalizedType).append(" ==\n");
+        if (description != null && !description.isBlank()) {
+            prompt.append("Description fonctionnelle : ").append(description.trim()).append("\n");
+        }
+
+        if (classSkeleton != null && !classSkeleton.isBlank()) {
+            prompt.append("""
+
+                == CODE SOURCE COMPLET DE LA CLASSE À TESTER ==
+                %s
+
+                INSTRUCTIONS D'ANALYSE DU CODE SOURCE :
+                - Lis le code COMPLET de chaque méthode, Y COMPRIS les méthodes privées appelées par la méthode cible.
+                - TRACE L'EXÉCUTION complète : si add() appelle checkRole() qui appelle SecurityUtils.getCurrentUserId(),
+                  tu DOIS gérer SecurityUtils (MockedStatic pour UNIT, SecurityContext pour INTEGRATION).
+                - Identifie TOUS les appels à des repositories/services dans TOUTE la chaîne d'appels (méthode cible + méthodes privées).
+                  Exemples : save, findById, existsBy, delete, findByProjectIdAndUserId...
+                  Pour UNIT : tu DOIS mocker CHACUN de ces appels avec les bons types de retour.
+                  Pour INTEGRATION : tu DOIS préparer les données en DB pour que ces appels réussissent.
+                - Identifie les vérifications métier (if/throw) : ton test doit satisfaire ces conditions (Happy Path) ou les déclencher (Exception).
+                - Identifie les objets créés/modifiés dans la méthode : ton test doit vérifier leurs valeurs.
+                - Remplis les champs du request DTO avec les valeurs du testData (request.setName(...), request.setBaseUrlWeb(...), etc.).
+                - ANTI-NPE : si le code fait entity.getRelation().getId(), l'entité DOIT avoir cette relation configurée
+                  (pour UNIT : dans le mock, pour INTEGRATION : dans le save en DB).
+                - N'invente PAS de méthodes, champs ou classes absents de ce code source.
+                - Pour les imports : consulte l'ARBORESCENCE ci-dessus pour trouver le bon package.
+                """.formatted(classSkeleton));
+        }
+
+        if (dependencySources != null && !dependencySources.isBlank()) {
+            prompt.append("""
+
+                == CLASSES DÉPENDANTES (DTOs, Entités, Repositories, Utils) ==
+                %s
+
+                UTILISATION DES CLASSES DÉPENDANTES :
+                - Ces classes sont les DTOs, entités, repositories et utilitaires importés par la classe cible.
+                - Utilise les VRAIS setters/getters visibles dans ces classes (pas de méthodes inventées).
+                - Pour les DTOs request : appelle CHAQUE setter correspondant aux valeurs du testData.
+                - Pour les entités : crée des instances avec TOUS les champs nécessaires.
+                  UNIT → pour les objets retournés par les mocks. INTEGRATION → pour les save() en DB dans @BeforeMethod.
+                  Configure TOUTES les relations (setProject, setSuite, setEnvironment...) pour éviter les NPE.
+                - Pour les repositories : regarde les méthodes déclarées pour savoir EXACTEMENT quoi mocker (UNIT) ou quelles données préparer (INTEGRATION).
+                - Pour les enums (comme Role) : utilise les valeurs EXACTES listées (ADMIN, TESTER, etc.).
+                """.formatted(dependencySources));
+        }
+
         if (testData != null && !testData.isBlank()) {
-            testDataBlock = """
+            prompt.append("""
 
-                DONNÉES DE TEST À UTILISER DANS LE CODE (JSON fourni par le testeur) :
-                ```json
+                == DONNÉES DE TEST (JSON fourni par le testeur) ==
                 %s
-                ```
-                - Utilise ces valeurs comme inputs dans tes assertions et appels de méthodes.
-                - Ex: si tu vois {"username":"admin","password":"123"}, utilise exactement ces valeurs dans le test.
-                - Ne génère pas de données aléatoires si des données sont fournies ici.
-                """.formatted(testData);
+
+                - Utilise EXACTEMENT ces valeurs dans le test (pas de valeurs inventées).
+                - Les clés JSON correspondent aux setters de la request (ex: "name" → request.setName("...")).
+                """.formatted(testData));
         }
 
-        String scenarioBlock = "";
         if (methodName != null && !methodName.isBlank()) {
             String scenarioLabel = resolveScenarioLabel(scenarioType);
             String expectedLine = (expectedBehavior != null && !expectedBehavior.isBlank())
                     ? expectedBehavior.trim()
                     : "le comportement normal de la méthode";
 
-            scenarioBlock = """
+            prompt.append("""
 
-                CIBLE DU TEST (instructions prioritaires — respecter exactement) :
-                - Méthode à tester    : %s
-                - Scénario            : %s
-                - Résultat attendu    : %s
-                - Génère UNE SEULE méthode @Test qui couvre CE scénario précis.
-                - Nomme la méthode de test : test_%s_%s()
+                == CIBLE PRÉCISE DU TEST ==
+                - Méthode à tester : %s
+                - Scénario : %s
+                - Résultat attendu : %s
+                - Génère UNE SEULE méthode @Test nommée : test_%s_%s()
                 - Ne génère PAS d'autres scénarios.
-                """.formatted(
-                    methodName,
-                    scenarioLabel,
-                    expectedLine,
-                    methodName,
-                    (scenarioType != null ? scenarioType.toLowerCase() : "happyPath")
-            );
+                """.formatted(methodName, scenarioLabel, expectedLine,
+                    methodName, scenarioType != null ? scenarioType.toLowerCase() : "happyPath"));
         }
 
-        String integrationDbRule = buildIntegrationDbRule(normalizedDatabaseType);
+        prompt.append("\n").append(buildTypeRules(normalizedType, databaseType));
+        prompt.append("\nGénère maintenant le code Java complet.\n");
 
-        String specifics = switch (normalizedType) {
+        return prompt.toString();
+    }
+
+    private String buildTypeRules(String type, String databaseType) {
+        return switch (type) {
             case "UNIT" -> """
-                Génère un test UNIT en complétant ce squelette. Remplace les {placeholders} uniquement.
+                == RÈGLES UNIT ==
+                - Package du test : package suites.unit;
+                - Framework : TestNG + Mockito (pas de Spring context).
 
-                SQUELETTE (respecte-le exactement — le package est TOUJOURS suites.unit) :
-                package suites.unit;
-
-                import {basePackage}.service.{TestedClass};
-                import {basePackage}.repository.*;
-                import {basePackage}.entity.*;
-                import {basePackage}.dto.request.*;
-                import {basePackage}.dto.response.*;
-                import org.mockito.*;
-                import org.testng.annotations.*;
-                import static org.testng.Assert.*;
+                == IMPORTS OBLIGATOIRES (copie-les TOUS) ==
+                import org.mockito.Mock;
+                import org.mockito.InjectMocks;
+                import org.mockito.MockedStatic;
+                import org.mockito.MockitoAnnotations;
+                import org.testng.annotations.BeforeMethod;
+                import org.testng.annotations.AfterMethod;
+                import org.testng.annotations.Test;
                 import static org.mockito.Mockito.*;
+                import static org.mockito.ArgumentMatchers.*;
+                import static org.testng.Assert.*;
                 import java.util.Optional;
 
-                public class {TestedClass}Test {
+                == STRUCTURE OBLIGATOIRE DE LA CLASSE ==
+                - Importe la classe source avec son package COMPLET (consulte l'ARBORESCENCE).
+                - Crée un champ @Mock pour CHAQUE dépendance (repository, service) injectée dans la classe source.
+                - INTERDIT d'utiliser new() pour créer le service testé. Utilise UNIQUEMENT :
+                    @InjectMocks
+                    private XxxService xxxService;
+                  Mockito injecte automatiquement les @Mock dans le service via @InjectMocks.
+                  NE FAIS JAMAIS : xxxService = new XxxService(); ou xxxService = new XxxService(repo1, repo2);
+                - Déclare "private AutoCloseable mocks;" comme champ.
 
-                    private AutoCloseable mocks;  // TOUJOURS présent
+                == SecurityUtils (MockedStatic) ==
+                - Cherche SecurityUtils.getCurrentUserId() dans TOUTE la classe (y compris les méthodes privées).
+                - Si elle est appelée N'IMPORTE OÙ :
+                    → Déclare le champ SANS @Mock : private MockedStatic<SecurityUtils> mockedSecurity;
+                      INTERDIT : @Mock private MockedStatic<SecurityUtils> — ça ne compile pas.
+                      MockedStatic n'est PAS un mock classique, c'est un wrapper pour les méthodes statiques.
+                    → Dans @BeforeMethod : mockedSecurity = mockStatic(SecurityUtils.class);
+                                           mockedSecurity.when(SecurityUtils::getCurrentUserId).thenReturn(1L);
+                    → Dans @AfterMethod : mockedSecurity.close(); (AVANT mocks.close())
 
-                    @Mock private {Repo1} {repo1Field};  // un @Mock par dépendance du service
-                    @InjectMocks private {TestedClass} sut;  // PAS de = new {TestedClass}()
+                == @BeforeMethod / @AfterMethod ==
+                @BeforeMethod :
+                    mocks = MockitoAnnotations.openMocks(this);
+                    + mockedSecurity = mockStatic(...) si nécessaire (voir ci-dessus)
+                @AfterMethod (throws Exception) :
+                    mockedSecurity.close(); // si SecurityUtils utilisé, AVANT mocks.close()
+                    mocks.close();
 
-                    @BeforeMethod
-                    public void setUp() throws Exception {
-                        mocks = MockitoAnnotations.openMocks(this);  // stocker la référence
-                    }
+                == CONFIGURATION DES MOCKS (section Given) ==
+                - TRACE TOUTES LES MÉTHODES PRIVÉES appelées par la méthode cible. Lis leur code et identifie
+                  CHAQUE appel repository/service. Exemples courants à ne PAS oublier :
+                    → checkProjectRole() appelle findByProjectIdAndUserId → mock avec Optional.of(member) + setRole(ADMIN)
+                    → checkMembership() appelle existsByProjectIdAndUserId → mock avec thenReturn(true)
+                    → getProjectOrThrow() appelle projectRepository.findById → mock avec Optional.of(project)
+                  Tu DOIS identifier et mocker TOUTES ces méthodes, pas seulement les plus évidentes.
+                - Pour save() : thenReturn doit retourner une entité avec un ID (jamais null).
+                - Pour findById() : thenReturn(Optional.of(entité)) ou Optional.empty() selon le scénario.
+                - Pour existsBy...() : TOUJOURS mocker explicitement avec thenReturn(true) ou thenReturn(false).
+                  Happy Path → false (pas de doublon). Exception → true (doublon détecté).
+                  NE JAMAIS compter sur le retour par défaut de Mockito.
 
-                    @AfterMethod
-                    public void tearDown() throws Exception {
-                        mocks.close();  // TOUJOURS fermer — ne pas laisser vide
-                    }
+                == BOUCLES ET LISTES ==
+                - Si le code boucle sur une liste (ex: for (Long id : request.getTestCaseIds())) et appelle
+                  repository.findById(id) à chaque itération, tu DOIS mocker findById pour CHAQUE ID de la liste.
+                  Exemple : si testCaseIds = [10L, 11L], tu dois :
+                    TestCase tc1 = new TestCase(); tc1.setId(10L); ...
+                    TestCase tc2 = new TestCase(); tc2.setId(11L); ...
+                    when(testCaseRepository.findById(10L)).thenReturn(Optional.of(tc1));
+                    when(testCaseRepository.findById(11L)).thenReturn(Optional.of(tc2));
+                - Si le code fait save() dans une boucle (ex: campaignTestCaseRepository.save(ctc)),
+                  mocke save() avec any() : when(repo.save(any(...))).thenReturn(new Entity());
+                  NE PAS utiliser saveAll() si le code appelle save() individuellement.
 
-                    @Test
-                    public void test_{methodName}_{scenario}() {
-                        // given — configure les mocks (jamais thenReturn(null) pour save())
-                        // when  — appelle sut.{methodName}(...)
-                        // then  — assertNotNull(result) ET verify(repo).save(any())
-                    }
-                }
+                == ANTI-NPE (très important) ==
+                - Quand un mock retourne un objet (ex: environment), et que le code appelle getProject().getId() dessus,
+                  tu DOIS configurer toute la chaîne : environment.setProject(project); project.setId(1L);
+                - Fais ça pour CHAQUE niveau d'imbrication : tc.getSuite().getProject().getId() nécessite
+                  tc.setSuite(suite); suite.setProject(project); project.setId(projectId);
+                - Pour Role : si checkProjectRole vérifie member.getRole(), le member DOIT avoir setRole(ProjectMember.Role.ADMIN).
+                - Pour les enums : si le code fait Enum.valueOf(request.getXxx().toUpperCase()), utilise une valeur EXACTE de l'enum.
+                  Exemple : TriggerMode.valueOf("MANUAL") → request.setTriggerMode("MANUAL").
+                  Regarde les valeurs de l'enum dans les CLASSES DÉPENDANTES ci-dessus.
+                - Pour DTO request : lis CHAQUE ligne du code source qui appelle request.getXxx() et configure le setter correspondant.
+                  Si tu oublies un getter, le test aura un NullPointerException. Vérifie TOUS les getters un par un.
 
-                RÈGLES pour remplir les placeholders :
-                - @Mock : un par champ final visible dans le squelette source (repositories, services)
-                - Pour save() : thenReturn(entité avec setId(1L) et les champs du testData) — jamais null
-                - Pour findById() : thenReturn(Optional.of(entité)) ou Optional.empty() selon le scénario
-                - Si la méthode utilise SecurityUtils.getCurrentUserId() : ajouter AVANT @BeforeMethod :
-                    private MockedStatic<SecurityUtils> mockedSecurity;
-                    import {basePackage}.security.SecurityUtils;
-                  Et dans setUp() : mockedSecurity = mockStatic(SecurityUtils.class);
-                                    mockedSecurity.when(SecurityUtils::getCurrentUserId).thenReturn(1L);
-                  Et dans tearDown() : mockedSecurity.close();  (avant mocks.close())
+                == TYPES (enums vs String) ==
+                - Si un setter d'entité attend un enum (ex: campaign.setTriggerMode(Campaign.TriggerMode.MANUAL)),
+                  utilise l'enum, PAS un String. Regarde le type du champ dans les CLASSES DÉPENDANTES.
+                - Si un setter de DTO request attend un String (ex: request.setTriggerMode("MANUAL")), utilise un String.
+
+                == VERIFY (section Then) ==
+                - INTERDIT d'utiliser verifyNoMoreInteractions() — ça casse quand un mock a des appels internes.
+                - Ne verify QUE les méthodes qui sont RÉELLEMENT appelées dans le chemin d'exécution testé.
+                - TRACE le code : si add() appelle checkProjectRole() qui appelle findByProjectIdAndUserId(),
+                  verify findByProjectIdAndUserId() (car c'est RÉELLEMENT appelé),
+                  NE PAS verify existsByProjectIdAndUserId() (car c'est checkMembership, pas checkProjectRole).
+                - En cas de doute, ne verify PAS — les assertions sur le résultat suffisent.
+
+                == STRUCTURE DU TEST ==
+                Given (prépare objets + configure mocks) / When (appelle la méthode) / Then (assertions + verify).
                 """;
 
-            case "INTEGRATION" -> ("""
-                Génère un test INTEGRATION en complétant ce squelette. Respecte-le à la lettre.
+            case "INTEGRATION" -> """
+                == RÈGLES INTEGRATION ==
+                - Package du test : package suites.integration;
+                - Framework : TestNG + Spring Boot (PAS de Mockito pour les repositories — ils sont de vrais beans Spring).
+                - La classe de test DOIT étendre AbstractTestNGSpringContextTests.
+                - Imports obligatoires :
+                    import org.testng.annotations.*;
+                    import static org.testng.Assert.*;
+                    import org.springframework.beans.factory.annotation.Autowired;
+                    import org.springframework.boot.test.context.SpringBootTest;
+                    import org.springframework.test.context.ActiveProfiles;
+                    import org.springframework.test.context.TestPropertySource;
+                    import org.springframework.test.annotation.Rollback;
+                    import org.springframework.transaction.annotation.Transactional;
+                    import org.testng.annotations.Test;
+                - Importe la classe source, ses DTOs, ses entités avec leur package COMPLET (consulte l'ARBORESCENCE).
 
-                SQUELETTE (structure fixe — NE PAS modifier les annotations ni les imports) :
-                package suites.integration;
+                == ANNOTATIONS DE LA CLASSE DE TEST ==
+                - @SpringBootTest (charge le contexte Spring complet)
+                - @ActiveProfiles("test")
+                - @Transactional (rollback automatique après chaque test)
+                - @Rollback(true)
+                - @TestPropertySource → voir section DB ci-dessous
 
-                import {basePackage}.entity.*;
-                import {basePackage}.repository.*;
-                import {basePackage}.service.*;
-                import {basePackage}.dto.request.*;
-                import {basePackage}.dto.response.*;
-                import org.springframework.beans.factory.annotation.Autowired;
-                import org.springframework.boot.test.context.SpringBootTest;
-                import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-                import org.springframework.security.core.context.SecurityContextHolder;
-                import org.springframework.security.core.context.SecurityContextImpl;
-                import org.springframework.test.context.ActiveProfiles;
-                import org.springframework.test.context.TestPropertySource;
-                import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
-                import org.springframework.transaction.annotation.Transactional;
-                import java.util.Collections;
-                import org.testng.annotations.AfterMethod;
-                import org.testng.annotations.BeforeMethod;
-                import org.testng.annotations.Test;
-                import static org.testng.Assert.*;
+                == INJECTION ==
+                - @Autowired pour le service testé (ex: @Autowired private EnvironmentService environmentService;)
+                - @Autowired pour CHAQUE repository nécessaire pour préparer les données de test.
+                - Ne mocke PAS les repositories. Les vrais repositories Spring accèdent à la vraie DB (H2/Testcontainers).
 
-                @SpringBootTest
-                @ActiveProfiles("test")
-                @Transactional
-                """ + buildTestPropertySourceAnnotation(normalizedDatabaseType) + """
+                == PRÉPARATION DES DONNÉES (@BeforeMethod) ==
+                - Trace l'exécution de la méthode cible (Y COMPRIS les méthodes privées) pour identifier TOUTES les entités pré-requises.
+                - Exemple : si create() appelle getProjectOrThrow(projectId), tu DOIS insérer un Project en DB avant le test.
+                - Exemple : si checkProjectRole() appelle findByProjectIdAndUserId(), tu DOIS insérer un ProjectMember avec le bon rôle.
+                - Utilise les repositories @Autowired pour faire les save() dans @BeforeMethod.
+                - Stocke les IDs générés dans des champs de la classe de test (private Long projectId, private Long envId...).
+                - ANTI-NPE : si le code fait env.getProject().getId(), l'entité Environment en DB DOIT avoir un Project associé.
+                  Configure TOUTES les relations (setProject, setSuite, etc.) AVANT le save().
+                - Pour les DTO request : remplis TOUS les champs que le code source appelle via getters.
+                  Lis chaque request.getXxx() dans le code et assure-toi que setXxx() est appelé dans le test.
 
-                public class {ClassName}Test extends AbstractTestNGSpringContextTests {
+                == SÉCURITÉ (SecurityUtils) ==
+                - IMPORTANT : cherche SecurityUtils.getCurrentUserId() dans TOUTE la classe (y compris les méthodes privées).
+                - Si elle est appelée N'IMPORTE OÙ :
+                    → import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+                    → import org.springframework.security.core.context.SecurityContextHolder;
+                    → import org.springframework.security.core.context.SecurityContextImpl;
+                    → import java.util.Collections;
+                    → Dans @BeforeMethod :
+                      Long userId = 1L;
+                      SecurityContextHolder.setContext(new SecurityContextImpl(
+                          new UsernamePasswordAuthenticationToken(userId, null, Collections.emptyList())));
+                    → Dans @AfterMethod : SecurityContextHolder.clearContext();
+                - L'userId utilisé dans SecurityContext DOIT correspondre au userId du ProjectMember inséré en DB.
 
-                    private final Long TEST_USER_ID = 1L;
-                    private Long suiteId;
+                == ASSERTIONS ET VÉRIFICATIONS ==
+                - Vérifie le résultat retourné (assertNotNull, assertEquals sur chaque champ important).
+                - Vérifie l'état de la DB après l'appel si pertinent (repository.findById, repository.count, etc.).
+                - Pour les scénarios d'exception : utilise @Test(expectedExceptions = RuntimeException.class).
 
-                    @Autowired private {TestedService} testedService;
-                    @Autowired private ProjectRepository projectRepository;
-                    @Autowired private TestSuiteRepository testSuiteRepository;
-                    @Autowired private ProjectMemberRepository projectMemberRepository;
+                == STRUCTURE DU TEST ==
+                - @BeforeMethod : insertions en DB + SecurityContext
+                - @Test : crée le request DTO, appelle la méthode, vérifie le résultat
+                - @AfterMethod : SecurityContextHolder.clearContext()
+                - Pas besoin de cleanup des données (rollback automatique grâce à @Transactional).
 
-                    @BeforeMethod
-                    public void setUp() {
-                        SecurityContextHolder.setContext(new SecurityContextImpl(
-                            new UsernamePasswordAuthenticationToken(TEST_USER_ID, null, Collections.emptyList())
-                        ));
-                        Project project = new Project();
-                        project.setName("Test"); project.setDescription("desc");
-                        project = projectRepository.save(project);
-                        TestSuite suite = new TestSuite();
-                        suite.setName("Suite"); suite.setProject(project);
-                        suite.setType(TestSuite.TestType.INTEGRATION);
-                        suite = testSuiteRepository.save(suite);
-                        suiteId = suite.getId();
-                        ProjectMember member = new ProjectMember();
-                        member.setProject(project); member.setUserId(TEST_USER_ID);
-                        member.setRole(ProjectMember.Role.ADMIN);
-                        projectMemberRepository.save(member);
-                    }
-
-                    @AfterMethod
-                    public void tearDown() { SecurityContextHolder.clearContext(); }
-
-                    @Test
-                    public void test_{methodName}_{scenario}() {
-                        // TON CODE ICI
-                    }
-                }
-
-                RÈGLES pour remplir les placeholders :
-                - {basePackage} : déduis-le depuis "package ..." dans le squelette fourni — copie-le EXACTEMENT, ne l'invente pas
-                - {TestedService} : la classe du service visible dans le squelette (ex: TestCaseService)
-                - {ClassName} : nom de la classe testée (ex: TestCaseService → TestCaseServiceTest)
-                - Champs du Request : utilise UNIQUEMENT les clés du testData fourni comme noms de setters
-                  Exemple : testData={"title":"X","type":"INTEGRATION"} → request.setTitle("X"); request.setType("INTEGRATION");
-                  INTERDIT : inventer des setters comme setName(), setActive(), setFlaky() s'ils ne sont pas dans testData
-                  INTERDIT : utiliser des enums internes (XxxRequest.RiskLevel.LOW) — les champs sont des String
-                - Pour les suites INTEGRATION, la request DOIT avoir setGeneratedCode("package suites.integration; public class Stub {}")
-                  OU setDescriptionAI("...") — sans l'un des deux, le service lève une erreur 400
-                - Assertions minimales : assertNotNull(response); assertEquals(response.getTitle(), valeurAttendue);
-                """);
+                %s
+                """.formatted(buildDbConfig(databaseType));
 
             case "WEB" -> """
-                Génère un test E2E Web en complétant ce squelette. Respecte-le à la lettre.
-
-                SQUELETTE :
-                package suites.herapp;
-
-                import io.github.bonigarcia.wdm.WebDriverManager;
-                import org.openqa.selenium.*;
-                import org.openqa.selenium.chrome.ChromeDriver;
-                import org.openqa.selenium.chrome.ChromeOptions;
-                import org.testng.annotations.*;
-                import static org.testng.Assert.*;
-                import java.io.*;
-                import java.nio.file.*;
-
-                public class {ClassName}Test {
-
-                    private WebDriver driver;
-                    private final String BASE_URL = System.getProperty("BASE_URL", "http://localhost:3000");
-
-                    @BeforeMethod
-                    public void setUp() {
-                        WebDriverManager.chromedriver().setup();
-                        ChromeOptions opts = new ChromeOptions();
-                        opts.addArguments("--headless", "--no-sandbox", "--disable-dev-shm-usage");
-                        driver = new ChromeDriver(opts);
-                        driver.manage().window().maximize();
-                    }
-
-                    @AfterMethod
-                    public void tearDown() {
-                        if (driver != null) driver.quit();
-                    }
-
-                    private String takeScreenshot(String testName) throws IOException {
-                        if (!(driver instanceof TakesScreenshot ts)) return "";
-                        byte[] bytes = ts.getScreenshotAs(OutputType.BYTES);
-                        Path dir = Paths.get("screenshots"); Files.createDirectories(dir);
-                        Path file = dir.resolve(testName + "_" + System.currentTimeMillis() + ".png");
-                        Files.write(file, bytes);
-                        return file.toAbsolutePath().toString();
-                    }
-
-                    @Test
-                    public void test_{scenario}() {
-                        // TON CODE ICI
-                        // en cas d'AssertionError : try { ... } catch (AssertionError e) { takeScreenshot("test_{scenario}"); throw e; }
-                    }
-                }
-
-                RÈGLES pour remplir les placeholders :
-                - {ClassName} : nom fonctionnel du test (ex: Login, Checkout)
-                - Utilise BASE_URL comme point d'entrée de toutes les navigations
-                - Sélecteurs : By.id > By.cssSelector > By.xpath (dans cet ordre de préférence)
-                - Chaque interaction importante → takeScreenshot() en cas d'échec
+                == RÈGLES WEB (E2E Selenium) ==
+                - Package du test : package suites.web;
+                - Framework : TestNG + Selenium + WebDriverManager.
+                - @BeforeMethod : ChromeDriver headless (--headless=new, --no-sandbox, --disable-gpu).
+                - @AfterMethod : driver.quit();
+                - URL de base : System.getProperty("BASE_URL", "http://localhost:3000")
+                - Sélecteurs : By.id > By.cssSelector > By.xpath (ordre de préférence).
+                - Capture un screenshot en cas d'échec (TakesScreenshot).
                 """;
 
             case "API" -> """
-                CONSIGNES API (tests REST) :
-                - Utilise REST Assured (io.rest-assured.*).
-                - Lis l'URL de base depuis System.getProperty("BASE_URL").
-                - Envoie des requêtes JSON (contentType JSON) et vérifie : status code, headers, body.
-                - Utilise des assertions Hamcrest (org.hamcrest.Matchers.*) avec RestAssured (then().body(...)).
-                - Le test doit être robuste (valide au moins un champ du JSON et/ou un header pertinent).
+                == RÈGLES API (tests REST) ==
+                - Package du test : package suites.api;
+                - Framework : TestNG + REST Assured.
+                - URL de base : System.getProperty("BASE_URL", "http://localhost:8082")
+                - Requêtes en JSON (contentType JSON).
+                - Vérifie : status code, headers pertinents, champs du body.
+                - Assertions avec Hamcrest (org.hamcrest.Matchers.*).
                 """;
 
             case "UX_WEB" -> """
-                Tu es un expert senior en automatisation UX web. Tu dois générer UN SEUL fichier Java compilable, en français, sans explication.
-
-                CONTRAINTES ABSOLUES :
-                - Utilise EXCLUSIVEMENT HtmlUnitDriver. Interdiction de ChromeDriver, FirefoxDriver, EdgeDriver ou tout autre driver.
-                - Utilise EXCLUSIVEMENT TestNG. Interdiction de JUnit.
-                - Utilise WebDriverWait pour toutes les attentes. Interdiction de Thread.sleep().
-                - Utilise uniquement les imports nécessaires et commençant directement par package ou import.
-                - N'écris aucun backtick markdown, aucun bloc ``` et aucun texte hors code.
-                - Le code doit être immédiatement compilable.
-
-                EXIGENCES FONCTIONNELLES :
-                - Lire l'URL cible depuis System.getProperty("UX_URL").
-                - Naviguer sur l'application et mesurer précisément le temps de chargement des pages et des composants visibles.
-                - Vérifier la présence des éléments clés : boutons, champs, liens, messages, libellés et indicateurs d'état.
-                - Évaluer la clarté des messages d'erreur, de validation et de succès.
-                - Capturer une capture d'écran avec TakesScreenshot après chaque étape importante.
-                - Sauvegarder les captures dans le répertoire temporaire de System.getProperty("java.io.tmpdir").
-                - Construire une variable String uxSummary contenant des métriques détaillées et lisibles.
-
-                FORMAT EXACT DE LA SORTIE UX_SUMMARY :
-                UX_SUMMARY: TempsChargement=...; ElementsPrésents=...; Messages=...; Clarté=...; Screenshots=...
-
-                RÈGLES DE QUALITÉ :
-                - Le test doit être structuré avec @BeforeMethod et @AfterMethod.
-                - Le test doit gérer les erreurs avec des assertions TestNG.
-                - Le test doit rester simple, directif, et sans logique inutile.
-                - Le premier caractère utile du fichier doit être package ou import.
+                == RÈGLES UX_WEB ==
+                - Package du test : package suites.ux;
+                - Framework : TestNG + HtmlUnitDriver (PAS de ChromeDriver).
+                - URL cible : System.getProperty("UX_URL")
+                - Mesure les temps de chargement des pages.
+                - Vérifie la présence des éléments clés (boutons, champs, messages).
+                - Évalue la clarté des messages d'erreur et de succès.
+                - Construit une variable String uxSummary avec le format :
+                  UX_SUMMARY: TempsChargement=...; ElementsPrésents=...; Messages=...; Clarté=...; Screenshots=...
                 """;
 
             case "UX_MOBILE" -> """
-                Tu es un expert senior en automatisation UX mobile. Tu dois générer UN SEUL fichier Java compilable, en français, sans explication.
-
-                CONTRAINTES ABSOLUES :
-                - Utilise EXCLUSIVEMENT AppiumDriver. Interdiction de ChromeDriver, FirefoxDriver, Selenium pur sans Appium, ou tout autre driver.
-                - Utilise EXCLUSIVEMENT TestNG. Interdiction de JUnit.
-                - Utilise WebDriverWait pour les attentes. Interdiction de Thread.sleep().
-                - Utilise uniquement les imports nécessaires et commençant directement par package ou import.
-                - N'écris aucun backtick markdown, aucun bloc ``` et aucun texte hors code.
-                - Le code doit être immédiatement compilable.
-
-                EXIGENCES FONCTIONNELLES :
-                - Lire le package via System.getProperty("UX_PACKAGE").
-                - Lire l'activité via System.getProperty("UX_ACTIVITY").
-                - Se connecter à l'application cible et mesurer précisément le temps de chargement des écrans.
-                - Vérifier la présence des éléments clés : boutons, champs, icônes, zones tactiles et messages.
-                - Vérifier la clarté des messages d'erreur, d'information et de succès.
-                - Vérifier que les zones tactiles ont une taille minimale de 48dp quand c'est applicable.
-                - Capturer une capture d'écran avec TakesScreenshot après chaque étape importante.
-                - Sauvegarder les captures dans le répertoire temporaire de System.getProperty("java.io.tmpdir").
-                - Construire une variable String uxSummary contenant des métriques détaillées et lisibles.
-
-                FORMAT EXACT DE LA SORTIE UX_SUMMARY :
-                UX_SUMMARY: TempsChargement=...; ElementsPrésents=...; Messages=...; Clarté=...; Screenshots=...
-
-                RÈGLES DE QUALITÉ :
-                - Le test doit être structuré avec @BeforeMethod et @AfterMethod.
-                - Le test doit gérer les erreurs avec des assertions TestNG.
-                - Le test doit rester simple, directif, et sans logique inutile.
-                - Le premier caractère utile du fichier doit être package ou import.
+                == RÈGLES UX_MOBILE ==
+                - Package du test : package suites.ux;
+                - Framework : TestNG + AppiumDriver (PAS de Selenium pur).
+                - Package app : System.getProperty("UX_PACKAGE")
+                - Activité : System.getProperty("UX_ACTIVITY")
+                - Vérifie la taille des zones tactiles (minimum 48dp).
+                - Construit une variable String uxSummary avec le format :
+                  UX_SUMMARY: TempsChargement=...; ElementsPrésents=...; Messages=...; Clarté=...; Screenshots=...
                 """;
 
             default -> """
-                CONSIGNES PAR DÉFAUT :
+                == RÈGLES PAR DÉFAUT ==
                 - Génère un test TestNG minimal, compilable, cohérent avec la description.
                 """;
         };
-
-        String basePackage   = extractBasePackage(classSkeleton);
-        String testedClass   = extractClassName(classSkeleton);
-        String scenarioLabel = scenarioType != null ? scenarioType.toLowerCase() : "test";
-        String methodLabel   = methodName   != null ? methodName                 : "method";
-
-        specifics = specifics
-            .replace("{basePackage}",   basePackage  != null ? basePackage  : "com.example")
-            .replace("{TestedService}", testedClass  != null ? testedClass  : "ServiceUnderTest")
-            .replace("{ClassName}",     testedClass  != null ? testedClass  : "TestedClass")
-            .replace("{methodName}",    methodLabel)
-            .replace("{scenario}",      scenarioLabel);
-
-        return commonRules + mongoIntegrationRules + header + skeletonBlock + testDataBlock + scenarioBlock + "\n" + specifics + "\n" + "Génère maintenant le code Java.";
     }
 
-    private String extractBasePackage(String skeleton) {
-        if (skeleton == null || skeleton.isBlank()) return null;
-        java.util.regex.Matcher m = java.util.regex.Pattern
-            .compile("^\\s*package\\s+([\\w.]+)\\s*;", java.util.regex.Pattern.MULTILINE)
-            .matcher(skeleton);
-        if (!m.find()) return null;
-        String pkg = m.group(1); // e.g. "com.pfe.platform.ms_gestion.service"
-        int lastDot = pkg.lastIndexOf('.');
-        return lastDot > 0 ? pkg.substring(0, lastDot) : pkg;
-    }
-
-    private String extractClassName(String skeleton) {
-        if (skeleton == null || skeleton.isBlank()) return null;
-        java.util.regex.Matcher m = java.util.regex.Pattern
-            .compile("(?:public\\s+)?(?:abstract\\s+)?(?:class|interface)\\s+(\\w+)")
-            .matcher(skeleton);
-        return m.find() ? m.group(1) : null;
-    }
-
-    private String buildTestPropertySourceAnnotation(String dbType) {
-        return switch (dbType == null ? "" : dbType.trim().toUpperCase()) {
+    private String buildDbConfig(String databaseType) {
+        String db = databaseType == null ? "" : databaseType.trim().toUpperCase();
+        return switch (db) {
             case "POSTGRESQL" -> """
-                @TestPropertySource(properties = {
+                - Base de données de test : Testcontainers PostgreSQL
+                - Ajoute @TestPropertySource(properties = {
                     "spring.datasource.url=jdbc:tc:postgresql:14:///testdb",
                     "spring.datasource.driverClassName=org.testcontainers.jdbc.ContainerDatabaseDriver",
-                    "spring.datasource.username=sa",
-                    "spring.datasource.password=",
-                    "spring.jpa.hibernate.ddl-auto=create-drop"
-                })""";
-            case "MYSQL" -> """
-                @TestPropertySource(properties = {
-                    "spring.datasource.url=jdbc:tc:mysql:8.0.33:///testdb",
-                    "spring.datasource.driverClassName=org.testcontainers.jdbc.ContainerDatabaseDriver",
-                    "spring.datasource.username=sa",
-                    "spring.datasource.password=",
-                    "spring.jpa.hibernate.ddl-auto=create-drop"
-                })""";
-            case "MONGODB" -> ""; // MongoDB uses @BeforeSuite + System.setProperty — handled separately
-            default -> """
-                @TestPropertySource(properties = {
-                    "spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
-                    "spring.datasource.driverClassName=org.h2.Driver",
-                    "spring.datasource.username=sa",
-                    "spring.datasource.password=",
-                    "spring.jpa.hibernate.ddl-auto=create-drop",
-                    "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect"
-                })""";
-        };
-    }
-
-    private String buildIntegrationDbRule(String dbType) {
-        return switch (dbType == null ? "" : dbType.trim().toUpperCase()) {
-            case "POSTGRESQL" -> """
-                - Configure Testcontainers PostgreSQL avec @TestPropertySource(properties = {
-                    "spring.datasource.url=jdbc:tc:postgresql:14:///testdb",
-                    "spring.datasource.driverClassName=org.testcontainers.jdbc.ContainerDatabaseDriver",
-                    "spring.datasource.username=sa",
-                    "spring.datasource.password=",
+                    "spring.datasource.username=sa", "spring.datasource.password=",
                     "spring.jpa.hibernate.ddl-auto=create-drop"
                   })
-                - N'ajoute PAS @Testcontainers ou @Container : la connexion se fait automatiquement via l'URL tc:.
+                - N'utilise PAS @Testcontainers ni @Container (la connexion se fait via l'URL tc:).
                 """;
             case "MYSQL" -> """
-                - Configure Testcontainers MySQL avec @TestPropertySource(properties = {
+                - Base de données de test : Testcontainers MySQL
+                - Ajoute @TestPropertySource(properties = {
                     "spring.datasource.url=jdbc:tc:mysql:8.0.33:///testdb",
                     "spring.datasource.driverClassName=org.testcontainers.jdbc.ContainerDatabaseDriver",
-                    "spring.datasource.username=sa",
-                    "spring.datasource.password=",
+                    "spring.datasource.username=sa", "spring.datasource.password=",
                     "spring.jpa.hibernate.ddl-auto=create-drop"
                   })
-                - N'ajoute PAS @Testcontainers ou @Container : la connexion se fait automatiquement via l'URL tc:.
                 """;
-            case "MONGODB" -> "";
+            case "MONGODB" -> """
+                - Base de données de test : Testcontainers MongoDB
+                - Démarre MongoDBContainer dans @BeforeSuite(alwaysRun = true)
+                - Injecte l'URI via System.setProperty("spring.data.mongodb.uri", mongo.getReplicaSetUrl())
+                - N'utilise PAS @Testcontainers, @Container, @DynamicPropertySource.
+                """;
             default -> """
-                - Configure H2 avec @TestPropertySource(properties = {
+                - Base de données de test : H2 en mémoire
+                - Ajoute @TestPropertySource(properties = {
                     "spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
                     "spring.datasource.driverClassName=org.h2.Driver",
-                    "spring.datasource.username=sa",
-                    "spring.datasource.password=",
+                    "spring.datasource.username=sa", "spring.datasource.password=",
                     "spring.jpa.hibernate.ddl-auto=create-drop",
                     "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect"
                   })

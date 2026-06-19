@@ -40,6 +40,12 @@ public class ExecutionResult {
     private String screenshotUrl;
     private LocalDateTime executedAt = LocalDateTime.now();
 
+    @Column(name = "retry_count")
+    private Integer retryCount = 0;
+
+    @Column(name = "retry_log", columnDefinition = "TEXT")
+    private String retryLog;
+
     public enum ResultStatus { SUCCESS, FAILURE, ERROR }
 
     public ExecutionResult() {
@@ -158,4 +164,10 @@ public class ExecutionResult {
     public void setExecutedAt(LocalDateTime executedAt) {
         this.executedAt = executedAt;
     }
+
+    public Integer getRetryCount() { return retryCount; }
+    public void setRetryCount(Integer retryCount) { this.retryCount = retryCount; }
+
+    public String getRetryLog() { return retryLog; }
+    public void setRetryLog(String retryLog) { this.retryLog = retryLog; }
 }

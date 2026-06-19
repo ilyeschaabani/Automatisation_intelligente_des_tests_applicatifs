@@ -113,6 +113,7 @@ public class ExecutionService {
     private final TestCaseRepository testCaseRepository;
     private final TestSuiteRepository testSuiteRepository;
     private final com.pfe.platform.msexecution.service.ReportStorageService reportStorageService;
+    private final ScriptRetryService scriptRetryService;
 
     @Value("${execution.temp-dir:}")
     private String tempDirConfig;
@@ -1012,6 +1013,106 @@ public class ExecutionService {
                 result.setErrorMessage("Maven exit code : " + exitCode);
                 log.error("[TESTCASE {}] Maven FAILURE exitCode={} (durationMs={})", tc.getId(), exitCode, duration);
                 log.error("[TESTCASE {}] Maven output (first 500 lines, truncated):\n{}", tc.getId(), firstLines(combinedOutput, 500, 20_000));
+
+                // === AUTO-RETRY M3: si test généré + erreur corrigeable, corriger et relancer ===
+                if (Boolean.TRUE.equals(tc.getGenerated()) && tc.getGeneratedCode() != null
+                        && isRetryableError(combinedOutput)) {
+                    int maxRetries = 3;
+                    StringBuilder retryLogBuilder = new StringBuilder();
+                    String currentScript = tc.getGeneratedCode();
+                    String relevantErrors = llmAnalysisService.extractRelevantErrors(combinedOutput);
+
+                    for (int retry = 1; retry <= maxRetries; retry++) {
+                        log.info("[TESTCASE {}] AUTO-RETRY {}/{} — L'IA corrige le script...", tc.getId(), retry, maxRetries);
+
+                        Campaign retryStatusCampaign = campaignRepository.findById(campaignId).orElse(null);
+                        if (retryStatusCampaign != null) {
+                            retryStatusCampaign.setCurrentStep("AI_RETRY:" + tc.getId() + ":" + retry + "/" + maxRetries);
+                            campaignRepository.save(retryStatusCampaign);
+                        }
+
+                        retryLogBuilder.append("=== Tentative ").append(retry).append("/").append(maxRetries).append(" ===\n");
+                        retryLogBuilder.append("Erreur détectée: ").append(relevantErrors.substring(0, Math.min(500, relevantErrors.length()))).append("\n");
+
+                        String correctedScript = scriptRetryService.correctScript(
+                                currentScript, relevantErrors, tc.getGeneratedCode());
+
+                        if (correctedScript == null || correctedScript.isBlank()) {
+                            retryLogBuilder.append("Résultat: L'IA n'a pas pu corriger le script.\n\n");
+                            log.warn("[TESTCASE {}] Retry {}: LLM returned null correction", tc.getId(), retry);
+                            break;
+                        }
+
+                        retryLogBuilder.append("Résultat: Script corrigé (").append(correctedScript.length()).append(" chars), relance Maven...\n");
+
+                        // Réécrire le fichier test
+                        String subDir = getTestPackageByType(tc.getType());
+                        if (subDir == null || subDir.isBlank()) subDir = "suites/generated";
+                        var retryClassMatcher = Pattern.compile("\\bclass\\s+(\\w+)").matcher(correctedScript);
+                        if (!retryClassMatcher.find()) {
+                            retryLogBuilder.append("Résultat: Script corrigé invalide (pas de déclaration de classe).\n\n");
+                            break;
+                        }
+                        String retryClassName = retryClassMatcher.group(1);
+                        Path retryTestFile = workDir.resolve("src/test/java").resolve(subDir).resolve(retryClassName + ".java");
+                        Files.writeString(retryTestFile, correctedScript);
+                        log.info("[TESTCASE {}] Retry {}: corrected script written to {}", tc.getId(), retry, retryTestFile);
+
+                        // Relancer Maven
+                        ProcessBuilder retryPb = new ProcessBuilder(command);
+                        retryPb.directory(workDir.toFile());
+                        retryPb.redirectErrorStream(false);
+                        Process retryProcess = retryPb.start();
+
+                        StringBuilder retryStdout = new StringBuilder(32 * 1024);
+                        StringBuilder retryStderr = new StringBuilder(16 * 1024);
+                        Thread retryOutThread = startStreamGobbler(retryProcess.getInputStream(), retryStdout, "retry-stdout", tc.getId());
+                        Thread retryErrThread = startStreamGobbler(retryProcess.getErrorStream(), retryStderr, "retry-stderr", tc.getId());
+
+                        boolean retryFinished = retryProcess.waitFor(effectiveTimeoutMinutes, TimeUnit.MINUTES);
+                        joinQuietly(retryOutThread, 10_000);
+                        joinQuietly(retryErrThread, 10_000);
+
+                        String retryCombinedOutput = combineProcessOutput(retryStdout, retryStderr);
+                        int retryExitCode = retryFinished ? retryProcess.exitValue() : -1;
+
+                        if (!retryFinished) {
+                            retryProcess.destroyForcibly();
+                            retryLogBuilder.append("Résultat: Timeout Maven.\n\n");
+                            break;
+                        }
+
+                        if (retryExitCode == 0) {
+                            retryLogBuilder.append("Résultat: SUCCÈS après correction !\n");
+                            result.setStatus(ExecutionResult.ResultStatus.SUCCESS);
+                            result.setErrorMessage(null);
+                            result.setLogs(retryCombinedOutput);
+                            // Mettre à jour le code généré avec la version corrigée
+                            currentScript = correctedScript;
+
+                            try {
+                                String retryMethodResults = parseSurefireReports(workDir);
+                                if (retryMethodResults != null) result.setTestMethodResults(retryMethodResults);
+                            } catch (Exception ignored) {}
+
+                            log.info("[TESTCASE {}] AUTO-RETRY SUCCESS at attempt {}", tc.getId(), retry);
+                            break;
+                        } else {
+                            retryLogBuilder.append("Résultat: Encore en échec (exit=").append(retryExitCode).append(").\n\n");
+                            currentScript = correctedScript;
+                            relevantErrors = llmAnalysisService.extractRelevantErrors(retryCombinedOutput);
+                            combinedOutput = retryCombinedOutput;
+                            result.setLogs(retryCombinedOutput);
+
+                            if (!isRetryableError(retryCombinedOutput)) {
+                                retryLogBuilder.append("L'erreur n'est plus corrigeable automatiquement. Arrêt du retry.\n");
+                                break;
+                            }
+                        }
+                    }
+                    result.setRetryCount(Math.min(maxRetries, retryLogBuilder.toString().split("=== Tentative").length - 1));
+                    result.setRetryLog(retryLogBuilder.toString());
+                }
             }
 
             // Analyse UX si applicable
@@ -1871,6 +1972,33 @@ spring.jpa.hibernate.ddl-auto=create-drop
             case API, INTEGRATION -> env.getBaseUrlApi() != null ? env.getBaseUrlApi() : "";
             default -> "";
         };
+    }
+
+    private boolean isRetryableError(String logs) {
+        if (logs == null) return false;
+        return isCompilationError(logs) || isTestFailure(logs);
+    }
+
+    private boolean isCompilationError(String logs) {
+        if (logs == null) return false;
+        return logs.contains("COMPILATION ERROR")
+                || logs.contains("cannot find symbol")
+                || logs.contains("is not abstract and does not override")
+                || logs.contains("incompatible types")
+                || logs.contains("package does not exist")
+                || logs.contains("cannot be applied to");
+    }
+
+    private boolean isTestFailure(String logs) {
+        if (logs == null) return false;
+        return logs.contains("Wanted but not invoked")
+                || logs.contains("Actually, there were zero interactions")
+                || logs.contains("AssertionError")
+                || logs.contains("AssertionFailedError")
+                || logs.contains("NullPointerException")
+                || logs.contains("Unnecessary stubbings detected")
+                || logs.contains("but was:")
+                || logs.contains("expected [") && logs.contains("] but found [");
     }
 
     private void deleteDirectory(Path path) {
