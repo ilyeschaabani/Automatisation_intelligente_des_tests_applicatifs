@@ -38,8 +38,19 @@ public class AgenticEvaluationService {
     private final EvaluationStreamService streamService;
     private final HumanInputService humanInputService;
 
-    @Value("${gemini.max-steps:8}")
+    /**
+     * Plafond de sécurité (anti-boucle infinie) — PAS une limite fonctionnelle.
+     * L'agent fait un tour complet et s'arrête de lui-même à saturation bien avant ce nombre.
+     */
+    @Value("${ux.max-steps:60}")
     private int maxSteps;
+
+    /**
+     * Nombre d'étapes consécutives sans nouvelle découverte (page/élément) avant de
+     * considérer le tour comme complet. C'est ça qui termine l'exploration, pas un plafond fixe.
+     */
+    @Value("${ux.saturation-threshold:6}")
+    private int saturationThreshold;
 
     /** Set of evaluation IDs that have been requested to stop. */
     private final Set<Long> stopRequested = java.util.concurrent.ConcurrentHashMap.newKeySet();
@@ -146,8 +157,25 @@ public class AgenticEvaluationService {
             List<String> history = new ArrayList<>();
             int consecutiveEmptyResponses = 0;
 
-            // Boucle agentique
-            for (int i = 1; i <= maxSteps; i++) {
+            // Suivi de couverture pour l'exploration adaptative (tour complet)
+            Set<String> visitedUrls = new LinkedHashSet<>();
+            Set<String> interactedElements = new HashSet<>();
+            int stepsWithoutDiscovery = 0;
+
+            // Boucle agentique adaptative : pas de limite fixe, s'arrête à saturation
+            int i = 0;
+            while (true) {
+                i++;
+
+                // Plafond de sécurité (anti-boucle infinie), pas une limite fonctionnelle
+                if (i > maxSteps) {
+                    log.info("[UX-AGENT {}] Safety cap {} reached", evaluationId, maxSteps);
+                    streamService.sendInfo(evaluationId,
+                            "ℹ Plafond de sécurité atteint (" + maxSteps + " étapes) — fin du tour");
+                    history.add("ℹ Plafond de sécurité atteint à l'étape " + i);
+                    break;
+                }
+
                 // Check if stop was requested (in-memory flag OR DB status changed)
                 if (stopRequested.remove(evaluationId) || isStoppedInDb(evaluationId)) {
                     log.info("[UX-AGENT {}] Stop detected at step {}", evaluationId, i);
@@ -155,7 +183,8 @@ public class AgenticEvaluationService {
                     history.add("⛔ Exploration arrêtée par le testeur à l'étape " + i);
                     break;
                 }
-                log.info("[UX-AGENT {}] Step {}/{}", evaluationId, i, maxSteps);
+                log.info("[UX-AGENT {}] Step {} (cap {}, sans découverte {}/{})",
+                        evaluationId, i, maxSteps, stepsWithoutDiscovery, saturationThreshold);
 
                 // Screenshot + compress to reduce Gemini token usage
                 byte[] rawScreenshot = ((TakesScreenshot) driver).getScreenshotAs(OutputType.BYTES);
@@ -163,19 +192,21 @@ public class AgenticEvaluationService {
                 String currentUrl = driver.getCurrentUrl();
                 String pageTitle = driver.getTitle();
 
+                // Suivi de couverture : nouvelle page découverte ?
+                boolean newPage = visitedUrls.add(normalizeUrl(currentUrl));
+
                 // Envoi du screenshot au frontend
                 streamService.sendScreenshot(evaluationId, screenshot);
                 streamService.sendThinking(evaluationId, i, currentUrl, pageTitle);
 
-                // Délai inter-appels pour le rate limit
+                // Petit délai de stabilisation (Ollama Cloud n'a pas le rate limit free-tier d'OpenRouter)
                 if (i > 1) {
-                    log.info("[UX-AGENT {}] Waiting 10s for rate limit…", evaluationId);
-                    Thread.sleep(10_000);
+                    Thread.sleep(1_000);
                 }
 
                 // Analyse IA du screenshot
-                String prompt = buildActionPrompt(currentUrl, pageTitle, history, i, maxSteps,
-                        evaluation.getDescription());
+                String prompt = buildActionPrompt(currentUrl, pageTitle, history, i,
+                        evaluation.getDescription(), visitedUrls);
                 String geminiResponse = visionProvider.analyzeScreenshot(screenshot, prompt);
 
                 // Info backend utilisé
@@ -310,6 +341,28 @@ public class AgenticEvaluationService {
                 // Attente stabilisation page
                 Thread.sleep(1500);
                 waitForPageLoad(driver);
+
+                // ── Suivi de couverture : l'agent a-t-il découvert du nouveau ? ──
+                String elementSig = decision.actionType + "|" + currentUrl + "|" + decision.selector;
+                boolean newElement = interactedElements.add(elementSig);
+                String newUrl = normalizeUrl(driver.getCurrentUrl());
+                boolean landedOnNewPage = visitedUrls.add(newUrl);
+
+                if (newPage || newElement || landedOnNewPage) {
+                    stepsWithoutDiscovery = 0; // découverte → on continue le tour
+                } else {
+                    stepsWithoutDiscovery++;
+                    if (stepsWithoutDiscovery >= saturationThreshold) {
+                        log.info("[UX-AGENT {}] Saturation atteinte ({} étapes sans découverte) — tour complet",
+                                evaluationId, stepsWithoutDiscovery);
+                        streamService.sendInfo(evaluationId,
+                                "✅ Tour complet terminé — " + visitedUrls.size()
+                                + " page(s) explorée(s), plus rien de nouveau à découvrir");
+                        history.add("✅ Tour complet : " + visitedUrls.size()
+                                + " pages visitées, saturation à l'étape " + i);
+                        break;
+                    }
+                }
             }
 
             // Génération du rapport final
@@ -346,8 +399,8 @@ public class AgenticEvaluationService {
     // Construction des prompts
 
     private String buildActionPrompt(String url, String pageTitle,
-                                     List<String> history, int step, int maxSteps,
-                                     String userDescription) {
+                                     List<String> history, int step,
+                                     String userDescription, Set<String> visitedUrls) {
         String historyText = history.isEmpty() ? "Aucune (première visite)"
                 : String.join("\n", history);
 
@@ -355,13 +408,21 @@ public class AgenticEvaluationService {
                 ? "\nLe testeur a précisé : " + userDescription
                 : "";
 
+        String visitedText = visitedUrls.isEmpty() ? "Aucune encore"
+                : String.join("\n", visitedUrls);
+
         return """
-            Tu es un testeur UX humain qui explore cette application web pour la première fois.
-            Tu ne sais rien de cette application. Tu découvres tout en naviguant.%s
+            Tu es un testeur UX humain chargé de faire un TOUR COMPLET de cette application web.
+            Ton objectif : visiter TOUTES les sections principales, tester les formulaires et les
+            fonctionnalités, puis te forger un avis sur l'expérience utilisateur.
+            Tu ne sais rien de cette application au départ : tu découvres tout en naviguant.%s
 
             URL actuelle : %s
             Titre de page : %s
-            Étape : %d / %d
+            Étape : %d
+
+            Pages déjà visitées (évite de tourner en rond, cherche du NOUVEAU) :
+            %s
 
             Historique de tes actions :
             %s
@@ -369,23 +430,30 @@ public class AgenticEvaluationService {
             Regarde le screenshot et réponds en JSON STRICT (pas de texte avant/après) :
             {
               "observation": "Ce que tu vois sur cette page en 1-2 phrases (en français)",
-              "action_type": "CLICK | FILL | SCROLL | NEEDS_INPUT | DONE",
-              "selector": "sélecteur CSS de l'élément (ou texte visible du lien/bouton), null si NEEDS_INPUT ou DONE",
+              "action_type": "CLICK | FILL | SCROLL | NAVIGATE | NEEDS_INPUT | DONE",
+              "selector": "Le TEXTE VISIBLE exact du bouton ou lien (ex: 'Accepter', 'Connexion', 'Envoyer'). Sinon un sélecteur CSS simple (#id, .class, input[name='email']). Pour NAVIGATE : mets l'URL complète ici. JAMAIS de :has-text() ni de sélecteurs Playwright. null si NEEDS_INPUT ou DONE",
               "value": "valeur à saisir si FILL, sinon null",
               "question": "Question précise à poser au testeur humain — UNIQUEMENT si action_type est NEEDS_INPUT",
               "hint": "Exemple de réponse attendue — UNIQUEMENT si action_type est NEEDS_INPUT",
               "reason": "Pourquoi tu fais cette action (en français)"
             }
 
-            Règles :
-            - Explore les fonctionnalités principales (navigation, formulaires, boutons)
-            - Si tu vois un formulaire, essaie de le soumettre vide pour voir les messages d'erreur UX
-            - Si tu vois un menu, explore les sections principales
-            - Utilise NEEDS_INPUT si tu as besoin d'identifiants réels (login/password), tokens, codes 2FA, ou toute
-              information confidentielle que tu ne peux pas inventer. Explique précisément ce dont tu as besoin.
-            - Utilise DONE quand tu as suffisamment exploré (minimum 4 étapes)
+            IMPORTANT pour le champ "selector" :
+            - Pour les boutons/liens : utilise UNIQUEMENT le texte visible exact (ex: "Accepter", "Non, merci.")
+            - Pour les champs de formulaire : utilise un sélecteur CSS simple (ex: input[name='email'], #password, .search-input)
+            - NE JAMAIS utiliser button:has-text() ni des pseudo-sélecteurs Playwright — ils ne fonctionnent pas
+
+            Règles pour un TOUR COMPLET :
+            - Priorise les sections JAMAIS visitées (regarde la liste ci-dessus) avant de revenir sur du connu
+            - Explore chaque entrée de menu / onglet principal au moins une fois
+            - Si tu vois un formulaire, teste-le : soumets-le vide pour voir les messages d'erreur UX, puis avec des données valides
+            - Utilise SCROLL si la page a du contenu plus bas que tu n'as pas encore vu
+            - Utilise NEEDS_INPUT seulement si tu as besoin d'identifiants réels (login/password), tokens, codes 2FA,
+              ou toute info confidentielle que tu ne peux pas inventer. Explique précisément ce dont tu as besoin.
+            - Utilise DONE UNIQUEMENT quand tu as réellement fait le tour de TOUTE la plateforme
+              (toutes les sections principales visitées et les formulaires testés)
             - Réponds UNIQUEMENT avec le JSON, pas de texte autour
-            """.formatted(userContext, url, pageTitle, step, maxSteps, historyText);
+            """.formatted(userContext, url, pageTitle, step, visitedText, historyText);
     }
 
     private String buildFinalReport(String url, List<UxNavigationStep> steps, String description) {
@@ -438,7 +506,21 @@ public class AgenticEvaluationService {
 
     private boolean executeAction(WebDriver driver, AgentDecision decision) {
         try {
+            // Auto-detect: if selector is a full URL, treat as NAVIGATE
+            if (decision.selector != null
+                    && (decision.selector.startsWith("http://") || decision.selector.startsWith("https://"))) {
+                log.info("[UX-AGENT] Selector is a URL — navigating directly to {}", decision.selector);
+                driver.get(decision.selector);
+                return true;
+            }
+
             switch (decision.actionType.toUpperCase()) {
+                case "NAVIGATE" -> {
+                    String url = decision.value != null ? decision.value : decision.selector;
+                    if (url == null || url.isBlank()) return false;
+                    driver.get(url);
+                    return true;
+                }
                 case "CLICK" -> {
                     WebElement el = findElement(driver, decision.selector);
                     if (el == null) return false;
@@ -476,41 +558,92 @@ public class AgenticEvaluationService {
     private WebElement findElement(WebDriver driver, String selector) {
         if (selector == null || selector.isBlank()) return null;
 
-        // CSS selector
-        try {
-            WebElement el = driver.findElement(By.cssSelector(selector));
-            if (el.isDisplayed()) return el;
-        } catch (Exception ignored) {}
+        // Pre-process: extract text from Playwright-style selectors the LLM may produce
+        // e.g. "button:has-text('Accepter')" → try "Accepter" as text + "button" as tag
+        List<String> textCandidates = extractTextFromSelector(selector);
 
-        // Texte exact du lien
+        // 1) Try each comma-separated part as CSS selector
+        for (String part : selector.split(",")) {
+            String css = part.trim();
+            if (css.isEmpty() || css.contains(":has-text(") || css.contains(":has(")) continue;
+            try {
+                WebElement el = driver.findElement(By.cssSelector(css));
+                if (el.isDisplayed()) return el;
+            } catch (Exception ignored) {}
+        }
+
+        // 2) Try extracted text candidates via XPath (buttons, links, any clickable)
+        for (String text : textCandidates) {
+            String escaped = text.replace("'", "\\'");
+            // Exact text match on button/a/input
+            try {
+                String xpath = "//button[normalize-space(.)='" + escaped
+                        + "'] | //a[normalize-space(.)='" + escaped
+                        + "'] | //input[@value='" + escaped + "']";
+                WebElement el = driver.findElement(By.xpath(xpath));
+                if (el.isDisplayed()) return el;
+            } catch (Exception ignored) {}
+            // Contains text match
+            try {
+                String xpath = "//button[contains(.,'" + escaped
+                        + "')] | //a[contains(.,'" + escaped
+                        + "')] | //*[@role='button'][contains(.,'" + escaped + "')]";
+                WebElement el = driver.findElement(By.xpath(xpath));
+                if (el.isDisplayed()) return el;
+            } catch (Exception ignored) {}
+            // Any element with that text
+            try {
+                String xpath = "//*[normalize-space(text())='" + escaped + "']";
+                WebElement el = driver.findElement(By.xpath(xpath));
+                if (el.isDisplayed()) return el;
+            } catch (Exception ignored) {}
+        }
+
+        // 3) Fallback: raw selector as link text
         try {
             WebElement el = driver.findElement(By.linkText(selector));
             if (el.isDisplayed()) return el;
         } catch (Exception ignored) {}
-
-        // Texte partiel du lien
         try {
             WebElement el = driver.findElement(By.partialLinkText(selector));
             if (el.isDisplayed()) return el;
         } catch (Exception ignored) {}
 
-        // XPath par contenu texte
+        // 4) Last resort: raw selector as XPath text search
         try {
-            String xpath = "//*[contains(text(),'" + selector.replace("'", "\\'") + "')]";
-            WebElement el = driver.findElement(By.xpath(xpath));
-            if (el.isDisplayed()) return el;
-        } catch (Exception ignored) {}
-
-        // XPath bouton ou lien
-        try {
-            String xpath = "//button[contains(.,'" + selector.replace("'", "\\'")
-                    + "')] | //a[contains(.,'" + selector.replace("'", "\\'") + "')]";
+            String escaped = selector.replace("'", "\\'");
+            String xpath = "//*[contains(text(),'" + escaped + "')]";
             WebElement el = driver.findElement(By.xpath(xpath));
             if (el.isDisplayed()) return el;
         } catch (Exception ignored) {}
 
         log.warn("Élément introuvable pour le sélecteur: {}", selector);
         return null;
+    }
+
+    private List<String> extractTextFromSelector(String selector) {
+        List<String> texts = new ArrayList<>();
+        // Extract from :has-text('...') or :has-text("...")
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile(":has-text\\(['\"](.+?)['\"]\\)").matcher(selector);
+        while (m.find()) {
+            texts.add(m.group(1));
+        }
+        // Extract from :text('...') (another Playwright pattern)
+        m = java.util.regex.Pattern.compile(":text\\(['\"](.+?)['\"]\\)").matcher(selector);
+        while (m.find()) {
+            texts.add(m.group(1));
+        }
+        // Extract from [aria-label='...'] or [aria-label*='...']
+        m = java.util.regex.Pattern.compile("\\[aria-label\\*?=['\"](.+?)['\"]\\]").matcher(selector);
+        while (m.find()) {
+            texts.add(m.group(1));
+        }
+        // If no patterns matched and selector looks like plain text (no CSS chars), use it directly
+        if (texts.isEmpty() && !selector.matches(".*[.#\\[\\]>+~:@].*")) {
+            texts.add(selector);
+        }
+        return texts;
     }
 
     // Parsing de la décision IA
@@ -610,6 +743,19 @@ public class AgenticEvaluationService {
         return evaluationRepository.findById(evaluationId)
                 .map(e -> e.getStatus() != Status.RUNNING)
                 .orElse(true);
+    }
+
+    /**
+     * Normalise une URL pour le suivi de couverture : retire le fragment (#…) et le slash final,
+     * pour que deux variantes de la même page ne comptent pas comme deux pages distinctes.
+     */
+    private String normalizeUrl(String url) {
+        if (url == null) return "";
+        String u = url.trim();
+        int hash = u.indexOf('#');
+        if (hash >= 0) u = u.substring(0, hash);
+        if (u.endsWith("/")) u = u.substring(0, u.length() - 1);
+        return u;
     }
 
     private void waitForPageLoad(WebDriver driver) {
