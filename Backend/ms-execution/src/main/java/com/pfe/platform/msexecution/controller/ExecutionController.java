@@ -49,7 +49,7 @@ public class ExecutionController {
                 return ResponseEntity.ok(CampaignRunResponseDto.alreadyRunning(campaignId));
             }
 
-            // Parse runMode and optional testCaseIds
+
             String runMode = "ALL";
             List<Long> selectedIds = null;
             if (body != null) {
@@ -70,7 +70,6 @@ public class ExecutionController {
             campaign.setCurrentStep("Cloning repository");
             campaignRepository.save(campaign);
 
-            // Pass selectedIds to execution (null = run all)
             List<Long> idsToRun = "SELECTED".equals(runMode) && selectedIds != null && !selectedIds.isEmpty()
                     ? selectedIds : null;
             executionService.runCampaign(campaignId, idsToRun);

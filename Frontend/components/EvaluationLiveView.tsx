@@ -108,6 +108,7 @@ interface EvaluationLiveViewProps {
   connected: boolean
   needsInput: { question: string; hint?: string | null } | null
   isRunning: boolean
+  isMobile?: boolean
   currentBackend?: string | null
   onSendAnswer: (answer: string) => void
 }
@@ -118,6 +119,7 @@ export function EvaluationLiveView({
   connected,
   needsInput,
   isRunning,
+  isMobile = false,
   currentBackend,
   onSendAnswer,
 }: EvaluationLiveViewProps) {
@@ -177,33 +179,79 @@ export function EvaluationLiveView({
           </div>
         </div>
 
-        <div className="relative flex-1 rounded-xl border border-border/60 bg-muted/20 overflow-hidden min-h-[300px]">
-          {liveScreenshot ? (
-            <img
-              src={liveScreenshot}
-              alt="Écran en direct"
-              className="w-full h-full object-contain object-top"
-            />
-          ) : (
-            <div className="flex h-full min-h-[300px] flex-col items-center justify-center gap-3 text-muted-foreground">
-              {isRunning ? (
-                <>
-                  <Loader2 className="h-8 w-8 animate-spin" />
-                  <p className="text-sm">En attente du premier screenshot…</p>
-                </>
-              ) : (
-                <p className="text-sm">Aucun screenshot disponible</p>
-              )}
+        {isMobile ? (
+          /* ── Phone frame for mobile mode ── */
+          <div className="flex flex-1 items-start justify-center py-4 min-h-[300px]">
+            <div className="relative mx-auto" style={{ width: 280 }}>
+              {/* Phone bezel */}
+              <div className="rounded-[2.5rem] border-[6px] border-zinc-800 dark:border-zinc-600 bg-black shadow-2xl overflow-hidden">
+                {/* Notch */}
+                <div className="relative z-10 mx-auto h-6 w-28 rounded-b-2xl bg-black" />
+                {/* Screen */}
+                <div className="relative bg-white" style={{ height: 560 }}>
+                  {liveScreenshot ? (
+                    <img
+                      src={liveScreenshot}
+                      alt="Écran mobile en direct"
+                      className="w-full h-full object-cover object-top"
+                    />
+                  ) : (
+                    <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground bg-muted/20">
+                      {isRunning ? (
+                        <>
+                          <Loader2 className="h-6 w-6 animate-spin" />
+                          <p className="text-xs">En attente…</p>
+                        </>
+                      ) : (
+                        <p className="text-xs">Aucun screenshot</p>
+                      )}
+                    </div>
+                  )}
+                  {isRunning && liveScreenshot && (
+                    <div className="absolute top-1 right-1 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                      <span className="text-[9px] text-white font-medium">LIVE</span>
+                    </div>
+                  )}
+                </div>
+                {/* Home bar */}
+                <div className="flex justify-center py-2 bg-black">
+                  <div className="h-1 w-24 rounded-full bg-zinc-600" />
+                </div>
+              </div>
+              {/* Device label */}
+              <p className="mt-2 text-center text-[10px] text-muted-foreground">iPhone 14 — 390×844</p>
             </div>
-          )}
-          {/* Pulse indicator overlay when running */}
-          {isRunning && liveScreenshot && (
-            <div className="absolute top-2 right-2 flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1">
-              <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-[10px] text-white font-medium">LIVE</span>
-            </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          /* ── Desktop screenshot ── */
+          <div className="relative flex-1 rounded-xl border border-border/60 bg-muted/20 overflow-hidden min-h-[300px]">
+            {liveScreenshot ? (
+              <img
+                src={liveScreenshot}
+                alt="Écran en direct"
+                className="w-full h-full object-contain object-top"
+              />
+            ) : (
+              <div className="flex h-full min-h-[300px] flex-col items-center justify-center gap-3 text-muted-foreground">
+                {isRunning ? (
+                  <>
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                    <p className="text-sm">En attente du premier screenshot…</p>
+                  </>
+                ) : (
+                  <p className="text-sm">Aucun screenshot disponible</p>
+                )}
+              </div>
+            )}
+            {isRunning && liveScreenshot && (
+              <div className="absolute top-2 right-2 flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1">
+                <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                <span className="text-[10px] text-white font-medium">LIVE</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Right: Chat ───────────────────────────────────────────── */}

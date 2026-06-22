@@ -67,12 +67,14 @@ function scoreBg(score: number): string {
 /** Display label + color for action type */
 function actionBadge(actionType?: string | null) {
   switch ((actionType ?? '').toUpperCase()) {
-    case 'CLICK':  return { label: '🖱 Clic',       cls: 'bg-blue-500/10 text-blue-600 border-blue-500/30' }
-    case 'FILL':   return { label: '✏️ Saisie',     cls: 'bg-purple-500/10 text-purple-600 border-purple-500/30' }
-    case 'SCROLL': return { label: '↕ Défilement',  cls: 'bg-slate-500/10 text-slate-600 border-slate-500/30' }
-    case 'DONE':   return { label: '✅ Fin',         cls: 'bg-green-500/10 text-green-600 border-green-500/30' }
-    case 'SKIP':   return { label: '⚠ Ignorée',     cls: 'bg-orange-500/10 text-orange-600 border-orange-500/30' }
-    default:       return null
+    case 'CLICK':    return { label: '🖱 Clic',        cls: 'bg-blue-500/10 text-blue-600 border-blue-500/30' }
+    case 'FILL':     return { label: '✏️ Saisie',      cls: 'bg-purple-500/10 text-purple-600 border-purple-500/30' }
+    case 'SCROLL':   return { label: '↕ Défilement',   cls: 'bg-slate-500/10 text-slate-600 border-slate-500/30' }
+    case 'NAVIGATE': return { label: '🧭 Navigation',  cls: 'bg-cyan-500/10 text-cyan-600 border-cyan-500/30' }
+    case 'BACK':     return { label: '⬅ Retour',       cls: 'bg-amber-500/10 text-amber-600 border-amber-500/30' }
+    case 'DONE':     return { label: '✅ Fin',          cls: 'bg-green-500/10 text-green-600 border-green-500/30' }
+    case 'SKIP':     return { label: '⚠ Ignorée',      cls: 'bg-orange-500/10 text-orange-600 border-orange-500/30' }
+    default:         return null
   }
 }
 
@@ -461,6 +463,7 @@ export default function EvaluationDetailPage() {
                     connected={connected}
                     needsInput={needsInput}
                     isRunning={isRunning}
+                    isMobile={item?.platform === 'WEB_MOBILE' || item?.platform === 'MOBILE_APP'}
                     currentBackend={currentBackend}
                     onSendAnswer={sendAnswer}
                   />

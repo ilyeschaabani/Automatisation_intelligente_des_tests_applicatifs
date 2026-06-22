@@ -37,6 +37,7 @@ public class AgenticEvaluationService {
     private final UxNavigationStepRepository stepRepository;
     private final EvaluationStreamService streamService;
     private final HumanInputService humanInputService;
+    private final AppiumDriverService appiumDriverService;
 
     /**
      * Plafond de sécurité (anti-boucle infinie) — PAS une limite fonctionnelle.
@@ -72,11 +73,26 @@ public class AgenticEvaluationService {
     }
 
     public UxEvaluation createEvaluation(String url, String description, Long projectId) {
+        return createEvaluation(url, description, projectId, "WEB", null);
+    }
+
+    public UxEvaluation createEvaluation(String url, String description, Long projectId, String platform) {
+        return createEvaluation(url, description, projectId, platform, null);
+    }
+
+    public UxEvaluation createEvaluation(String url, String description, Long projectId, String platform, String apkPath) {
+        UxEvaluation.Platform p;
+        try {
+            p = UxEvaluation.Platform.valueOf(platform.toUpperCase());
+        } catch (Exception e) {
+            p = UxEvaluation.Platform.WEB;
+        }
         UxEvaluation evaluation = UxEvaluation.builder()
                 .url(url)
                 .description(description)
                 .projectId(projectId)
-                .platform(UxEvaluation.Platform.WEB)
+                .platform(p)
+                .apkPath(apkPath)
                 .status(Status.PENDING)
                 .createdAt(LocalDateTime.now())
                 .build();
@@ -107,6 +123,11 @@ public class AgenticEvaluationService {
         evaluation.setLogs(null);
         evaluationRepository.save(evaluation);
 
+        if (evaluation.getPlatform() == UxEvaluation.Platform.MOBILE_APP) {
+            executeApkEvaluation(evaluation);
+            return;
+        }
+
         Instant startedAt = Instant.now();
         WebDriver driver = null;
         List<UxNavigationStep> steps = new ArrayList<>();
@@ -115,22 +136,22 @@ public class AgenticEvaluationService {
         streamService.sendInfo(evaluationId, "🚀 Démarrage de l'évaluation UX (moteur IA : " + backend + ")");
         log.info("[UX-AGENT {}] Using vision backend: {}", evaluationId, backend);
         try {
-            // Configuration ChromeDriver
-            WebDriverManager.chromedriver().setup();
+            // Configuration ChromeDriver — détecte la version de Chrome installée et télécharge le driver correspondant
+            WebDriverManager.chromedriver()
+                    .timeout(15)
+                    .setup();
             ChromeOptions opts = new ChromeOptions();
-            opts.addArguments(
-                "--headless=new",
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-gpu",
-                "--window-size=1280,800",
-                "--lang=fr"
-            );
 
-            // Check if mobile emulation requested
-            boolean mobileMode = evaluation.getDescription() != null
-                    && evaluation.getDescription().toLowerCase().contains("[mobile]");
+            boolean mobileMode = evaluation.getPlatform() == UxEvaluation.Platform.WEB_MOBILE
+                    || evaluation.getPlatform() == UxEvaluation.Platform.MOBILE
+                    || (evaluation.getDescription() != null
+                        && evaluation.getDescription().toLowerCase().contains("[mobile]"));
+
             if (mobileMode) {
+                opts.addArguments(
+                    "--headless=new", "--no-sandbox", "--disable-dev-shm-usage",
+                    "--disable-gpu", "--window-size=390,844", "--lang=fr"
+                );
                 Map<String, Object> deviceMetrics = new HashMap<>();
                 deviceMetrics.put("width", 390);
                 deviceMetrics.put("height", 844);
@@ -142,7 +163,13 @@ public class AgenticEvaluationService {
                     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
                     + "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1");
                 opts.setExperimentalOption("mobileEmulation", mobileEmulation);
-                log.info("[UX-AGENT {}] Mobile emulation enabled (iPhone 14)", evaluationId);
+                log.info("[UX-AGENT {}] Mobile emulation enabled (iPhone 14 — 390x844)", evaluationId);
+                streamService.sendInfo(evaluationId, "📱 Mode mobile activé (iPhone 14 — 390×844)");
+            } else {
+                opts.addArguments(
+                    "--headless=new", "--no-sandbox", "--disable-dev-shm-usage",
+                    "--disable-gpu", "--window-size=1280,800", "--lang=fr"
+                );
             }
 
             driver = new ChromeDriver(opts);
@@ -154,8 +181,23 @@ public class AgenticEvaluationService {
             driver.get(evaluation.getUrl());
             waitForPageLoad(driver);
 
+            // ── Phase 0 : Découverte automatique du menu (texte → URL) ──
+            LinkedHashMap<String, String> menuSections = discoverMenuLinks(driver, evaluation.getUrl());
+            Set<String> visitedSections = new LinkedHashSet<>();
+            if (!menuSections.isEmpty()) {
+                log.info("[UX-AGENT {}] Menu discovered: {} sections", evaluationId, menuSections.size());
+                streamService.sendInfo(evaluationId,
+                        "🗺 " + menuSections.size() + " section(s) détectée(s) dans le menu : "
+                        + String.join(", ", menuSections.keySet().stream().limit(8)
+                            .map(s -> s.length() > 30 ? s.substring(0, 30) + "…" : s)
+                            .toList()));
+            }
+
             List<String> history = new ArrayList<>();
             int consecutiveEmptyResponses = 0;
+            int consecutiveFailures = 0;
+            String lastUrl = "";
+            int sameUrlCount = 0;
 
             // Suivi de couverture pour l'exploration adaptative (tour complet)
             Set<String> visitedUrls = new LinkedHashSet<>();
@@ -186,17 +228,48 @@ public class AgenticEvaluationService {
                 log.info("[UX-AGENT {}] Step {} (cap {}, sans découverte {}/{})",
                         evaluationId, i, maxSteps, stepsWithoutDiscovery, saturationThreshold);
 
-                // Screenshot + compress to reduce Gemini token usage
+                // Screenshot : version HD pour le live view, compressée pour l'IA
                 byte[] rawScreenshot = ((TakesScreenshot) driver).getScreenshotAs(OutputType.BYTES);
-                byte[] screenshot = compressScreenshot(rawScreenshot);
+                byte[] hdScreenshot = compressScreenshot(rawScreenshot, 1280, 0.85f);
+                byte[] aiScreenshot = compressScreenshot(rawScreenshot, 800, 0.6f);
                 String currentUrl = driver.getCurrentUrl();
                 String pageTitle = driver.getTitle();
 
-                // Suivi de couverture : nouvelle page découverte ?
-                boolean newPage = visitedUrls.add(normalizeUrl(currentUrl));
+                // Détection de boucle sur la même page
+                String normalizedCurrent = normalizeUrl(currentUrl);
+                if (normalizedCurrent.equals(lastUrl)) {
+                    sameUrlCount++;
+                    if (sameUrlCount >= 4) {
+                        log.warn("[UX-AGENT {}] Stuck on same URL for {} steps, forcing navigation to next unvisited section",
+                                evaluationId, sameUrlCount);
+                        String nextUrl = menuSections.entrySet().stream()
+                                .filter(e -> !visitedSections.contains(e.getKey()))
+                                .map(Map.Entry::getValue)
+                                .findFirst().orElse(null);
+                        if (nextUrl != null) {
+                            driver.get(nextUrl);
+                            history.add("SYSTEM: Forced navigation to " + nextUrl + " (stuck " + sameUrlCount + " steps)");
+                            sameUrlCount = 0;
+                            continue;
+                        }
+                    }
+                } else {
+                    lastUrl = normalizedCurrent;
+                    sameUrlCount = 0;
+                }
 
-                // Envoi du screenshot au frontend
-                streamService.sendScreenshot(evaluationId, screenshot);
+                // Suivi de couverture : nouvelle page découverte ?
+                boolean newPage = visitedUrls.add(normalizedCurrent);
+                for (Map.Entry<String, String> entry : menuSections.entrySet()) {
+                    String normalizedMenuUrl = normalizeUrl(entry.getValue());
+                    if (normalizedCurrent.equals(normalizedMenuUrl)
+                            || normalizedCurrent.startsWith(normalizedMenuUrl)) {
+                        visitedSections.add(entry.getKey());
+                    }
+                }
+
+                // Envoi du screenshot HD au frontend
+                streamService.sendScreenshot(evaluationId, hdScreenshot);
                 streamService.sendThinking(evaluationId, i, currentUrl, pageTitle);
 
                 // Petit délai de stabilisation (Ollama Cloud n'a pas le rate limit free-tier d'OpenRouter)
@@ -206,8 +279,8 @@ public class AgenticEvaluationService {
 
                 // Analyse IA du screenshot
                 String prompt = buildActionPrompt(currentUrl, pageTitle, history, i,
-                        evaluation.getDescription(), visitedUrls);
-                String geminiResponse = visionProvider.analyzeScreenshot(screenshot, prompt);
+                        evaluation.getDescription(), visitedUrls, menuSections, visitedSections, mobileMode);
+                String geminiResponse = visionProvider.analyzeScreenshot(aiScreenshot, prompt);
 
                 // Info backend utilisé
                 streamService.send(evaluationId,
@@ -217,7 +290,7 @@ public class AgenticEvaluationService {
                 if (stopRequested.remove(evaluationId) || isStoppedInDb(evaluationId)) {
                     log.info("[UX-AGENT {}] Stop detected after Gemini call", evaluationId);
                     steps.add(saveStep(evaluationId, i, "Exploration arrêtée par le testeur",
-                            "⛔ Stop", currentUrl, pageTitle, screenshot, null, "SKIP", null, null));
+                            "⛔ Stop", currentUrl, pageTitle, rawScreenshot, null, "SKIP", null, null));
                     streamService.sendInfo(evaluationId, "⛔ Arrêté par le testeur");
                     history.add("⛔ Arrêté par le testeur");
                     break;
@@ -235,7 +308,7 @@ public class AgenticEvaluationService {
                         steps.add(saveStep(evaluationId, i,
                                 "⚠ API indisponible — exploration arrêtée",
                                 "Arrêt automatique après " + consecutiveEmptyResponses + " échecs consécutifs",
-                                currentUrl, pageTitle, screenshot, null, "SKIP", null, null));
+                                currentUrl, pageTitle, rawScreenshot, null, "SKIP", null, null));
                         streamService.sendInfo(evaluationId,
                                 "⚠ Tous les modèles sont surchargés (" + consecutiveEmptyResponses
                                 + " tentatives) — exploration arrêtée. Réessayez dans quelques minutes.");
@@ -250,7 +323,7 @@ public class AgenticEvaluationService {
                             + "/5) — nouvelle tentative dans " + waitSecs + "s…");
                     steps.add(saveStep(evaluationId, i, "⏳ Rate limit — attente " + waitSecs + "s…",
                             "429 rate limit — attente avant retry",
-                            currentUrl, pageTitle, screenshot, null, "SKIP", null, null));
+                            currentUrl, pageTitle, rawScreenshot, null, "SKIP", null, null));
                     Thread.sleep(waitSecs * 1000L);
                     i--; // retry same step number
                     continue;
@@ -331,9 +404,23 @@ public class AgenticEvaluationService {
                                  : "Action échouée sur : " + decision.selector);
 
                 if (!actionOk) {
-                    log.warn("[UX-AGENT {}] Action failed: {} on '{}'",
-                            evaluationId, decision.actionType, decision.selector);
+                    consecutiveFailures++;
+                    log.warn("[UX-AGENT {}] Action failed: {} on '{}' (consecutive: {})",
+                            evaluationId, decision.actionType, decision.selector, consecutiveFailures);
                     history.add("  ⚠ Action échouée: " + decision.actionType + " sur " + decision.selector);
+
+                    // Auto-recovery : 3 échecs consécutifs → retour automatique
+                    if (consecutiveFailures >= 3) {
+                        log.info("[UX-AGENT {}] Auto-recovery: 3 consecutive failures, going back", evaluationId);
+                        streamService.sendInfo(evaluationId,
+                                "🔄 3 échecs consécutifs — retour automatique à la page précédente");
+                        try { driver.navigate().back(); Thread.sleep(1500); waitForPageLoad(driver); }
+                        catch (Exception ignored) {}
+                        consecutiveFailures = 0;
+                        history.add("  🔄 Auto-recovery: retour à la page précédente");
+                    }
+                } else {
+                    consecutiveFailures = 0;
                 }
 
                 streamService.sendStepDone(evaluationId, i, maxSteps);
@@ -368,7 +455,7 @@ public class AgenticEvaluationService {
             // Génération du rapport final
             log.info("[UX-AGENT {}] Generating final UX report ({} steps)", evaluationId, steps.size());
             streamService.sendInfo(evaluationId, "📝 Génération du rapport UX en cours…");
-            String finalReport = buildFinalReport(evaluation.getUrl(), steps, evaluation.getDescription());
+            String finalReport = buildFinalReport(evaluation.getUrl(), steps, evaluation.getDescription(), mobileMode);
 
             // Sauvegarde des résultats
             evaluation.setAiAnalysis(finalReport);
@@ -400,9 +487,11 @@ public class AgenticEvaluationService {
 
     private String buildActionPrompt(String url, String pageTitle,
                                      List<String> history, int step,
-                                     String userDescription, Set<String> visitedUrls) {
+                                     String userDescription, Set<String> visitedUrls,
+                                     LinkedHashMap<String, String> menuSections, Set<String> visitedSections,
+                                     boolean mobileMode) {
         String historyText = history.isEmpty() ? "Aucune (première visite)"
-                : String.join("\n", history);
+                : String.join("\n", history.subList(Math.max(0, history.size() - 15), history.size()));
 
         String userContext = (userDescription != null && !userDescription.isBlank())
                 ? "\nLe testeur a précisé : " + userDescription
@@ -411,93 +500,139 @@ public class AgenticEvaluationService {
         String visitedText = visitedUrls.isEmpty() ? "Aucune encore"
                 : String.join("\n", visitedUrls);
 
-        return """
-            Tu es un testeur UX humain chargé de faire un TOUR COMPLET de cette application web.
-            Ton objectif : visiter TOUTES les sections principales, tester les formulaires et les
-            fonctionnalités, puis te forger un avis sur l'expérience utilisateur.
-            Tu ne sais rien de cette application au départ : tu découvres tout en naviguant.%s
+        // Checklist des sections du menu avec URLs réelles
+        StringBuilder sectionChecklist = new StringBuilder();
+        if (!menuSections.isEmpty()) {
+            for (Map.Entry<String, String> entry : menuSections.entrySet()) {
+                boolean visited = visitedSections.contains(entry.getKey());
+                sectionChecklist.append(visited ? "  ✅ " : "  ❌ ")
+                        .append(entry.getKey())
+                        .append(" → ").append(entry.getValue())
+                        .append("\n");
+            }
+        } else {
+            sectionChecklist.append("  (Non détectées — explore le menu toi-même)\n");
+        }
 
+        String mobileBlock = mobileMode ? """
+
+            🔍 MODE MOBILE — Critères spécifiques à évaluer :
+            - Taille des boutons/liens tactiles (doivent être >= 44px pour être confortables au doigt)
+            - Texte lisible sans zoomer (taille >= 14px)
+            - Pas de scroll horizontal involontaire
+            - Menu hamburger fonctionnel et accessible
+            - Formulaires adaptés au mobile (champs assez grands, clavier adapté)
+            - Images et mise en page responsive
+            """ : "";
+
+        return """
+            Tu es un testeur UX expert chargé de faire un TOUR COMPLET de cette application web.
+            Tu explores méthodiquement TOUTES les sections, tu testes les formulaires, et tu notes
+            chaque détail UX (positif ou négatif). Tu ne sais rien au départ — tu découvres tout.%s%s
+
+            === CONTEXTE ===
             URL actuelle : %s
             Titre de page : %s
             Étape : %d
 
-            Pages déjà visitées (évite de tourner en rond, cherche du NOUVEAU) :
+            === SECTIONS DU SITE (checklist) ===
+            %s
+            === PAGES VISITÉES ===
             %s
 
-            Historique de tes actions :
+            === HISTORIQUE RÉCENT (15 dernières actions) ===
             %s
 
-            Regarde le screenshot et réponds en JSON STRICT (pas de texte avant/après) :
+            === RÉPONSE ATTENDUE ===
+            Réponds en JSON STRICT uniquement (pas de texte avant/après, pas de ```json) :
             {
-              "observation": "Ce que tu vois sur cette page en 1-2 phrases (en français)",
-              "action_type": "CLICK | FILL | SCROLL | NAVIGATE | NEEDS_INPUT | DONE",
-              "selector": "Le TEXTE VISIBLE exact du bouton ou lien (ex: 'Accepter', 'Connexion', 'Envoyer'). Sinon un sélecteur CSS simple (#id, .class, input[name='email']). Pour NAVIGATE : mets l'URL complète ici. JAMAIS de :has-text() ni de sélecteurs Playwright. null si NEEDS_INPUT ou DONE",
+              "observation": "Ce que tu vois sur cette page en 1-2 phrases",
+              "action_type": "CLICK | FILL | SCROLL | NAVIGATE | BACK | NEEDS_INPUT | DONE",
+              "selector": "Texte visible exact du bouton/lien, OU sélecteur CSS simple, OU URL pour NAVIGATE. null si DONE/BACK/NEEDS_INPUT",
               "value": "valeur à saisir si FILL, sinon null",
-              "question": "Question précise à poser au testeur humain — UNIQUEMENT si action_type est NEEDS_INPUT",
-              "hint": "Exemple de réponse attendue — UNIQUEMENT si action_type est NEEDS_INPUT",
-              "reason": "Pourquoi tu fais cette action (en français)"
+              "question": "question pour le testeur humain (UNIQUEMENT si NEEDS_INPUT)",
+              "hint": "exemple de réponse (UNIQUEMENT si NEEDS_INPUT)",
+              "reason": "Pourquoi tu fais cette action"
             }
 
-            IMPORTANT pour le champ "selector" :
-            - Pour les boutons/liens : utilise UNIQUEMENT le texte visible exact (ex: "Accepter", "Non, merci.")
-            - Pour les champs de formulaire : utilise un sélecteur CSS simple (ex: input[name='email'], #password, .search-input)
-            - NE JAMAIS utiliser button:has-text() ni des pseudo-sélecteurs Playwright — ils ne fonctionnent pas
+            === RÈGLES DE PRIORITÉ (ordre strict) ===
+            1. Si un popup/modal bloque la navigation (cookies, promo…) → CLICK pour le fermer
+            2. Si des sections ❌ ne sont pas encore visitées → NAVIGATE avec l'URL affichée à côté (après →)
+            3. Si la page contient un formulaire non testé → FILL + soumission (d'abord vide pour voir les erreurs, puis avec des données)
+            4. Si la page a du contenu non vu plus bas → SCROLL (1 seule fois par page, pas plus)
+            5. Si tu es coincé (page PDF, iframe, page morte, pas de liens) → BACK pour revenir en arrière
+            6. Si TOUTES les sections ✅ sont visitées et les formulaires testés → DONE
 
-            Règles pour un TOUR COMPLET :
-            - Priorise les sections JAMAIS visitées (regarde la liste ci-dessus) avant de revenir sur du connu
-            - Explore chaque entrée de menu / onglet principal au moins une fois
-            - Si tu vois un formulaire, teste-le : soumets-le vide pour voir les messages d'erreur UX, puis avec des données valides
-            - Utilise SCROLL si la page a du contenu plus bas que tu n'as pas encore vu
-            - Utilise NEEDS_INPUT seulement si tu as besoin d'identifiants réels (login/password), tokens, codes 2FA,
-              ou toute info confidentielle que tu ne peux pas inventer. Explique précisément ce dont tu as besoin.
-            - Utilise DONE UNIQUEMENT quand tu as réellement fait le tour de TOUTE la plateforme
-              (toutes les sections principales visitées et les formulaires testés)
-            - Réponds UNIQUEMENT avec le JSON, pas de texte autour
-            """.formatted(userContext, url, pageTitle, step, visitedText, historyText);
+            === RÈGLES SELECTOR ===
+            - Boutons/liens : texte visible exact ("Accepter", "Connexion", "Envoyer")
+            - Formulaires : sélecteur CSS simple (input[name='email'], #password)
+            - Navigation directe : URL complète (https://...)
+            - JAMAIS de :has-text() ou sélecteurs Playwright
+            - Si un clic échoue 2 fois, essaie NAVIGATE avec l'URL du lien ou BACK
+            """.formatted(userContext, mobileBlock, url, pageTitle, step,
+                sectionChecklist, visitedText, historyText);
     }
 
-    private String buildFinalReport(String url, List<UxNavigationStep> steps, String description) {
+    private String buildFinalReport(String url, List<UxNavigationStep> steps, String description, boolean mobileMode) {
         String parcours = steps.stream()
                 .map(s -> "Étape " + s.getStepNumber() + " (" + s.getPageUrl() + "): "
                         + s.getObservation() + " → " + s.getActionPerformed())
                 .collect(Collectors.joining("\n"));
 
+        String mobileSection = mobileMode ? """
+
+            ## 5b. ÉVALUATION MOBILE
+            - Ergonomie tactile : les boutons font-ils >= 44px ? Faciles à toucher au doigt ?
+            - Lisibilité : textes lisibles sans zoomer ? Taille de police suffisante ?
+            - Responsive : la mise en page s'adapte-t-elle correctement à l'écran mobile ?
+            - Scroll horizontal : y a-t-il du contenu qui dépasse de l'écran ?
+            - Menu mobile : le menu hamburger fonctionne-t-il correctement ?
+            - Formulaires : les champs sont-ils adaptés au mobile ?
+            """ : "";
+
         String prompt = """
             Tu es un expert UX senior avec 10 ans d'expérience.
-            Tu viens d'explorer %s en %d étapes comme un vrai utilisateur.
+            Tu viens d'explorer %s en %d étapes comme un vrai utilisateur%s.
             %s
 
             Parcours effectué :
             %s
 
-            Rédige un rapport d'expérience utilisateur complet en français :
+            Rédige un rapport d'expérience utilisateur complet en français.
+
+            COMMENCE OBLIGATOIREMENT par la note globale. Structure EXACTE :
+
+            ## SCORE GLOBAL : X/10
+            Justification en 1-2 phrases.
 
             ## 1. PREMIÈRE IMPRESSION
             Qu'est-ce que cette application ? À quoi sert-elle ?
 
             ## 2. POINTS FORTS
-            Ce qui est bien conçu, intuitif, agréable.
+            Ce qui est bien conçu, intuitif, agréable (3-5 points max).
 
             ## 3. POINTS DE FRICTION
-            Ce qui bloque, confuse, ou frustre un utilisateur.
+            Ce qui bloque, confuse, ou frustre un utilisateur (3-5 points max).
 
             ## 4. CLARTÉ DES MESSAGES
             Les messages d'erreur, labels et textes sont-ils compréhensibles ?
 
             ## 5. NAVIGATION & FLUIDITÉ
             Est-ce facile de trouver ce qu'on cherche ?
-
+            %s
             ## 6. RECOMMANDATIONS
-            Suggestions concrètes d'amélioration (3-5 points).
+            Suggestions concrètes d'amélioration (5-8 points prioritaires).
 
-            ## 7. SCORE GLOBAL
-            Note sur 10 avec justification en 1 phrase.
-
-            IMPORTANT : Écris comme un vrai testeur humain, pas comme une machine.
-            Base-toi uniquement sur ce que tu as observé pendant la navigation.
+            RÈGLES STRICTES :
+            - Le rapport DOIT commencer par "## SCORE GLOBAL : X/10" — c'est la première ligne.
+            - Écris comme un vrai testeur humain, pas comme une machine.
+            - Base-toi uniquement sur ce que tu as observé pendant la navigation.
+            - Sois précis : cite les pages, les boutons, les messages exacts.
+            - Sois concis : chaque section fait 3-8 lignes max. Pas de pavés.
             """.formatted(url, steps.size(),
+                mobileMode ? " sur mobile (iPhone 14)" : "",
                 description != null ? "Contexte du testeur : " + description : "",
-                parcours);
+                parcours, mobileSection);
 
         return visionProvider.analyzeText(prompt);
     }
@@ -511,6 +646,7 @@ public class AgenticEvaluationService {
                     && (decision.selector.startsWith("http://") || decision.selector.startsWith("https://"))) {
                 log.info("[UX-AGENT] Selector is a URL — navigating directly to {}", decision.selector);
                 driver.get(decision.selector);
+                waitForPageLoad(driver);
                 return true;
             }
 
@@ -519,6 +655,12 @@ public class AgenticEvaluationService {
                     String url = decision.value != null ? decision.value : decision.selector;
                     if (url == null || url.isBlank()) return false;
                     driver.get(url);
+                    waitForPageLoad(driver);
+                    return true;
+                }
+                case "BACK" -> {
+                    driver.navigate().back();
+                    waitForPageLoad(driver);
                     return true;
                 }
                 case "CLICK" -> {
@@ -689,12 +831,16 @@ public class AgenticEvaluationService {
                     decision.actionType = "DONE";
                 } else if (lower.contains("needs_input") || lower.contains("intervention") || lower.contains("identifiant")) {
                     decision.actionType = "NEEDS_INPUT";
+                } else if (lower.contains("\"navigate\"") || lower.contains("naviguer") || lower.contains("navigue")) {
+                    decision.actionType = "NAVIGATE";
+                } else if (lower.contains("\"back\"") || lower.contains("retour") || lower.contains("précédent")) {
+                    decision.actionType = "BACK";
                 } else if (lower.contains("\"fill\"") || lower.contains("remplir") || lower.contains("saisir")) {
                     decision.actionType = "FILL";
                 } else if (lower.contains("\"click\"") || lower.contains("cliquer") || lower.contains("soumettre")) {
                     decision.actionType = "CLICK";
                 } else {
-                    decision.actionType = "SCROLL"; // keep exploring
+                    decision.actionType = "SCROLL";
                 }
                 log.info("[PARSE] Inferred action_type={}", decision.actionType);
             }
@@ -766,14 +912,63 @@ public class AgenticEvaluationService {
         } catch (Exception ignored) {}
     }
 
-    /** Compression du screenshot (JPEG 60%, max 800px largeur) pour réduire la taille envoyée à l'API. */
-    private byte[] compressScreenshot(byte[] pngBytes) {
+    /**
+     * Phase 0 : extrait les liens de navigation (menu, nav, header) de la page pour
+     * construire une checklist de sections à visiter.
+     */
+    /**
+     * Phase 0 : extrait les liens de navigation avec leurs URLs réelles.
+     * Retourne une Map ordonnée : texte du lien → URL absolue.
+     * Filtre les liens qui pointent vers la page courante (href == baseUrl).
+     */
+    private LinkedHashMap<String, String> discoverMenuLinks(WebDriver driver, String baseUrl) {
+        try {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> links = (List<Map<String, Object>>) ((JavascriptExecutor) driver)
+                    .executeScript(
+                        "var results = [];" +
+                        "var selectors = 'nav a, header a, [role=navigation] a, .navbar a, .menu a, .sidebar a, .nav a';" +
+                        "document.querySelectorAll(selectors).forEach(function(a) {" +
+                        "  var text = (a.textContent || '').trim();" +
+                        "  var href = a.href || '';" +
+                        "  if (text.length > 1 && text.length < 50 && href.startsWith('http') && !href.includes('#')) {" +
+                        "    results.push({text: text, href: href});" +
+                        "  }" +
+                        "});" +
+                        "return results;");
+
+            if (links == null || links.isEmpty()) return new LinkedHashMap<>();
+
+            LinkedHashMap<String, String> sections = new LinkedHashMap<>();
+            String baseDomain = baseUrl.replaceAll("https?://([^/]+).*", "$1");
+            String normalizedBase = normalizeUrl(baseUrl);
+
+            for (Map<String, Object> link : links) {
+                String text = String.valueOf(link.get("text")).trim();
+                String href = String.valueOf(link.get("href")).trim();
+                if (text.isEmpty() || href.isEmpty()) continue;
+                if (!href.contains(baseDomain)) continue;
+                // Skip links that point to the current page (homepage links, anchors, etc.)
+                if (normalizeUrl(href).equals(normalizedBase)) continue;
+                String key = text.toLowerCase();
+                if (!sections.containsKey(key) && sections.size() < 20) {
+                    sections.put(key, href);
+                }
+            }
+            return sections;
+        } catch (Exception e) {
+            log.debug("[UX-AGENT] Menu discovery failed: {}", e.getMessage());
+            return new LinkedHashMap<>();
+        }
+    }
+
+    /** Compression du screenshot avec paramètres configurables. */
+    private byte[] compressScreenshot(byte[] pngBytes, int maxWidth, float quality) {
         try {
             BufferedImage original = ImageIO.read(new ByteArrayInputStream(pngBytes));
             if (original == null) return pngBytes;
 
-            // Scale down to max 800px wide
-            int targetWidth = Math.min(original.getWidth(), 800);
+            int targetWidth = Math.min(original.getWidth(), maxWidth);
             int targetHeight = (int) ((double) original.getHeight() * targetWidth / original.getWidth());
             java.awt.Image scaled = original.getScaledInstance(targetWidth, targetHeight,
                     java.awt.Image.SCALE_SMOOTH);
@@ -781,20 +976,19 @@ public class AgenticEvaluationService {
                     BufferedImage.TYPE_INT_RGB);
             resized.getGraphics().drawImage(scaled, 0, 0, null);
 
-            // Write as JPEG at 60% quality
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             javax.imageio.ImageWriter writer = javax.imageio.ImageIO
                     .getImageWritersByFormatName("jpeg").next();
             javax.imageio.ImageWriteParam param = writer.getDefaultWriteParam();
             param.setCompressionMode(javax.imageio.ImageWriteParam.MODE_EXPLICIT);
-            param.setCompressionQuality(0.6f);
+            param.setCompressionQuality(quality);
             writer.setOutput(javax.imageio.ImageIO.createImageOutputStream(out));
             writer.write(null, new javax.imageio.IIOImage(resized, null, null), param);
             writer.dispose();
 
             byte[] compressed = out.toByteArray();
-            log.info("Screenshot compressed: {}KB → {}KB",
-                    pngBytes.length / 1024, compressed.length / 1024);
+            log.info("Screenshot compressed: {}KB → {}KB ({}px, {}%)",
+                    pngBytes.length / 1024, compressed.length / 1024, maxWidth, Math.round(quality * 100));
             return compressed;
         } catch (Exception e) {
             log.warn("Screenshot compression failed, using original: {}", e.getMessage());
@@ -833,5 +1027,403 @@ public class AgenticEvaluationService {
         String reason;
         String question;
         String hint;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // APK (Android native app) evaluation
+    // ═══════════════════════════════════════════════════════════════════
+
+    private void executeApkEvaluation(UxEvaluation evaluation) {
+        Long evaluationId = evaluation.getId();
+        Instant startedAt = Instant.now();
+
+        try {
+            evaluation.setStatus(Status.RUNNING);
+            evaluation.setExecutedAt(LocalDateTime.now());
+            evaluationRepository.save(evaluation);
+
+            streamService.sendInfo(evaluationId, "Demarrage de l'emulateur Android Docker...");
+            appiumDriverService.ensureEmulatorRunning();
+            streamService.sendInfo(evaluationId, "Emulateur pret — copie de l'APK...");
+
+            String hostApkPath = evaluation.getApkPath();
+            appiumDriverService.copyApkToContainer(hostApkPath);
+            String containerApkPath = appiumDriverService.getContainerApkPath(hostApkPath);
+
+            streamService.sendInfo(evaluationId, "Installation de l'APK sur l'emulateur...");
+            appiumDriverService.createSession(containerApkPath);
+            streamService.sendInfo(evaluationId, "Application Android lancee — debut de l'exploration");
+
+            Thread.sleep(3000);
+
+            List<UxNavigationStep> steps = new ArrayList<>();
+            List<String> history = new ArrayList<>();
+            Set<String> visitedScreens = new LinkedHashSet<>();
+            int consecutiveFailures = 0;
+            int stepsWithoutDiscovery = 0;
+
+            int i = 0;
+            while (true) {
+                i++;
+                if (i > maxSteps) {
+                    streamService.sendInfo(evaluationId, "Plafond de securite atteint (" + maxSteps + " etapes)");
+                    break;
+                }
+
+                if (stopRequested.remove(evaluationId) || isStoppedInDb(evaluationId)) {
+                    streamService.sendInfo(evaluationId, "Arret demande");
+                    break;
+                }
+
+                byte[] rawScreenshot = appiumDriverService.takeScreenshot();
+
+                try {
+                    java.awt.image.BufferedImage rawImg = ImageIO.read(new ByteArrayInputStream(rawScreenshot));
+                    if (rawImg != null) {
+                        lastRawScreenshotWidth = rawImg.getWidth();
+                        lastRawScreenshotHeight = rawImg.getHeight();
+                        log.info("[UX-AGENT-APK] Raw screenshot: {}x{}", lastRawScreenshotWidth, lastRawScreenshotHeight);
+                    }
+                } catch (Exception ignored) {}
+
+                byte[] hdScreenshot = compressScreenshot(rawScreenshot, 1080, 0.85f);
+                byte[] aiScreenshot = compressScreenshot(rawScreenshot, 540, 0.6f);
+
+                String currentActivity = appiumDriverService.getCurrentActivity();
+
+                // Liste des éléments interactifs réels (coordonnées exactes depuis l'arbre d'accessibilité)
+                List<AppiumDriverService.UiElement> uiElements;
+                try {
+                    uiElements = appiumDriverService.getInteractiveElements();
+                } catch (Exception ex) {
+                    uiElements = new ArrayList<>();
+                }
+                log.info("[UX-AGENT-APK] {} interactive element(s) detected", uiElements.size());
+
+                boolean newScreen = visitedScreens.add(currentActivity);
+                if (newScreen) { stepsWithoutDiscovery = 0; } else { stepsWithoutDiscovery++; }
+
+                if (stepsWithoutDiscovery >= saturationThreshold && i > 8) {
+                    streamService.sendInfo(evaluationId, "Saturation — toutes les pages principales ont ete explorees");
+                    break;
+                }
+
+                streamService.sendScreenshot(evaluationId, hdScreenshot);
+                streamService.sendThinking(evaluationId, i, currentActivity, "Android App");
+
+                if (i > 1) Thread.sleep(1_000);
+
+                String prompt = buildApkActionPrompt(currentActivity, history, i,
+                        evaluation.getDescription(), visitedScreens, uiElements);
+                String aiResponse = visionProvider.analyzeScreenshot(aiScreenshot, prompt);
+
+                streamService.send(evaluationId,
+                        com.pfe.platform.msexecution.dto.StreamEvent.backendInfo(visionProvider.getLastUsedBackend()));
+
+                if (stopRequested.remove(evaluationId) || isStoppedInDb(evaluationId)) break;
+
+                if (aiResponse == null || aiResponse.isBlank()) {
+                    consecutiveFailures++;
+                    history.add("Step " + i + " [EMPTY AI RESPONSE]");
+                    if (consecutiveFailures >= 3) {
+                        try { appiumDriverService.pressBack(); } catch (Exception ignored) {}
+                        history.add("SYSTEM: Forced BACK after " + consecutiveFailures + " empty responses");
+                        consecutiveFailures = 0;
+                    }
+                    continue;
+                }
+
+                AgentDecision decision = parseDecision(aiResponse);
+                if (decision == null) {
+                    history.add("Step " + i + " [PARSE ERROR]");
+                    continue;
+                }
+
+                String observation = decision.observation != null ? decision.observation : "";
+                String actionType = decision.actionType != null ? decision.actionType.toUpperCase() : "DONE";
+
+                streamService.sendObservation(evaluationId, i, observation, currentActivity, "Android App");
+                streamService.sendAction(evaluationId, i, actionType,
+                        decision.selector, decision.value, decision.reason);
+
+                if ("DONE".equals(actionType)) {
+                    steps.add(saveStep(evaluationId, i, observation, "DONE",
+                            currentActivity, "Android App", hdScreenshot, aiResponse, "DONE", null, null));
+                    streamService.sendStepDone(evaluationId, i, i);
+                    break;
+                }
+
+                boolean success = executeApkAction(decision, uiElements);
+
+                streamService.sendActionResult(evaluationId, i, success,
+                        success ? "Action executee avec succes" : "Action echouee");
+
+                if (success) {
+                    consecutiveFailures = 0;
+                    history.add("Step " + i + " [" + currentActivity + "]: " + observation
+                            + " -> " + actionType + (decision.selector != null ? " " + decision.selector : ""));
+                } else {
+                    consecutiveFailures++;
+                    history.add("Step " + i + " [FAILED]: " + actionType
+                            + " " + (decision.selector != null ? decision.selector : ""));
+                    if (consecutiveFailures >= 3) {
+                        try { appiumDriverService.pressBack(); } catch (Exception ignored) {}
+                        history.add("SYSTEM: Auto-recovery BACK after 3 failures");
+                        consecutiveFailures = 0;
+                    }
+                }
+
+                steps.add(saveStep(evaluationId, i, observation,
+                        actionType + (success ? "" : " [FAILED]"),
+                        currentActivity, "Android App", hdScreenshot, aiResponse,
+                        actionType, decision.selector, decision.value));
+                streamService.sendStepDone(evaluationId, i, maxSteps);
+
+                Thread.sleep(1500);
+            }
+
+            streamService.sendInfo(evaluationId, "Redaction du rapport UX mobile...");
+            String finalReport = buildApkFinalReport(evaluation.getDescription(), steps, visitedScreens);
+
+            evaluation.setAiAnalysis(finalReport);
+            evaluation.setDurationMs(Duration.between(startedAt, Instant.now()).toMillis());
+            evaluation.setStatus(Status.COMPLETED);
+            evaluation.setLogs(String.join("\n", history));
+            evaluationRepository.save(evaluation);
+
+            streamService.sendCompleted(evaluationId, finalReport);
+            log.info("[UX-AGENT-APK {}] Completed in {} ms with {} steps",
+                    evaluationId, evaluation.getDurationMs(), steps.size());
+
+        } catch (Exception e) {
+            log.error("[UX-AGENT-APK {}] Failed: {}", evaluationId, e.getMessage(), e);
+            evaluation.setStatus(Status.FAILED);
+            evaluation.setErrorMessage(e.getMessage());
+            evaluation.setDurationMs(Duration.between(startedAt, Instant.now()).toMillis());
+            evaluationRepository.save(evaluation);
+            streamService.sendFailed(evaluationId, e.getMessage() != null ? e.getMessage() : "Erreur inconnue");
+        } finally {
+            humanInputService.cancel(evaluationId);
+            appiumDriverService.deleteSession();
+        }
+    }
+
+    private static final int AI_SCREENSHOT_WIDTH = 540;
+    private int lastRawScreenshotWidth = 0;
+    private int lastRawScreenshotHeight = 0;
+
+    private int[] scaleCoords(int aiX, int aiY) {
+        int refWidth = lastRawScreenshotWidth > 0 ? lastRawScreenshotWidth : appiumDriverService.getScreenWidth();
+        int refHeight = lastRawScreenshotHeight > 0 ? lastRawScreenshotHeight : appiumDriverService.getScreenHeight();
+        double scale = (double) refWidth / AI_SCREENSHOT_WIDTH;
+        int realX = (int) (aiX * scale);
+        int realY = (int) (aiY * scale);
+        log.info("[UX-AGENT-APK] Coordinate scaling: AI({},{}) -> Device({},{}) [scale={}, screenshot={}x{}]",
+                aiX, aiY, realX, realY, String.format("%.2f", scale), refWidth, refHeight);
+        return new int[]{realX, realY};
+    }
+
+    private AppiumDriverService.UiElement resolveElement(String selector,
+                                                         List<AppiumDriverService.UiElement> uiElements) {
+        if (selector == null || uiElements == null || uiElements.isEmpty()) return null;
+        try {
+            int idx = Integer.parseInt(selector.trim().replaceAll("[^0-9].*$", ""));
+            if (idx >= 0 && idx < uiElements.size()) return uiElements.get(idx);
+        } catch (Exception ignored) {}
+        // Fallback: match by label text
+        String s = selector.trim().toLowerCase();
+        for (AppiumDriverService.UiElement el : uiElements) {
+            if (el.label != null && el.label.toLowerCase().contains(s)) return el;
+        }
+        return null;
+    }
+
+    private boolean executeApkAction(AgentDecision decision,
+                                     List<AppiumDriverService.UiElement> uiElements) {
+        try {
+            String action = decision.actionType.toUpperCase();
+            switch (action) {
+                case "TAP_ELEMENT" -> {
+                    AppiumDriverService.UiElement el = resolveElement(decision.selector, uiElements);
+                    if (el == null) {
+                        log.warn("[UX-AGENT-APK] TAP_ELEMENT: no element for selector '{}'", decision.selector);
+                        return false;
+                    }
+                    log.info("[UX-AGENT-APK] TAP_ELEMENT \"{}\" at exact ({},{})", el.label, el.centerX, el.centerY);
+                    appiumDriverService.tap(el.centerX, el.centerY);
+                    Thread.sleep(500);
+                    return true;
+                }
+                case "TAP" -> {
+                    String[] coords = decision.selector.split(",");
+                    int aiX = Integer.parseInt(coords[0].trim());
+                    int aiY = Integer.parseInt(coords[1].trim());
+                    int[] real = scaleCoords(aiX, aiY);
+                    appiumDriverService.tap(real[0], real[1]);
+                    Thread.sleep(500);
+                    return true;
+                }
+                case "SWIPE_UP", "SCROLL" -> {
+                    appiumDriverService.swipeUp();
+                    Thread.sleep(500);
+                    return true;
+                }
+                case "SWIPE_DOWN" -> {
+                    appiumDriverService.swipeDown();
+                    Thread.sleep(500);
+                    return true;
+                }
+                case "TYPE", "FILL" -> {
+                    // First focus the field: by element index if available, else by coordinates
+                    AppiumDriverService.UiElement el = resolveElement(decision.selector, uiElements);
+                    if (el != null) {
+                        appiumDriverService.tap(el.centerX, el.centerY);
+                        Thread.sleep(300);
+                    } else if (decision.selector != null && decision.selector.contains(",")) {
+                        String[] coords = decision.selector.split(",");
+                        int aiX = Integer.parseInt(coords[0].trim());
+                        int aiY = Integer.parseInt(coords[1].trim());
+                        int[] real = scaleCoords(aiX, aiY);
+                        appiumDriverService.tap(real[0], real[1]);
+                        Thread.sleep(300);
+                    }
+                    if (decision.value != null) {
+                        appiumDriverService.typeText(decision.value);
+                        Thread.sleep(300);
+                    }
+                    return true;
+                }
+                case "BACK" -> {
+                    appiumDriverService.pressBack();
+                    Thread.sleep(500);
+                    return true;
+                }
+                default -> {
+                    log.warn("[UX-AGENT-APK] Unknown action: {}", action);
+                    return false;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[UX-AGENT-APK] Action failed: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    private String buildApkActionPrompt(String currentActivity, List<String> history, int step,
+                                         String userDescription, Set<String> visitedScreens,
+                                         List<AppiumDriverService.UiElement> uiElements) {
+        String historyText = history.isEmpty() ? "Aucune (première ouverture)"
+                : String.join("\n", history.subList(Math.max(0, history.size() - 15), history.size()));
+
+        String userContext = (userDescription != null && !userDescription.isBlank())
+                ? "\nLe testeur a précisé : " + userDescription : "";
+
+        String screensText = visitedScreens.isEmpty() ? "Aucun encore"
+                : String.join(", ", visitedScreens);
+
+        // Liste numérotée des éléments réels détectés sur l'écran (coordonnées exactes)
+        StringBuilder elementList = new StringBuilder();
+        if (uiElements != null && !uiElements.isEmpty()) {
+            for (int idx = 0; idx < uiElements.size(); idx++) {
+                AppiumDriverService.UiElement el = uiElements.get(idx);
+                elementList.append("  [").append(idx).append("] ")
+                        .append(el.editable ? "(champ texte) " : "")
+                        .append("\"").append(el.label).append("\"")
+                        .append("\n");
+            }
+        } else {
+            elementList.append("  (Aucun élément détecté — utilise TAP avec coordonnées estimées)\n");
+        }
+
+        return """
+            Tu es un testeur UX expert d'applications mobiles Android.
+            Tu explores cette application native de façon méthodique pour évaluer l'expérience utilisateur.%s
+
+            === CONTEXTE ===
+            Écran actuel (Activity) : %s
+            Étape : %d
+            Écrans visités : %s
+
+            === ÉLÉMENTS INTERACTIFS DÉTECTÉS SUR CET ÉCRAN ===
+            (Utilise l'index [N] pour taper précisément — c'est BIEN PLUS FIABLE que les coordonnées)
+            %s
+            === HISTORIQUE RÉCENT ===
+            %s
+
+            === RÉPONSE ATTENDUE ===
+            Réponds en JSON STRICT uniquement (pas de texte avant/après, pas de ```json) :
+            {
+              "observation": "Ce que tu vois sur cet écran en 1-2 phrases",
+              "action_type": "TAP_ELEMENT | TAP | SWIPE_UP | SWIPE_DOWN | TYPE | BACK | DONE",
+              "selector": "index de l'élément (ex: \\"2\\") pour TAP_ELEMENT ; OU x,y pour TAP ; null sinon",
+              "value": "texte à saisir si TYPE, sinon null",
+              "reason": "Pourquoi tu fais cette action"
+            }
+
+            === RÈGLES DE PRIORITÉ ===
+            1. PRIORISE TOUJOURS TAP_ELEMENT avec l'index [N] d'un élément de la liste ci-dessus
+            2. Si un popup/permission/dialog bloque → TAP_ELEMENT sur "Autoriser"/"OK"/"Accepter"
+            3. Explore tous les onglets, menus, boutons de la liste — un par un, sans répéter
+            4. Pour un champ texte : TYPE avec selector = index du champ + value = données réalistes
+            5. SWIPE_UP si du contenu est caché en bas (rien de nouveau dans la liste)
+            6. BACK pour revenir si tu es dans un cul-de-sac
+            7. DONE quand tu as exploré tous les écrans principaux
+            8. N'utilise TAP (coordonnées) QUE si l'élément voulu n'est PAS dans la liste
+
+            === COORDONNÉES (fallback uniquement) ===
+            Si tu dois absolument utiliser TAP, estime (x,y) du CENTRE de l'élément sur le screenshot.
+            """.formatted(userContext, currentActivity, step, screensText, elementList, historyText);
+    }
+
+    private String buildApkFinalReport(String description, List<UxNavigationStep> steps,
+                                        Set<String> visitedScreens) {
+        String parcours = steps.stream()
+                .map(s -> "Étape " + s.getStepNumber() + " (" + s.getPageUrl() + "): "
+                        + s.getObservation() + " → " + s.getActionPerformed())
+                .collect(Collectors.joining("\n"));
+
+        String userContext = (description != null && !description.isBlank())
+                ? "Contexte du testeur : " + description : "";
+
+        return visionProvider.analyzeText("""
+            Tu es un expert UX mobile senior avec 10 ans d'expérience.
+            Tu viens d'explorer une application Android native en %d étapes.
+            %s
+
+            Écrans visités : %s
+
+            Parcours effectué :
+            %s
+
+            Rédige un rapport d'expérience utilisateur complet en français.
+
+            COMMENCE OBLIGATOIREMENT par la note globale. Structure EXACTE :
+
+            ## SCORE GLOBAL : X/10
+            Justification en 1-2 phrases.
+
+            ## 1. PREMIÈRE IMPRESSION
+            L'app se lance-t-elle rapidement ? L'écran d'accueil est-il clair ?
+
+            ## 2. ERGONOMIE MOBILE
+            - Taille des zones tactiles (>= 44dp ?)
+            - Espacement entre les éléments cliquables
+            - Navigation intuitive (onglets, drawer, bottom nav)
+            - Gestes naturels (swipe, pull-to-refresh)
+
+            ## 3. POINTS FORTS
+            Ce qui est bien conçu (3-5 points max).
+
+            ## 4. POINTS DE FRICTION
+            Ce qui bloque ou frustre (3-5 points max).
+
+            ## 5. PERFORMANCE PERÇUE
+            Temps de chargement, animations fluides, réactivité au toucher.
+
+            ## 6. RECOMMANDATIONS
+            5-8 suggestions concrètes d'amélioration.
+
+            RÈGLES : Sois concis, chaque section 3-8 lignes max. Écris comme un vrai testeur humain.
+            """.formatted(steps.size(), userContext, String.join(", ", visitedScreens), parcours));
     }
 }

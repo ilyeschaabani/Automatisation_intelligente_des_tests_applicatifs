@@ -112,9 +112,10 @@ export type UxNavigationStepDto = {
 export type UxEvaluationDto = {
   id: number
   projectId: number | null
-  platform: 'WEB' | 'MOBILE'
+  platform: 'WEB' | 'MOBILE' | 'WEB_DESKTOP' | 'WEB_MOBILE' | 'MOBILE_APP'
   url?: string | null
   description?: string | null
+  apkPath?: string | null
   status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED'
   testSummary?: string | null
   aiAnalysis?: string | null
@@ -194,7 +195,7 @@ export async function createFunctionalEvaluation(payload: Partial<FunctionalEval
   return (await response.json()) as FunctionalEvaluationDto
 }
 
-export async function generateUxScript(payload: { platform: 'WEB' | 'MOBILE'; url: string; description: string }): Promise<string> {
+export async function generateUxScript(payload: { platform: 'WEB' | 'MOBILE' | 'WEB_DESKTOP' | 'WEB_MOBILE' | 'MOBILE_APP'; url: string; description: string }): Promise<string> {
   const token = getAccessToken()
   const response = await fetch(`/api/llm/generate-functional-script`, {
     method: 'POST',
@@ -253,6 +254,20 @@ export async function stopFunctionalEvaluation(id: number): Promise<void> {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!response.ok) throw new Error('Échec de l\'arrêt')
+}
+
+export async function uploadApk(file: File): Promise<{ path: string; filename: string }> {
+  const token = getAccessToken()
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await fetch(`http://localhost:8083/api/functional-evaluation/upload-apk`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+    credentials: 'include',
+  })
+  if (!response.ok) throw new Error('Échec de l\'upload APK')
+  return response.json()
 }
 
 /** Poll navigation steps for a running evaluation (live view) */

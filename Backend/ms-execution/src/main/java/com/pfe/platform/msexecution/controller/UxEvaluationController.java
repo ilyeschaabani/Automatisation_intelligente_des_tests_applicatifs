@@ -12,11 +12,17 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
+@CrossOrigin(origins = "*")
 @RequestMapping({"/api/functional-evaluation", "/api/intelligence/ux-evaluations"})
 @RequiredArgsConstructor
 public class UxEvaluationController {
@@ -27,9 +33,23 @@ public class UxEvaluationController {
 
     @PostMapping
     public ResponseEntity<UxEvaluationDto> create(@Valid @RequestBody UxEvaluationRequest req) {
+        String platform = req.getPlatform() != null ? req.getPlatform() : "WEB";
         UxEvaluation created = agenticService.createEvaluation(
-                req.getUrl(), req.getDescription(), req.getProjectId());
+                req.getUrl(), req.getDescription(), req.getProjectId(), platform, req.getApkPath());
         return ResponseEntity.ok(UxEvaluationDto.fromEntity(created));
+    }
+
+    @PostMapping("/upload-apk")
+    public ResponseEntity<Map<String, String>> uploadApk(@RequestParam("file") MultipartFile file) throws IOException {
+        if (file.isEmpty() || file.getOriginalFilename() == null || !file.getOriginalFilename().endsWith(".apk")) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Fichier APK invalide"));
+        }
+        Path uploadDir = Path.of(System.getProperty("java.io.tmpdir"), "ms-execution", "apks");
+        Files.createDirectories(uploadDir);
+        String filename = System.currentTimeMillis() + "_" + file.getOriginalFilename();
+        Path dest = uploadDir.resolve(filename);
+        file.transferTo(dest.toFile());
+        return ResponseEntity.ok(Map.of("path", dest.toString(), "filename", filename));
     }
 
     @PostMapping("/{id}/execute")

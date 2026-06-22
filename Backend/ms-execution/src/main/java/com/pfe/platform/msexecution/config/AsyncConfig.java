@@ -8,13 +8,6 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.Executor;
 
-/**
- * Defines the primary TaskExecutor used by @Async methods.
- *
- * Without this, Spring sees the WebSocket broker thread pools
- * (clientInboundChannelExecutor, clientOutboundChannelExecutor, etc.)
- * and logs a warning because it can't pick one automatically.
- */
 @Configuration
 @EnableAsync
 public class AsyncConfig {
@@ -23,11 +16,8 @@ public class AsyncConfig {
     @Primary
     public Executor taskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        // Core threads — one per concurrent evaluation (typically 1-3)
         executor.setCorePoolSize(3);
-        // Max threads for burst of evaluations
         executor.setMaxPoolSize(8);
-        // Queue for pending evaluations
         executor.setQueueCapacity(50);
         executor.setThreadNamePrefix("UxEval-");
         executor.setWaitForTasksToCompleteOnShutdown(true);

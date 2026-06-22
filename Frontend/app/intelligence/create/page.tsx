@@ -3,55 +3,69 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Loader2, Sparkles } from 'lucide-react'
+import { ArrowLeft, Loader2 } from 'lucide-react'
 
 import { Header } from '@/components/header'
 import { Sidebar } from '@/components/sidebar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Checkbox } from '@/components/ui/checkbox'
-import { createFunctionalEvaluation, executeFunctionalEvaluation } from '@/lib/api-client'
+import { createFunctionalEvaluation, executeFunctionalEvaluation, uploadApk } from '@/lib/api-client'
 
 export default function CreateEvaluationPage() {
   const router = useRouter()
   const [url, setUrl] = useState('')
   const [description, setDescription] = useState('')
-  const [mobileMode, setMobileMode] = useState(false)
+  const [platform, setPlatform] = useState<'WEB' | 'WEB_MOBILE' | 'MOBILE_APP'>('WEB')
+  const [apkFile, setApkFile] = useState<File | null>(null)
+  const [uploading, setUploading] = useState(false)
   const [state, setState] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [error, setError] = useState<string | null>(null)
 
   const submit = async () => {
-    if (!url.trim()) {
-      setState('error')
-      setError('L\'URL est requise.')
-      return
+    if (platform === 'MOBILE_APP') {
+      if (!apkFile) {
+        setState('error')
+        setError('Veuillez sélectionner un fichier APK.')
+        return
+      }
+    } else {
+      if (!url.trim()) {
+        setState('error')
+        setError("L'URL est requise.")
+        return
+      }
     }
 
     setState('submitting')
     setError(null)
 
     try {
-      const desc = [
-        description.trim(),
-        mobileMode ? '[mobile]' : '',
-      ].filter(Boolean).join('\n')
-
-      const created = await createFunctionalEvaluation({
-        platform: 'WEB',
-        url: url.trim(),
-        description: desc || undefined,
-      })
-
-      // Auto-start execution
-      await executeFunctionalEvaluation(created.id)
-
-      // Redirect to detail page — user will see live steps
-      router.push(`/functional-evaluation/${created.id}`)
+      if (platform === 'MOBILE_APP') {
+        setUploading(true)
+        const { path } = await uploadApk(apkFile!)
+        setUploading(false)
+        const created = await createFunctionalEvaluation({
+          platform: 'MOBILE_APP',
+          url: apkFile!.name,
+          description: description.trim() || undefined,
+          apkPath: path,
+        })
+        await executeFunctionalEvaluation(created.id)
+        router.push(`/functional-evaluation/${created.id}`)
+      } else {
+        const created = await createFunctionalEvaluation({
+          platform,
+          url: url.trim(),
+          description: description.trim() || undefined,
+        })
+        await executeFunctionalEvaluation(created.id)
+        router.push(`/functional-evaluation/${created.id}`)
+      }
     } catch (err) {
+      setUploading(false)
       setState('error')
       setError(err instanceof Error ? err.message : 'Échec de la création.')
     }
@@ -63,7 +77,7 @@ export default function CreateEvaluationPage() {
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header />
         <main className="flex-1 overflow-auto p-6 lg:p-8">
-          <div className="mx-auto grid w-full max-w-5xl gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+          <div className="mx-auto w-full max-w-2xl">
 
             {/* ── Left: Form ──────────────────────────────────── */}
             <section className="rounded-2xl border border-border/60 bg-card/90 p-6 shadow-sm">
@@ -78,24 +92,114 @@ export default function CreateEvaluationPage() {
               </div>
 
               <p className="mb-6 text-sm text-muted-foreground">
-                Fournissez juste une URL. L'IA va explorer l'application de façon autonome,
-                prendre des screenshots à chaque étape, et rédiger un rapport UX complet.
+                Fournissez une URL ou un fichier APK. Le système explore l'application de façon autonome,
+                prend des captures à chaque étape, et génère un rapport UX complet.
               </p>
 
               <div className="space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="url">URL à tester</Label>
-                  <Input
-                    id="url"
-                    placeholder="https://example.com"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                  />
+                  <Label>Mode d'évaluation</Label>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setPlatform('WEB')}
+                      className={`flex-1 flex items-center gap-3 rounded-xl border-2 p-3 transition-all text-left
+                        ${platform === 'WEB'
+                          ? 'border-primary bg-primary/5 shadow-sm'
+                          : 'border-border/60 hover:border-border'}`}
+                    >
+                      <div>
+                        <p className="text-sm font-medium">Desktop</p>
+                        <p className="text-[11px] text-muted-foreground">1280×800</p>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPlatform('WEB_MOBILE')}
+                      className={`flex-1 flex items-center gap-3 rounded-xl border-2 p-3 transition-all text-left
+                        ${platform === 'WEB_MOBILE'
+                          ? 'border-primary bg-primary/5 shadow-sm'
+                          : 'border-border/60 hover:border-border'}`}
+                    >
+                      <div>
+                        <p className="text-sm font-medium">Mobile Web</p>
+                        <p className="text-[11px] text-muted-foreground">iPhone 14 — 390×844</p>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPlatform('MOBILE_APP')}
+                      className={`flex-1 flex items-center gap-3 rounded-xl border-2 p-3 transition-all text-left
+                        ${platform === 'MOBILE_APP'
+                          ? 'border-primary bg-primary/5 shadow-sm'
+                          : 'border-border/60 hover:border-border'}`}
+                    >
+                      <div>
+                        <p className="text-sm font-medium">App Android</p>
+                        <p className="text-[11px] text-muted-foreground">Fichier APK</p>
+                      </div>
+                    </button>
+                  </div>
                 </div>
+
+                {platform === 'MOBILE_APP' ? (
+                  <div className="space-y-2">
+                    <Label>Fichier APK</Label>
+                    <div
+                      className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border/60 p-8 hover:border-primary/40 transition-colors cursor-pointer"
+                      onClick={() => document.getElementById('apk-input')?.click()}
+                      onDragOver={(e) => { e.preventDefault(); e.stopPropagation() }}
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        const file = e.dataTransfer.files[0]
+                        if (file?.name.endsWith('.apk')) setApkFile(file)
+                      }}
+                    >
+                      <input
+                        id="apk-input"
+                        type="file"
+                        accept=".apk"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) setApkFile(file)
+                        }}
+                      />
+                      {apkFile ? (
+                        <div className="text-center">
+                          <p className="text-sm font-medium">{apkFile.name}</p>
+                          <p className="text-xs text-muted-foreground mt-1">{(apkFile.size / 1024 / 1024).toFixed(1)} MB</p>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setApkFile(null) }}
+                            className="mt-2 text-xs text-destructive hover:underline"
+                          >
+                            Supprimer
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="text-center">
+                          <p className="text-sm text-muted-foreground">Glissez votre fichier APK ici</p>
+                          <p className="text-xs text-muted-foreground mt-1">ou cliquez pour sélectionner</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="url">URL à tester</Label>
+                    <Input
+                      id="url"
+                      placeholder="https://example.com"
+                      value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                    />
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="description">
-                    Instructions pour l'IA <span className="text-muted-foreground text-xs">(optionnel)</span>
+                    Instructions supplémentaires <span className="text-muted-foreground text-xs">(optionnel)</span>
                   </Label>
                   <Textarea
                     id="description"
@@ -106,70 +210,24 @@ export default function CreateEvaluationPage() {
                   />
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <Checkbox
-                    id="mobile"
-                    checked={mobileMode}
-                    onCheckedChange={(v) => setMobileMode(v === true)}
-                  />
-                  <Label htmlFor="mobile" className="text-sm cursor-pointer">
-                    Simuler un écran mobile (iPhone 14 — 390×844)
-                  </Label>
-                </div>
-
                 {state === 'error' && error && (
                   <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
                     {error}
                   </div>
                 )}
 
-                <Button onClick={submit} disabled={state === 'submitting' || !url.trim()} className="w-full">
-                  {state === 'submitting' ? (
+                <Button onClick={submit} disabled={state === 'submitting' || uploading || (platform === 'MOBILE_APP' ? !apkFile : !url.trim())} className="w-full">
+                  {uploading ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Upload de l'APK…</>
+                  ) : state === 'submitting' ? (
                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Lancement en cours…</>
                   ) : (
-                    <><Sparkles className="mr-2 h-4 w-4" /> Lancer l'exploration IA</>
+                    <>Lancer l'évaluation</>
                   )}
                 </Button>
               </div>
             </section>
 
-            {/* ── Right: Explanation ──────────────────────────── */}
-            <aside className="space-y-4">
-              <Card className="border-border/60 bg-card/85">
-                <CardHeader>
-                  <CardTitle>Comment ça marche ?</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm text-muted-foreground">
-                  <div className="flex gap-3">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">1</div>
-                    <p>L'IA ouvre votre URL dans un vrai navigateur Chrome</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">2</div>
-                    <p>Elle regarde le screenshot et décide quoi faire ensuite (cliquer, remplir un formulaire…)</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">3</div>
-                    <p>Elle prend un screenshot à chaque étape — vous voyez tout en temps réel</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">4</div>
-                    <p>À la fin, elle rédige un rapport UX complet avec score /10</p>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-dashed border-border/70 bg-card/70">
-                <CardHeader>
-                  <CardTitle className="text-sm">Propulsé par</CardTitle>
-                </CardHeader>
-                <CardContent className="text-sm text-muted-foreground space-y-1">
-                  <p>🧠 <strong>Gemini 1.5 Flash</strong> — vision + raisonnement</p>
-                  <p>🌐 <strong>Chrome headless</strong> — rendu JS/CSS complet</p>
-                  <p>📸 <strong>Screenshots temps réel</strong> — suivi étape par étape</p>
-                </CardContent>
-              </Card>
-            </aside>
           </div>
         </main>
       </div>

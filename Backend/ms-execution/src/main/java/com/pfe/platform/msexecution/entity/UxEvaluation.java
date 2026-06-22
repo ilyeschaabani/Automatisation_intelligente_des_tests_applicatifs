@@ -76,8 +76,11 @@ public class UxEvaluation {
     @Column(name = "generated_script", columnDefinition = "text")
     private String generatedScript;
 
+    @Column(name = "apk_path", columnDefinition = "text")
+    private String apkPath;
+
     public enum Platform {
-        WEB, MOBILE
+        WEB, MOBILE, WEB_DESKTOP, WEB_MOBILE, MOBILE_APP
     }
 
     public enum Status {

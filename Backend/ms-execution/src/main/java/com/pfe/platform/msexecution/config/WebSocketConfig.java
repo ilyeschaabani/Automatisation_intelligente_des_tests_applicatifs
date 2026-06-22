@@ -12,7 +12,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // /ws is the handshake endpoint; SockJS fallback for browsers that don't support native WS
+
         registry.addEndpoint("/ws")
                 .setAllowedOriginPatterns("*")
                 .withSockJS();
@@ -20,9 +20,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        // Server pushes to /topic/...
+
         config.enableSimpleBroker("/topic");
-        // Client sends to /app/...
+
         config.setApplicationDestinationPrefixes("/app");
     }
 }

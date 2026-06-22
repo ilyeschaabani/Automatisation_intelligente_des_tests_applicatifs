@@ -94,11 +94,13 @@ public class StreamEvent {
 
     public static StreamEvent action(int step, String actionType, String selector, String value, String reason) {
         String label = switch (actionType == null ? "" : actionType.toUpperCase()) {
-            case "CLICK"  -> "🖱 Clic sur : " + selector;
-            case "FILL"   -> "✏️ Saisie dans : " + selector + " → \"" + value + "\"";
-            case "SCROLL" -> "↕ Défilement de la page";
-            case "DONE"   -> "✅ Exploration terminée";
-            default       -> "⚡ Action : " + actionType;
+            case "CLICK"    -> "🖱 Clic sur : " + selector;
+            case "FILL"     -> "✏️ Saisie dans : " + selector + " → \"" + value + "\"";
+            case "SCROLL"   -> "↕ Défilement de la page";
+            case "NAVIGATE" -> "🧭 Navigation vers : " + selector;
+            case "BACK"     -> "⬅ Retour à la page précédente";
+            case "DONE"     -> "✅ Exploration terminée";
+            default         -> "⚡ Action : " + actionType;
         };
         return StreamEvent.builder()
                 .type("ACTION")
