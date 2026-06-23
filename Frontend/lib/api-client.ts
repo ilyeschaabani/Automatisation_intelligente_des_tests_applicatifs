@@ -116,6 +116,8 @@ export type UxEvaluationDto = {
   url?: string | null
   description?: string | null
   apkPath?: string | null
+  /** AUTO (sans validation) ou SUPERVISED (le testeur valide les verdicts douteux) */
+  reviewMode?: string | null
   status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED'
   testSummary?: string | null
   aiAnalysis?: string | null
@@ -254,6 +256,51 @@ export async function stopFunctionalEvaluation(id: number): Promise<void> {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!response.ok) throw new Error('Échec de l\'arrêt')
+}
+
+/** Pause a running evaluation (HITL) */
+export async function pauseFunctionalEvaluation(id: number): Promise<void> {
+  const token = getAccessToken()
+  const response = await fetch(`/api/functional-evaluation/${encodeURIComponent(String(id))}/pause`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!response.ok) throw new Error('Échec de la pause')
+}
+
+/** Resume a paused evaluation (HITL) */
+export async function resumeFunctionalEvaluation(id: number): Promise<void> {
+  const token = getAccessToken()
+  const response = await fetch(`/api/functional-evaluation/${encodeURIComponent(String(id))}/resume`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!response.ok) throw new Error('Échec de la reprise')
+}
+
+export interface FunctionalTestResultDto {
+  id: number
+  evaluationId: number
+  formLabel: string | null
+  scenario: string | null
+  targetField: string | null
+  inputData: string | null
+  expected: string | null
+  observed: string | null
+  status: 'PASS' | 'FAIL' | 'WARN' | 'NEEDS_REVIEW' | null
+  severity: string | null
+  confidence: number | null
+  evidence: string | null
+  humanValidated: boolean | null
+  createdAt: string | null
+}
+
+/** Fetch the detailed functional test results of an evaluation */
+export async function getFunctionalResults(id: number): Promise<FunctionalTestResultDto[]> {
+  const token = getAccessToken()
+  return requestJson<FunctionalTestResultDto[]>(`/api/functional-evaluation/${id}/functional-results`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
 }
 
 export async function uploadApk(file: File): Promise<{ path: string; filename: string }> {

@@ -8,7 +8,7 @@ import { type ChatMessage, type StreamEventType } from '@/hooks/useEvaluationStr
 
 // ── Chat bubble styles per event type ────────────────────────────────────────
 
-function bubbleStyle(type: StreamEventType): {
+function bubbleStyle(type: StreamEventType, success?: boolean | null): {
   bg: string; border: string; textColor: string; prefix: string
 } {
   switch (type) {
@@ -30,6 +30,16 @@ function bubbleStyle(type: StreamEventType): {
       return { bg: 'bg-red-500/10', border: 'border-red-500/40', textColor: 'text-red-600 dark:text-red-400', prefix: '❌' }
     case 'STEP_DONE':
       return { bg: 'bg-muted/30', border: 'border-border/30', textColor: 'text-muted-foreground', prefix: '✓' }
+    case 'FORM_DETECTED':
+      return { bg: 'bg-indigo-500/8', border: 'border-indigo-500/30', textColor: 'text-indigo-700 dark:text-indigo-300', prefix: '' }
+    case 'TEST_CASE':
+      return { bg: 'bg-cyan-500/8', border: 'border-cyan-500/20', textColor: 'text-cyan-700 dark:text-cyan-300', prefix: '' }
+    case 'TEST_VERDICT':
+      if (success === true)
+        return { bg: 'bg-green-500/8', border: 'border-green-500/30', textColor: 'text-green-700 dark:text-green-400', prefix: '' }
+      if (success === false)
+        return { bg: 'bg-red-500/8', border: 'border-red-500/35', textColor: 'text-red-700 dark:text-red-400', prefix: '' }
+      return { bg: 'bg-orange-500/8', border: 'border-orange-500/30', textColor: 'text-orange-700 dark:text-orange-300', prefix: '' }
     default:
       return { bg: 'bg-muted/30', border: 'border-border/40', textColor: 'text-muted-foreground', prefix: 'ℹ' }
   }
@@ -38,8 +48,9 @@ function bubbleStyle(type: StreamEventType): {
 // ── Single chat bubble ────────────────────────────────────────────────────────
 
 function ChatBubble({ msg }: { msg: ChatMessage }) {
-  const { bg, border, textColor, prefix } = bubbleStyle(msg.event.type)
+  const { bg, border, textColor, prefix } = bubbleStyle(msg.event.type, msg.event.success)
   const time = msg.timestamp.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  const [showScreenshot, setShowScreenshot] = useState(false)
 
   if (msg.event.type === 'STEP_DONE') {
     return (
@@ -50,6 +61,8 @@ function ChatBubble({ msg }: { msg: ChatMessage }) {
       </div>
     )
   }
+
+  const hasVerdictScreenshot = msg.event.type === 'TEST_VERDICT' && msg.event.screenshotBase64
 
   return (
     <div className={`rounded-xl border px-3.5 py-2.5 text-sm ${bg} ${border}`}>
@@ -62,8 +75,28 @@ function ChatBubble({ msg }: { msg: ChatMessage }) {
             msg.event.message
           )}
         </p>
-        <span className="text-[10px] text-muted-foreground/50 shrink-0 mt-0.5 font-mono">{time}</span>
+        <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+          {hasVerdictScreenshot && (
+            <button
+              onClick={() => setShowScreenshot(s => !s)}
+              className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground underline font-mono"
+            >
+              {showScreenshot ? 'masquer' : 'capture'}
+            </button>
+          )}
+          <span className="text-[10px] text-muted-foreground/50 font-mono">{time}</span>
+        </div>
       </div>
+      {/* Screenshot thumbnail for TEST_VERDICT */}
+      {hasVerdictScreenshot && showScreenshot && (
+        <div className="mt-2 overflow-hidden rounded-lg border border-border/40">
+          <img
+            src={`data:image/png;base64,${msg.event.screenshotBase64}`}
+            alt="capture au moment du verdict"
+            className="w-full max-h-48 object-contain object-top bg-white"
+          />
+        </div>
+      )}
       {/* Show selector/value inline for ACTION events */}
       {msg.event.type === 'ACTION' && msg.event.selector && (
         <div className="mt-1 flex flex-wrap gap-1.5">

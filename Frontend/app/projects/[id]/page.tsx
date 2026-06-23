@@ -1561,9 +1561,9 @@ export default function ProjectDetailsPage() {
               <SelectValue placeholder="Select role" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ADMIN">ADMIN</SelectItem>
-              <SelectItem value="TESTER">TESTER</SelectItem>
-              <SelectItem value="DEVOPS">DEVOPS</SelectItem>
+              <SelectItem value="ADMIN">Administrateur</SelectItem>
+              <SelectItem value="TESTER">Testeur / QA</SelectItem>
+              <SelectItem value="DEVELOPER">Développeur</SelectItem>
             </SelectContent>
           </Select>
         </div>

@@ -26,5 +26,5 @@ public class ProjectMember {
     @Column(nullable = false)
     private Role role;
 
-    public enum Role { ADMIN, TESTER, DEVOPS }
+    public enum Role { ADMIN, TESTER, DEVELOPER }
 }

@@ -15,6 +15,8 @@ import {
   getFunctionalEvaluation,
   executeFunctionalEvaluation,
   stopFunctionalEvaluation,
+  pauseFunctionalEvaluation,
+  resumeFunctionalEvaluation,
   getEvaluationSteps,
   type UxEvaluationDto,
   type UxNavigationStepDto,
@@ -300,6 +302,25 @@ export default function EvaluationDetailPage() {
     } catch { /* best effort */ }
   }
 
+  // ── Pause / Resume (HITL) ────────────────────────────────────────
+  const [paused, setPaused] = useState(false)
+  const [pausing, setPausing] = useState(false)
+  const handlePauseResume = async () => {
+    if (!item || pausing) return
+    setPausing(true)
+    try {
+      if (paused) {
+        await resumeFunctionalEvaluation(item.id)
+        setPaused(false)
+      } else {
+        await pauseFunctionalEvaluation(item.id)
+        setPaused(true)
+      }
+    } catch { /* best effort */ } finally {
+      setPausing(false)
+    }
+  }
+
   // ── Re-run ──────────────────────────────────────────────────────
   const handleRerun = async () => {
     if (!item || rerunning) return
@@ -402,10 +423,16 @@ export default function EvaluationDetailPage() {
                   <Link href="/functional-evaluation"><ArrowLeft className="mr-2 h-4 w-4" />Retour</Link>
                 </Button>
                 {isRunning ? (
-                  <Button variant="destructive" onClick={handleStop} disabled={stopping}>
-                    {stopping ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Square className="mr-2 h-4 w-4" />}
-                    {stopping ? 'Arrêt en cours…' : 'Arrêter'}
-                  </Button>
+                  <>
+                    <Button variant="outline" onClick={handlePauseResume} disabled={pausing}>
+                      {pausing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      {paused ? 'Reprendre' : 'Pause'}
+                    </Button>
+                    <Button variant="destructive" onClick={handleStop} disabled={stopping}>
+                      {stopping ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Square className="mr-2 h-4 w-4" />}
+                      {stopping ? 'Arrêt en cours…' : 'Arrêter'}
+                    </Button>
+                  </>
                 ) : (
                   <Button onClick={handleRerun} disabled={rerunning}>
                     {rerunning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />

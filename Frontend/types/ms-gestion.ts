@@ -1,7 +1,7 @@
 export type ProjectStatus = 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
 export type TestType = 'WEB' | 'UNIT' | 'INTEGRATION';
 export type RiskLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
-export type MemberRole = 'ADMIN' | 'TESTER' | 'DEVOPS';
+export type MemberRole = 'ADMIN' | 'TESTER' | 'DEVELOPER';
 
 export interface Project {
   id: number;

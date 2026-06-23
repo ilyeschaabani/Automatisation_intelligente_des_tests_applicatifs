@@ -79,6 +79,10 @@ public class UxEvaluation {
     @Column(name = "apk_path", columnDefinition = "text")
     private String apkPath;
 
+    /** Mode de revue des tests fonctionnels : AUTO (sans validation) ou SUPERVISED (le testeur valide les verdicts douteux). */
+    @Column(name = "review_mode")
+    private String reviewMode;
+
     public enum Platform {
         WEB, MOBILE, WEB_DESKTOP, WEB_MOBILE, MOBILE_APP
     }

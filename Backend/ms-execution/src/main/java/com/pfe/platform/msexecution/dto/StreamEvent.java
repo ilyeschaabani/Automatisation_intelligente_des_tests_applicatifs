@@ -175,4 +175,53 @@ public class StreamEvent {
                 .backend(backend)
                 .build();
     }
+
+    // ── Test fonctionnel ──────────────────────────────────────────────────────
+
+    public static StreamEvent formDetected(int step, String formLabel, int fieldCount) {
+        return StreamEvent.builder()
+                .type("FORM_DETECTED")
+                .message("🧪 Formulaire détecté : « " + formLabel + " » (" + fieldCount + " champ(s)) — lancement des tests fonctionnels")
+                .step(step)
+                .build();
+    }
+
+    public static StreamEvent testCase(int step, String scenario, String description) {
+        return StreamEvent.builder()
+                .type("TEST_CASE")
+                .message("▶ Cas de test [" + scenario + "] : " + description)
+                .step(step)
+                .actionType(scenario)
+                .build();
+    }
+
+    public static StreamEvent testVerdict(int step, FunctionalTestResult r) {
+        String icon = switch (r.getStatus()) {
+            case PASS -> "✅";
+            case FAIL -> "🔴";
+            case WARN -> "🟠";
+            case NEEDS_REVIEW -> "⏸";
+        };
+        StringBuilder sb = new StringBuilder();
+        sb.append(icon).append(" [").append(r.getScenario()).append("] ")
+          .append(r.getStatus());
+        if (r.getTargetField() != null) sb.append(" — champ « ").append(r.getTargetField()).append(" »");
+        sb.append("\nAttendu : ").append(r.getExpected());
+        sb.append("\nObservé : ").append(r.getObserved());
+        if (r.getEvidence() != null && r.getEvidence().contains("Appels réseau")) {
+            String net = r.getEvidence().replaceAll(".*?(Appels réseau[^|]*?).*", "$1").trim();
+            if (!net.isEmpty()) sb.append("\nRéseau : ").append(net);
+        }
+        if (r.getStatus() == FunctionalTestResult.Status.FAIL) {
+            sb.append("\nSévérité : ").append(r.getSeverity());
+        }
+        return StreamEvent.builder()
+                .type("TEST_VERDICT")
+                .message(sb.toString())
+                .step(step)
+                .actionType(r.getScenario())
+                .success(r.getStatus() == FunctionalTestResult.Status.PASS)
+                .screenshotBase64(r.getScreenshotBase64())
+                .build();
+    }
 }

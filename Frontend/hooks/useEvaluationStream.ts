@@ -19,6 +19,9 @@ export type StreamEventType =
   | 'FAILED'
   | 'INFO'
   | 'BACKEND_INFO'
+  | 'FORM_DETECTED'
+  | 'TEST_CASE'
+  | 'TEST_VERDICT'
 
 export interface StreamEvent {
   type: StreamEventType
@@ -163,6 +166,9 @@ export function useEvaluationStream({
       case 'ACTION_RESULT':
       case 'INFO':
       case 'STEP_DONE':
+      case 'FORM_DETECTED':
+      case 'TEST_CASE':
+      case 'TEST_VERDICT':
         addMessage(event)
         break
     }

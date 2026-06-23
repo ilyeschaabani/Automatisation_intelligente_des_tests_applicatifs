@@ -30,12 +30,13 @@ public class UxEvaluationController {
     private final UxEvaluationRepository uxEvaluationRepository;
     private final UxNavigationStepRepository stepRepository;
     private final AgenticEvaluationService agenticService;
+    private final com.pfe.platform.msexecution.repository.FunctionalTestResultRepository functionalTestResultRepository;
 
     @PostMapping
     public ResponseEntity<UxEvaluationDto> create(@Valid @RequestBody UxEvaluationRequest req) {
         String platform = req.getPlatform() != null ? req.getPlatform() : "WEB";
         UxEvaluation created = agenticService.createEvaluation(
-                req.getUrl(), req.getDescription(), req.getProjectId(), platform, req.getApkPath());
+                req.getUrl(), req.getDescription(), req.getProjectId(), platform, req.getApkPath(), req.getReviewMode());
         return ResponseEntity.ok(UxEvaluationDto.fromEntity(created));
     }
 
@@ -61,6 +62,18 @@ public class UxEvaluationController {
     @PostMapping("/{id}/stop")
     public ResponseEntity<Void> stop(@PathVariable Long id) {
         agenticService.stopEvaluation(id);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/{id}/pause")
+    public ResponseEntity<Void> pause(@PathVariable Long id) {
+        agenticService.pauseEvaluation(id);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/{id}/resume")
+    public ResponseEntity<Void> resume(@PathVariable Long id) {
+        agenticService.resumeEvaluation(id);
         return ResponseEntity.ok().build();
     }
 
@@ -116,5 +129,12 @@ public class UxEvaluationController {
                 .map(UxNavigationStepDto::fromEntity)
                 .collect(Collectors.toList());
         return ResponseEntity.ok(steps);
+    }
+
+    /** Résultats détaillés des tests fonctionnels d'une évaluation. */
+    @GetMapping("/{id}/functional-results")
+    public ResponseEntity<List<com.pfe.platform.msexecution.entity.FunctionalTestResultEntity>> getFunctionalResults(
+            @PathVariable Long id) {
+        return ResponseEntity.ok(functionalTestResultRepository.findByEvaluationIdOrderByIdAsc(id));
     }
 }

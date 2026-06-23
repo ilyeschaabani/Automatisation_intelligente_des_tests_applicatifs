@@ -1,0 +1,112 @@
+<svg viewBox="0 0 1010 1150" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI', Helvetica, Arial, sans-serif">
+<title>Diagramme de cas d'utilisation - Plateforme d'Automatisation des Tests</title>
+<desc>Trois acteurs (Administrateur, Testeur/QA, Developpeur) interagissent avec les cas d'usage regroupes par domaine, et deux systemes externes (Service LLM et API GitHub).</desc>
+<style>
+  .ttl{fill:#1e293b;font-size:21px;font-weight:700}
+  .pkg-lbl{fill:#334155;font-size:12.5px;font-weight:700;letter-spacing:.3px}
+  .uc{fill:#1e3a8a;font-size:12.5px;text-anchor:middle}
+  .act{fill:#1e293b;font-size:13px;font-weight:600;text-anchor:middle}
+  .ext{fill:#92400e;font-size:12.5px;font-weight:700;text-anchor:middle}
+  .ext-sub{fill:#64748b;font-size:10px;text-anchor:middle}
+  .ster{fill:#64748b;font-size:10px;font-style:italic}
+  .ln{fill:none;stroke-width:1.6;opacity:.85}
+  .auth{fill:none;stroke:#94a3b8;stroke-width:1.3;stroke-dasharray:5 4;opacity:.6}
+  .extln{fill:none;stroke-width:1.5;stroke-dasharray:6 4;opacity:.9}
+  .rel{fill:none;stroke:#64748b;stroke-width:1.3;stroke-dasharray:4 3}
+</style>
+
+<defs>
+  <marker id="ar" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="context-stroke"/></marker>
+  <marker id="aro" markerWidth="11" markerHeight="11" refX="9" refY="5" orient="auto"><path d="M1,1 L10,5 L1,9" fill="none" stroke="#64748b" stroke-width="1.3"/></marker>
+</defs>
+
+<rect x="0" y="0" width="1010" height="1150" fill="#ffffff"/>
+<text x="505" y="40" class="ttl" text-anchor="middle">Diagramme de Cas d'Utilisation - Plateforme d'Automatisation des Tests</text>
+
+<!-- ===== SYSTEM BOUNDARY ===== -->
+<rect x="362" y="64" width="356" height="1004" rx="10" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="540" y="86" class="pkg-lbl" text-anchor="middle" style="font-size:13px">Plateforme d'Automatisation des Tests</text>
+
+<!-- ===== PACKAGES ===== -->
+<rect x="380" y="100" width="320" height="160" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+<text x="394" y="118" class="pkg-lbl">Administration &amp; Projet</text>
+<rect x="380" y="276" width="320" height="160" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+<text x="394" y="294" class="pkg-lbl">Conception des tests</text>
+<rect x="380" y="452" width="320" height="160" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+<text x="394" y="470" class="pkg-lbl">Exécution &amp; Analyse</text>
+<rect x="380" y="628" width="320" height="114" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+<text x="394" y="646" class="pkg-lbl">Évaluation Qualité (IA agentique)</text>
+<rect x="380" y="758" width="320" height="114" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+<text x="394" y="776" class="pkg-lbl">Sécurité applicative</text>
+<rect x="380" y="888" width="320" height="114" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+<text x="394" y="906" class="pkg-lbl">Pilotage &amp; Reporting</text>
+
+<!-- ===== CONNECTORS ===== -->
+<path class="auth" d="M168,184 C300,184 300,1042 408,1042"/>
+<path class="auth" d="M168,540 C300,540 300,1042 408,1042"/>
+<path class="auth" d="M168,860 C300,860 300,1042 408,1042"/>
+<path class="ln" stroke="#2563eb" marker-end="url(#ar)" d="M168,184 C278,184 318,140 405,140"/>
+<path class="ln" stroke="#2563eb" marker-end="url(#ar)" d="M168,184 C278,184 318,186 405,186"/>
+<path class="ln" stroke="#2563eb" marker-end="url(#ar)" d="M168,184 C278,184 318,232 405,232"/>
+<path class="ln" stroke="#0d9488" marker-end="url(#ar)" d="M168,540 C300,540 300,316 405,316"/>
+<path class="ln" stroke="#0d9488" marker-end="url(#ar)" d="M168,540 C300,540 300,362 405,362"/>
+<path class="ln" stroke="#0d9488" marker-end="url(#ar)" d="M168,540 C300,540 300,408 405,408"/>
+<path class="ln" stroke="#0d9488" marker-end="url(#ar)" d="M168,540 C300,540 300,492 405,492"/>
+<path class="ln" stroke="#0d9488" marker-end="url(#ar)" d="M168,540 C300,540 300,538 405,538"/>
+<path class="ln" stroke="#0d9488" marker-end="url(#ar)" d="M168,540 C300,540 300,668 405,668"/>
+<path class="ln" stroke="#0d9488" marker-end="url(#ar)" d="M168,540 C300,540 300,714 405,714"/>
+<path class="ln" stroke="#0d9488" marker-end="url(#ar)" d="M168,540 C320,540 300,928 405,928"/>
+<path class="ln" stroke="#0d9488" marker-end="url(#ar)" d="M168,540 C320,540 300,974 405,974"/>
+<path class="ln" stroke="#ea580c" marker-end="url(#ar)" d="M168,860 C300,860 300,408 405,408"/>
+<path class="ln" stroke="#ea580c" marker-end="url(#ar)" d="M168,860 C300,860 300,538 405,538"/>
+<path class="ln" stroke="#ea580c" marker-end="url(#ar)" d="M168,860 C300,860 300,584 405,584"/>
+<path class="ln" stroke="#ea580c" marker-end="url(#ar)" d="M168,860 C300,860 300,798 405,798"/>
+<path class="ln" stroke="#ea580c" marker-end="url(#ar)" d="M168,860 C300,860 300,844 405,844"/>
+<path class="ln" stroke="#ea580c" marker-end="url(#ar)" d="M168,860 C310,860 300,928 405,928"/>
+<path class="ln" stroke="#ea580c" marker-end="url(#ar)" d="M168,860 C310,860 300,974 405,974"/>
+<path class="extln" stroke="#7c3aed" marker-end="url(#ar)" d="M675,408 C745,408 765,442 822,442"/>
+<path class="extln" stroke="#7c3aed" marker-end="url(#ar)" d="M675,584 C745,584 765,442 822,442"/>
+<path class="extln" stroke="#7c3aed" marker-end="url(#ar)" d="M675,668 C745,668 765,442 822,442"/>
+<path class="extln" stroke="#334155" marker-end="url(#ar)" d="M675,538 C745,538 765,822 822,822"/>
+<path class="extln" stroke="#334155" marker-end="url(#ar)" d="M675,1042 C745,1042 765,822 822,822"/>
+<path class="rel" marker-end="url(#aro)" d="M660,492 C706,500 706,532 662,538"/>
+<text x="712" y="518" class="ster">«include»</text>
+<path class="rel" marker-end="url(#aro)" d="M660,714 C706,706 706,676 662,668"/>
+<text x="712" y="694" class="ster">«extend»</text>
+
+<!-- ===== USE CASE OVALS ===== -->
+<g>
+  <ellipse cx="540" cy="140" rx="130" ry="20" fill="#eff6ff" stroke="#3b82f6"/><text x="540" y="144" class="uc">Gérer les projets</text>
+  <ellipse cx="540" cy="186" rx="130" ry="20" fill="#eff6ff" stroke="#3b82f6"/><text x="540" y="190" class="uc">Gérer les membres &amp; rôles</text>
+  <ellipse cx="540" cy="232" rx="130" ry="20" fill="#eff6ff" stroke="#3b82f6"/><text x="540" y="236" class="uc">Gérer les environnements</text>
+  <ellipse cx="540" cy="316" rx="130" ry="20" fill="#eff6ff" stroke="#3b82f6"/><text x="540" y="320" class="uc">Gérer les suites de test</text>
+  <ellipse cx="540" cy="362" rx="130" ry="20" fill="#eff6ff" stroke="#3b82f6"/><text x="540" y="366" class="uc">Gérer les cas de test</text>
+  <ellipse cx="540" cy="408" rx="130" ry="20" fill="#eff6ff" stroke="#3b82f6"/><text x="540" y="412" class="uc">Générer un test par IA</text>
+  <ellipse cx="540" cy="492" rx="130" ry="20" fill="#eff6ff" stroke="#3b82f6"/><text x="540" y="496" class="uc">Gérer les campagnes</text>
+  <ellipse cx="540" cy="538" rx="130" ry="20" fill="#eff6ff" stroke="#3b82f6"/><text x="540" y="542" class="uc">Exécuter une campagne</text>
+  <ellipse cx="540" cy="584" rx="130" ry="20" fill="#eff6ff" stroke="#3b82f6"/><text x="540" y="588" class="uc">Analyser les échecs (IA)</text>
+  <ellipse cx="540" cy="668" rx="130" ry="20" fill="#eff6ff" stroke="#3b82f6"/><text x="540" y="672" class="uc">Évaluation UX &amp; fonctionnelle</text>
+  <ellipse cx="540" cy="714" rx="130" ry="20" fill="#eff6ff" stroke="#3b82f6"/><text x="540" y="718" class="uc">Valider un verdict (HITL)</text>
+  <ellipse cx="540" cy="798" rx="130" ry="20" fill="#eff6ff" stroke="#3b82f6"/><text x="540" y="802" class="uc">Scan SAST / DAST / SCA</text>
+  <ellipse cx="540" cy="844" rx="130" ry="20" fill="#eff6ff" stroke="#3b82f6"/><text x="540" y="848" class="uc">Consulter les vulnérabilités</text>
+  <ellipse cx="540" cy="928" rx="130" ry="20" fill="#eff6ff" stroke="#3b82f6"/><text x="540" y="932" class="uc">Consulter les KPIs</text>
+  <ellipse cx="540" cy="974" rx="130" ry="20" fill="#eff6ff" stroke="#3b82f6"/><text x="540" y="978" class="uc">Rapports PDF</text>
+  <ellipse cx="540" cy="1042" rx="146" ry="22" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.6"/><text x="540" y="1046" class="uc" style="font-weight:700">S'authentifier (JWT / OAuth)</text>
+</g>
+
+<!-- ===== ACTORS ===== -->
+<g stroke="#1e293b" stroke-width="1.7" fill="none" stroke-linecap="round">
+  <circle cx="150" cy="156" r="12"/><line x1="150" y1="168" x2="150" y2="196"/><line x1="132" y1="178" x2="168" y2="178"/><line x1="150" y1="196" x2="136" y2="216"/><line x1="150" y1="196" x2="164" y2="216"/>
+  <circle cx="150" cy="512" r="12"/><line x1="150" y1="524" x2="150" y2="552"/><line x1="132" y1="534" x2="168" y2="534"/><line x1="150" y1="552" x2="136" y2="572"/><line x1="150" y1="552" x2="164" y2="572"/>
+  <circle cx="150" cy="832" r="12"/><line x1="150" y1="844" x2="150" y2="872"/><line x1="132" y1="854" x2="168" y2="854"/><line x1="150" y1="872" x2="136" y2="892"/><line x1="150" y1="872" x2="164" y2="892"/>
+</g>
+<text x="150" y="240" class="act">Administrateur</text>
+<text x="150" y="596" class="act">Testeur / QA</text>
+<text x="150" y="916" class="act">Développeur</text>
+
+<!-- ===== EXTERNAL SYSTEMS ===== -->
+<rect x="822" y="414" width="156" height="58" rx="6" fill="#fffbeb" stroke="#d97706" stroke-width="1.5"/>
+<text x="900" y="436" class="ext">«system»</text><text x="900" y="452" class="ext">Service LLM</text><text x="900" y="466" class="ext-sub">Ollama / Cloud · Vision</text>
+<rect x="822" y="794" width="156" height="58" rx="6" fill="#fffbeb" stroke="#d97706" stroke-width="1.5"/>
+<text x="900" y="816" class="ext">«system»</text><text x="900" y="832" class="ext">API GitHub</text><text x="900" y="846" class="ext-sub">OAuth · clone (PAT)</text>
+</svg>

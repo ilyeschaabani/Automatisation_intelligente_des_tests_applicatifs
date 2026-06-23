@@ -1,5 +1,7 @@
 package com.pfe.platform.msexecution.service;
 
+import com.pfe.platform.msexecution.dto.FormSchema;
+import com.pfe.platform.msexecution.dto.FunctionalTestResult;
 import com.pfe.platform.msexecution.entity.UxEvaluation;
 import com.pfe.platform.msexecution.entity.UxEvaluation.Status;
 import com.pfe.platform.msexecution.entity.UxNavigationStep;
@@ -38,6 +40,8 @@ public class AgenticEvaluationService {
     private final EvaluationStreamService streamService;
     private final HumanInputService humanInputService;
     private final AppiumDriverService appiumDriverService;
+    private final WebFunctionalTester webFunctionalTester;
+    private final com.pfe.platform.msexecution.repository.FunctionalTestResultRepository functionalTestResultRepository;
 
     /**
      * Plafond de sécurité (anti-boucle infinie) — PAS une limite fonctionnelle.
@@ -55,6 +59,37 @@ public class AgenticEvaluationService {
 
     /** Set of evaluation IDs that have been requested to stop. */
     private final Set<Long> stopRequested = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /** Set of evaluation IDs currently paused by the tester. */
+    private final Set<Long> pauseRequested = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    public void pauseEvaluation(Long evaluationId) {
+        pauseRequested.add(evaluationId);
+        streamService.sendInfo(evaluationId, "⏸ Test mis en pause par le testeur");
+        log.info("[UX-AGENT {}] Pause requested", evaluationId);
+    }
+
+    public void resumeEvaluation(Long evaluationId) {
+        pauseRequested.remove(evaluationId);
+        streamService.sendInfo(evaluationId, "▶ Reprise du test");
+        log.info("[UX-AGENT {}] Resume requested", evaluationId);
+    }
+
+    /** Bloque tant que le testeur a mis le test en pause (sans consommer de CPU). Renvoie false si arrêt demandé. */
+    private boolean awaitIfPaused(Long evaluationId) {
+        boolean wasPaused = false;
+        while (pauseRequested.contains(evaluationId)) {
+            wasPaused = true;
+            if (stopRequested.contains(evaluationId) || isStoppedInDb(evaluationId)) {
+                return false;
+            }
+            try { Thread.sleep(1000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); return false; }
+        }
+        if (wasPaused) {
+            streamService.sendInfo(evaluationId, "▶ Reprise — le test continue");
+        }
+        return true;
+    }
 
     public void stopEvaluation(Long evaluationId) {
         stopRequested.add(evaluationId);
@@ -81,18 +116,25 @@ public class AgenticEvaluationService {
     }
 
     public UxEvaluation createEvaluation(String url, String description, Long projectId, String platform, String apkPath) {
+        return createEvaluation(url, description, projectId, platform, apkPath, "AUTO");
+    }
+
+    public UxEvaluation createEvaluation(String url, String description, Long projectId, String platform,
+                                         String apkPath, String reviewMode) {
         UxEvaluation.Platform p;
         try {
             p = UxEvaluation.Platform.valueOf(platform.toUpperCase());
         } catch (Exception e) {
             p = UxEvaluation.Platform.WEB;
         }
+        String mode = "SUPERVISED".equalsIgnoreCase(reviewMode) ? "SUPERVISED" : "AUTO";
         UxEvaluation evaluation = UxEvaluation.builder()
                 .url(url)
                 .description(description)
                 .projectId(projectId)
                 .platform(p)
                 .apkPath(apkPath)
+                .reviewMode(mode)
                 .status(Status.PENDING)
                 .createdAt(LocalDateTime.now())
                 .build();
@@ -115,6 +157,11 @@ public class AgenticEvaluationService {
             stepRepository.deleteAll(oldSteps);
             log.info("[UX-AGENT {}] Deleted {} old steps from previous run", evaluationId, oldSteps.size());
         }
+
+        // Clean up old functional test results from a previous run
+        try {
+            functionalTestResultRepository.deleteByEvaluationId(evaluationId);
+        } catch (Exception ignored) {}
 
         evaluation.setStatus(Status.RUNNING);
         evaluation.setExecutedAt(LocalDateTime.now());
@@ -204,6 +251,10 @@ public class AgenticEvaluationService {
             Set<String> interactedElements = new HashSet<>();
             int stepsWithoutDiscovery = 0;
 
+            // Test fonctionnel : formulaires déjà testés + résultats collectés
+            Set<String> testedFormSignatures = new HashSet<>();
+            List<FunctionalTestResult> functionalResults = new ArrayList<>();
+
             // Boucle agentique adaptative : pas de limite fixe, s'arrête à saturation
             int i = 0;
             while (true) {
@@ -223,6 +274,12 @@ public class AgenticEvaluationService {
                     log.info("[UX-AGENT {}] Stop detected at step {}", evaluationId, i);
                     streamService.sendInfo(evaluationId, "⛔ Exploration arrêtée par le testeur");
                     history.add("⛔ Exploration arrêtée par le testeur à l'étape " + i);
+                    break;
+                }
+
+                // Pause éventuelle demandée par le testeur (HITL)
+                if (!awaitIfPaused(evaluationId)) {
+                    streamService.sendInfo(evaluationId, "⛔ Arrêté pendant la pause");
                     break;
                 }
                 log.info("[UX-AGENT {}] Step {} (cap {}, sans découverte {}/{})",
@@ -266,6 +323,25 @@ public class AgenticEvaluationService {
                             || normalizedCurrent.startsWith(normalizedMenuUrl)) {
                         visitedSections.add(entry.getKey());
                     }
+                }
+
+                // ── Test fonctionnel : détecter et tester les formulaires de cette page ──
+                boolean supervised = "SUPERVISED".equalsIgnoreCase(evaluation.getReviewMode());
+                try {
+                    List<FormSchema> forms = webFunctionalTester.detectForms(driver);
+                    for (FormSchema form : forms) {
+                        String sig = form.signature();
+                        if (testedFormSignatures.add(sig)) {
+                            log.info("[UX-AGENT {}] New form to test functionally: {}", evaluationId, form.label());
+                            List<FunctionalTestResult> res =
+                                    webFunctionalTester.testForm(driver, form, evaluationId, i, supervised);
+                            functionalResults.addAll(res);
+                            // Le formulaire a pu naviguer : revenir à la page d'exploration
+                            try { driver.get(currentUrl); waitForPageLoad(driver); } catch (Exception ignored) {}
+                        }
+                    }
+                } catch (Exception fe) {
+                    log.warn("[UX-AGENT {}] Functional testing error: {}", evaluationId, fe.getMessage());
                 }
 
                 // Envoi du screenshot HD au frontend
@@ -452,10 +528,18 @@ public class AgenticEvaluationService {
                 }
             }
 
+            // Persistance des résultats fonctionnels (rapport répétable + comparaison de runs)
+            persistFunctionalResults(evaluationId, functionalResults);
+
             // Génération du rapport final
-            log.info("[UX-AGENT {}] Generating final UX report ({} steps)", evaluationId, steps.size());
-            streamService.sendInfo(evaluationId, "📝 Génération du rapport UX en cours…");
-            String finalReport = buildFinalReport(evaluation.getUrl(), steps, evaluation.getDescription(), mobileMode);
+            log.info("[UX-AGENT {}] Generating final report ({} steps, {} functional tests)",
+                    evaluationId, steps.size(), functionalResults.size());
+            streamService.sendInfo(evaluationId, "📝 Génération du rapport en cours…");
+            String uxReport = buildFinalReport(evaluation.getUrl(), steps, evaluation.getDescription(), mobileMode);
+            String functionalSummary = buildFunctionalSummary(functionalResults);
+            String finalReport = functionalSummary.isEmpty()
+                    ? uxReport
+                    : functionalSummary + "\n\n---\n\n" + uxReport;
 
             // Sauvegarde des résultats
             evaluation.setAiAnalysis(finalReport);
@@ -635,6 +719,97 @@ public class AgenticEvaluationService {
                 parcours, mobileSection);
 
         return visionProvider.analyzeText(prompt);
+    }
+
+    private void persistFunctionalResults(Long evaluationId, List<FunctionalTestResult> results) {
+        if (results == null || results.isEmpty()) return;
+        try {
+            for (FunctionalTestResult r : results) {
+                com.pfe.platform.msexecution.entity.FunctionalTestResultEntity e =
+                        com.pfe.platform.msexecution.entity.FunctionalTestResultEntity.builder()
+                                .evaluationId(evaluationId)
+                                .formLabel(r.getFormLabel())
+                                .scenario(r.getScenario())
+                                .targetField(r.getTargetField())
+                                .inputData(r.getInputData())
+                                .expected(r.getExpected())
+                                .observed(r.getObserved())
+                                .status(r.getStatus() != null ? r.getStatus().name() : null)
+                                .severity(r.getSeverity() != null ? r.getSeverity().name() : null)
+                                .confidence(r.getConfidence())
+                                .evidence(r.getEvidence())
+                                .humanValidated(Boolean.FALSE)
+                                .createdAt(LocalDateTime.now())
+                                .build();
+                functionalTestResultRepository.save(e);
+            }
+            log.info("[UX-AGENT {}] Persisted {} functional test result(s)", evaluationId, results.size());
+        } catch (Exception ex) {
+            log.warn("[UX-AGENT {}] Failed to persist functional results: {}", evaluationId, ex.getMessage());
+        }
+    }
+
+    /**
+     * Synthèse déterministe des tests fonctionnels — les verdicts viennent du moteur
+     * (oracle DOM/HTML5), pas du LLM, pour garantir la fiabilité.
+     */
+    private String buildFunctionalSummary(List<FunctionalTestResult> results) {
+        if (results == null || results.isEmpty()) return "";
+
+        long total = results.size();
+        long pass = results.stream().filter(r -> r.getStatus() == FunctionalTestResult.Status.PASS).count();
+        long fail = results.stream().filter(r -> r.getStatus() == FunctionalTestResult.Status.FAIL).count();
+        long warn = results.stream().filter(r -> r.getStatus() == FunctionalTestResult.Status.WARN).count();
+        long review = results.stream().filter(r -> r.getStatus() == FunctionalTestResult.Status.NEEDS_REVIEW).count();
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("# RAPPORT DE TESTS FONCTIONNELS\n\n");
+        sb.append("## Synthèse\n");
+        sb.append("- Cas exécutés : ").append(total).append("\n");
+        sb.append("- ✅ Réussis : ").append(pass).append("\n");
+        sb.append("- 🔴 Échecs (bugs) : ").append(fail).append("\n");
+        sb.append("- 🟠 Avertissements : ").append(warn).append("\n");
+        sb.append("- ⏸ À vérifier (humain) : ").append(review).append("\n\n");
+
+        // Grouper par formulaire
+        Map<String, List<FunctionalTestResult>> byForm = new LinkedHashMap<>();
+        for (FunctionalTestResult r : results) {
+            byForm.computeIfAbsent(r.getFormLabel(), k -> new ArrayList<>()).add(r);
+        }
+
+        if (fail > 0) {
+            sb.append("## 🔴 Bugs détectés (priorité)\n");
+            for (FunctionalTestResult r : results) {
+                if (r.getStatus() == FunctionalTestResult.Status.FAIL) {
+                    sb.append("- **[").append(r.getSeverity()).append("] ").append(r.getFormLabel())
+                      .append(" / ").append(r.getScenario());
+                    if (r.getTargetField() != null) sb.append(" (").append(r.getTargetField()).append(")");
+                    sb.append("**\n");
+                    sb.append("  - Attendu : ").append(r.getExpected()).append("\n");
+                    sb.append("  - Observé : ").append(r.getObserved()).append("\n");
+                }
+            }
+            sb.append("\n");
+        }
+
+        sb.append("## Détail par formulaire\n");
+        for (Map.Entry<String, List<FunctionalTestResult>> e : byForm.entrySet()) {
+            sb.append("### ").append(e.getKey()).append("\n");
+            for (FunctionalTestResult r : e.getValue()) {
+                String icon = switch (r.getStatus()) {
+                    case PASS -> "✅";
+                    case FAIL -> "🔴";
+                    case WARN -> "🟠";
+                    case NEEDS_REVIEW -> "⏸";
+                };
+                sb.append(icon).append(" `").append(r.getScenario()).append("`");
+                if (r.getTargetField() != null) sb.append(" — ").append(r.getTargetField());
+                sb.append(" : ").append(r.getObserved()).append("\n");
+            }
+            sb.append("\n");
+        }
+
+        return sb.toString();
     }
 
     // Exécution des actions Selenium
@@ -1072,6 +1247,11 @@ public class AgenticEvaluationService {
 
                 if (stopRequested.remove(evaluationId) || isStoppedInDb(evaluationId)) {
                     streamService.sendInfo(evaluationId, "Arret demande");
+                    break;
+                }
+
+                if (!awaitIfPaused(evaluationId)) {
+                    streamService.sendInfo(evaluationId, "Arrete pendant la pause");
                     break;
                 }
 

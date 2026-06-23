@@ -19,6 +19,7 @@ export default function CreateEvaluationPage() {
   const [url, setUrl] = useState('')
   const [description, setDescription] = useState('')
   const [platform, setPlatform] = useState<'WEB' | 'WEB_MOBILE' | 'MOBILE_APP'>('WEB')
+  const [reviewMode, setReviewMode] = useState<'AUTO' | 'SUPERVISED'>('AUTO')
   const [apkFile, setApkFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [state, setState] = useState<'idle' | 'submitting' | 'error'>('idle')
@@ -52,6 +53,7 @@ export default function CreateEvaluationPage() {
           url: apkFile!.name,
           description: description.trim() || undefined,
           apkPath: path,
+          reviewMode,
         })
         await executeFunctionalEvaluation(created.id)
         router.push(`/functional-evaluation/${created.id}`)
@@ -60,6 +62,7 @@ export default function CreateEvaluationPage() {
           platform,
           url: url.trim(),
           description: description.trim() || undefined,
+          reviewMode,
         })
         await executeFunctionalEvaluation(created.id)
         router.push(`/functional-evaluation/${created.id}`)
@@ -208,6 +211,34 @@ export default function CreateEvaluationPage() {
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Validation des tests fonctionnels</Label>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setReviewMode('AUTO')}
+                      className={`flex-1 rounded-xl border-2 p-3 transition-all text-left
+                        ${reviewMode === 'AUTO'
+                          ? 'border-primary bg-primary/5 shadow-sm'
+                          : 'border-border/60 hover:border-border'}`}
+                    >
+                      <p className="text-sm font-medium">Automatique</p>
+                      <p className="text-[11px] text-muted-foreground">Verdicts décidés sans intervention</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReviewMode('SUPERVISED')}
+                      className={`flex-1 rounded-xl border-2 p-3 transition-all text-left
+                        ${reviewMode === 'SUPERVISED'
+                          ? 'border-primary bg-primary/5 shadow-sm'
+                          : 'border-border/60 hover:border-border'}`}
+                    >
+                      <p className="text-sm font-medium">Supervisé</p>
+                      <p className="text-[11px] text-muted-foreground">Tu valides les verdicts incertains</p>
+                    </button>
+                  </div>
                 </div>
 
                 {state === 'error' && error && (
