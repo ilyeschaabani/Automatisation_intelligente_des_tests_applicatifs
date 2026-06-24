@@ -11,11 +11,15 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.time.Instant;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Entity
 @Getter
@@ -70,6 +74,17 @@ public class User  implements UserDetails {
     /** Timestamp when token was stored (for lifecycle checks/auditing) */
     Instant githubTokenCreatedAt;
 
+    // -----------------------------
+    // Roles (badges, multi-roles)
+    // -----------------------------
+
+    /** Roles globaux de l'utilisateur sur la plateforme. Un user peut en cumuler plusieurs. */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "user_global_roles", joinColumns = @JoinColumn(name = "user_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role")
+    Set<GlobalRole> globalRoles = new HashSet<>();
+
     @PrePersist
     @PreUpdate
     void normalize() {
@@ -80,7 +95,12 @@ public class User  implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of();
+        if (globalRoles == null || globalRoles.isEmpty()) {
+            return List.of();
+        }
+        return globalRoles.stream()
+                .map(role -> new SimpleGrantedAuthority("ROLE_" + role.name()))
+                .collect(Collectors.toList());
     }
 
     @Override

@@ -147,7 +147,7 @@ export function SastCenter() {
               <p className="font-semibold text-sm mt-1">{latest.filesAnalyzed ?? '—'}</p>
             </Card>
             <Card className="p-3">
-              <p className="text-[10px] text-muted-foreground font-medium">COUVERTURE</p>
+              <p className="text-[10px] text-muted-foreground font-medium">INDICE QUALITÉ</p>
               <div className="flex items-center gap-2 mt-1">
                 <div className="flex-1 h-2 rounded-full bg-secondary">
                   <div className="h-full rounded-full bg-green-500" style={{ width: `${latest.coverage ?? 0}%` }} />

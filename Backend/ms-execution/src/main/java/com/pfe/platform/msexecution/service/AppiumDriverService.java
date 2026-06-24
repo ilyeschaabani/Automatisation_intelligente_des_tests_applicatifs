@@ -46,10 +46,7 @@ public class AppiumDriverService {
     public void ensureEmulatorRunning() throws Exception {
         if (isContainerRunning()) {
             log.info("[APPIUM] Android emulator container already running");
-            return;
-        }
-
-        if (isContainerExists()) {
+        } else if (isContainerExists()) {
             log.info("[APPIUM] Starting existing container {}", CONTAINER_NAME);
             exec("docker", "start", CONTAINER_NAME);
         } else {
@@ -58,6 +55,7 @@ public class AppiumDriverService {
                     "--name", CONTAINER_NAME,
                     "--privileged",
                     "--device", "/dev/kvm",
+                    "--group-add", kvmGroupId(),
                     "-p", APPIUM_PORT + ":4723",
                     "-p", "6090:6080",
                     "-e", "EMULATOR_DEVICE=Samsung Galaxy S10",
@@ -438,6 +436,25 @@ public class AppiumDriverService {
 
     // ── Docker management ──
 
+    /**
+     * GID propriétaire de /dev/kvm. L'utilisateur du conteneur (androidusr) doit
+     * appartenir à ce groupe pour démarrer l'émulateur, sinon Appium ne trouve
+     * aucun device. Détecté dynamiquement, repli sur 109 (valeur usuelle).
+     */
+    private String kvmGroupId() {
+        try {
+            String gid = execOutput("docker", "run", "--rm", "--device", "/dev/kvm",
+                    "--entrypoint", "stat", DOCKER_IMAGE, "-c", "%g", "/dev/kvm").trim();
+            if (gid.matches("\\d+")) {
+                log.info("[APPIUM] /dev/kvm group id detected: {}", gid);
+                return gid;
+            }
+        } catch (Exception e) {
+            log.warn("[APPIUM] Could not detect /dev/kvm gid, falling back to 109: {}", e.getMessage());
+        }
+        return "109";
+    }
+
     private boolean isContainerRunning() {
         try {
             String output = execOutput("docker", "inspect", "-f", "{{.State.Running}}", CONTAINER_NAME);
@@ -463,8 +480,14 @@ public class AppiumDriverService {
             try {
                 String output = execOutput("docker", "exec", CONTAINER_NAME,
                         "adb", "shell", "getprop", "sys.boot_completed");
-                if ("1".equals(output.trim())) {
-                    log.info("[APPIUM] Android device fully booted");
+                String anim = "";
+                try {
+                    anim = execOutput("docker", "exec", CONTAINER_NAME,
+                            "adb", "shell", "getprop", "init.svc.bootanim").trim();
+                } catch (Exception ignored) {}
+                // boot_completed=1 ET animation terminée → l'UI (et l'app Appium Settings) est prête
+                if ("1".equals(output.trim()) && "stopped".equals(anim)) {
+                    log.info("[APPIUM] Android device fully booted (bootanim stopped)");
                     Thread.sleep(5000);
                     return;
                 }

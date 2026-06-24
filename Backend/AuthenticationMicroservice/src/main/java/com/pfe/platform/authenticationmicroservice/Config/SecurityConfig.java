@@ -20,6 +20,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 
 @Configuration
 @EnableWebSecurity
+@org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -47,6 +48,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/signup", "/api/auth/signin", "/api/auth/refreshToken").permitAll()
                         .requestMatchers("/api/github/connect", "/api/github/callback").permitAll()
                         .requestMatchers("/uploads/**").permitAll()
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/auth/**").authenticated()
                         .requestMatchers("/api/github/**").authenticated()
                         .anyRequest().authenticated()

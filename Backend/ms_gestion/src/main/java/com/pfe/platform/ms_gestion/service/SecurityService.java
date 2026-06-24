@@ -118,7 +118,7 @@ public class SecurityService {
                 || v.getStatus() == SecurityVulnerability.VulnStatus.CLOSED).count();
 
         int securityScore = total == 0 ? 100
-                : Math.max(0, (int)(100 - (critical * 15 + high * 8 + medium * 3 + low * 1)));
+                : Math.max(0, (int)(100 - (critical * 15 + high * 12 + medium * 4 + low * 1)));
 
         Map<String, Long> severityCounts = new LinkedHashMap<>();
         severityCounts.put("critical", critical);
@@ -136,12 +136,19 @@ public class SecurityService {
         dashboard.put("statusCounts", statusCounts);
         dashboard.put("securityScore", securityScore);
 
+        // Sous-scores RÉELS dérivés des vulnérabilités par type (formule pondérée par sévérité).
+        long owaspCategoriesHit = vulns.stream()
+                .filter(v -> v.getOwaspCategory() != null)
+                .map(v -> v.getOwaspCategory().replaceAll("(?i)^(A\\d{2}).*", "$1"))
+                .filter(s -> s.matches("(?i)A\\d{2}"))
+                .distinct().count();
+
         Map<String, Object> scores = new LinkedHashMap<>();
         scores.put("overall", securityScore);
-        scores.put("owasp", Math.min(100, securityScore + 4));
-        scores.put("secureCoding", Math.min(100, securityScore + 7));
-        scores.put("infrastructure", Math.max(0, securityScore - 7));
-        scores.put("dependencies", Math.max(0, securityScore - 4));
+        scores.put("owasp", (int) ((10 - Math.min(10, owaspCategoriesHit)) * 10));
+        scores.put("secureCoding", weightedScore(vulns, SecurityVulnerability.VulnType.SAST));
+        scores.put("infrastructure", weightedScore(vulns, SecurityVulnerability.VulnType.DAST));
+        scores.put("dependencies", weightedScore(vulns, SecurityVulnerability.VulnType.SCA));
         dashboard.put("scores", scores);
 
         Map<String, Object> owaspTop10 = buildOwaspTop10(vulns);
@@ -159,6 +166,15 @@ public class SecurityService {
         dashboard.put("compliance", compliance);
 
         return dashboard;
+    }
+
+    /** Score pondéré par sévérité pour un type de scan : 100 = zéro finding. */
+    private int weightedScore(List<SecurityVulnerability> vulns, SecurityVulnerability.VulnType type) {
+        long c = vulns.stream().filter(v -> v.getVulnType() == type && v.getSeverity() == SecurityVulnerability.Severity.CRITICAL).count();
+        long h = vulns.stream().filter(v -> v.getVulnType() == type && v.getSeverity() == SecurityVulnerability.Severity.HIGH).count();
+        long m = vulns.stream().filter(v -> v.getVulnType() == type && v.getSeverity() == SecurityVulnerability.Severity.MEDIUM).count();
+        long l = vulns.stream().filter(v -> v.getVulnType() == type && v.getSeverity() == SecurityVulnerability.Severity.LOW).count();
+        return Math.max(0, (int) (100 - (c * 15 + h * 12 + m * 4 + l * 1)));
     }
 
     private Map<String, Object> buildOwaspTop10(List<SecurityVulnerability> vulns) {

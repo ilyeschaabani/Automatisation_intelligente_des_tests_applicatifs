@@ -34,7 +34,11 @@ interface BackendVuln {
 
 function computeOwaspFromVulns(vulns: BackendVuln[]): OwaspCategory[] {
   return OWASP_CATALOG.map(cat => {
-    const matched = vulns.filter(v => v.owaspCategory === cat.id)
+    // owaspCategory côté backend = "A03:2021 Injection" → on compare le préfixe "A03"
+    const matched = vulns.filter(v => {
+      const m = v.owaspCategory ? String(v.owaspCategory).match(/A\d{2}/i) : null
+      return m ? m[0].toUpperCase() === cat.id : false
+    })
     const count = matched.length
 
     const severityWeights: Record<string, number> = {

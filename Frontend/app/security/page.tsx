@@ -73,11 +73,9 @@ export default function SecurityPage() {
   const low = vulns.filter(v => v.severity === 'low').length
   const total = vulns.length
 
-  const computeScore = (c: number, h: number, m: number, l: number) => {
-    if (c + h + m + l === 0) return 100
-    const penalty = c * 12 + h * 5 + m * 2 + l * 0.5
-    return Math.max(5, Math.round(100 / (1 + penalty / 30)))
-  }
+  // Score pondéré par sévérité : 100% = zéro finding (cohérent avec les cartes Compliance).
+  const computeScore = (c: number, h: number, m: number, l: number) =>
+    Math.max(0, 100 - (c * 15 + h * 12 + m * 4 + l * 1))
 
   const sastVulns = vulns.filter(v => v.type === 'SAST')
   const dastVulns = vulns.filter(v => v.type === 'DAST')

@@ -9,7 +9,7 @@ import {
   Download, UserPlus, CheckCircle2, ExternalLink, Scan,
 } from 'lucide-react'
 import { ScanTabHeader, type ScanRecord, ScanStatusBadge } from './scan-tab-header'
-import { fetchScanVulnerabilities } from '@/lib/security-client'
+import { fetchScanVulnerabilities, updateVulnStatus, assignVuln } from '@/lib/security-client'
 
 interface VulnRecord {
   id: number
@@ -48,7 +48,11 @@ function sevBorder(s: string) {
   }
 }
 
-function DastFindingCard({ v }: { v: VulnRecord }) {
+function DastFindingCard({ v, onResolve, onAssign }: {
+  v: VulnRecord
+  onResolve: (id: number) => void
+  onAssign: (id: number) => void
+}) {
   const [open, setOpen] = useState(false)
   return (
     <div className={`border rounded-lg p-4 border-l-4 transition-all hover:shadow-sm ${sevBorder(v.severity)}`}>
@@ -102,9 +106,17 @@ function DastFindingCard({ v }: { v: VulnRecord }) {
             </div>
           )}
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="text-xs h-7"><ExternalLink className="h-3 w-3 mr-1" />Details</Button>
-            <Button variant="outline" size="sm" className="text-xs h-7"><UserPlus className="h-3 w-3 mr-1" />Assigner</Button>
-            <Button variant="outline" size="sm" className="text-xs h-7"><CheckCircle2 className="h-3 w-3 mr-1" />Resolu</Button>
+            {v.cweId && (
+              <a href={`https://cwe.mitre.org/data/definitions/${v.cweId.replace(/\D/g, '')}.html`} target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" size="sm" className="text-xs h-7"><ExternalLink className="h-3 w-3 mr-1" />Détails CWE</Button>
+              </a>
+            )}
+            <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => onAssign(v.id)}>
+              <UserPlus className="h-3 w-3 mr-1" />Assigner
+            </Button>
+            <Button variant="outline" size="sm" className="text-xs h-7" disabled={v.status === 'RESOLVED'} onClick={() => onResolve(v.id)}>
+              <CheckCircle2 className="h-3 w-3 mr-1" />{v.status === 'RESOLVED' ? 'Résolu ✓' : 'Marquer résolu'}
+            </Button>
           </div>
         </div>
       )}
@@ -132,6 +144,18 @@ export function DastCenter() {
   const high = vulns.filter(v => v.severity === 'HIGH').length
   const medium = vulns.filter(v => v.severity === 'MEDIUM').length
   const low = vulns.filter(v => v.severity === 'LOW').length
+
+  const handleResolve = useCallback(async (id: number) => {
+    const ok = await updateVulnStatus(id, 'RESOLVED')
+    if (ok) setVulns(prev => prev.map(x => x.id === id ? { ...x, status: 'RESOLVED' } : x))
+  }, [])
+
+  const handleAssign = useCallback(async (id: number) => {
+    const who = window.prompt('Assigner cette vulnérabilité à (nom) :')?.trim()
+    if (!who) return
+    const ok = await assignVuln(id, who)
+    if (ok) setVulns(prev => prev.map(x => x.id === id ? { ...x, assignedTo: who } : x))
+  }, [])
 
   return (
     <div className="space-y-6">
@@ -203,7 +227,7 @@ export function DastCenter() {
               {vulns.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">Aucune alerte detectee</p>
               ) : (
-                vulns.map(v => <DastFindingCard key={v.id} v={v} />)
+                vulns.map(v => <DastFindingCard key={v.id} v={v} onResolve={handleResolve} onAssign={handleAssign} />)
               )}
             </CardContent>
           </Card>

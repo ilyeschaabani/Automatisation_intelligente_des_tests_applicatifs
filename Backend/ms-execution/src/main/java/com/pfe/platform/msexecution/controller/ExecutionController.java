@@ -29,12 +29,6 @@ public class ExecutionController {
     private final ExecutionResultRepository executionResultRepository;
 
 
-    /**
-     * Run a campaign.
-     * Optional body:
-     *   { "runMode": "ALL" }           → run all test cases (default)
-     *   { "runMode": "SELECTED", "testCaseIds": [1, 2, 3] } → run only specified test cases
-     */
     @PostMapping("/run/{campaignId}")
     public ResponseEntity<CampaignRunResponseDto> runCampaign(
             @PathVariable Long campaignId,

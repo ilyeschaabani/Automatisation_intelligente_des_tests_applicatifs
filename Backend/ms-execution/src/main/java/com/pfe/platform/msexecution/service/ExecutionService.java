@@ -156,7 +156,6 @@ public class ExecutionService {
                 .orElse(null);
         log.info("Environment loaded: {}", env != null ? env.getId() : "NULL");
 
-        // Préparation de l'environnement d'exécution (Git externe ou template IA)
         Path repoDir = null;
         try {
             log.info("[CAMPAIGN {}] Preparing base repository (project-level)", campaignId);
@@ -173,13 +172,11 @@ public class ExecutionService {
             return;
         }
 
-        // Récupération des cas de test
         log.info("Fetching test cases for campaign ID: {}", campaignId);
         List<CampaignTestCase> ctcList = campaignTestCaseRepository
                 .findByCampaignIdOrderByExecutionOrder(campaignId);
         log.info("Found {} test cases for campaign", ctcList.size());
 
-        // Filter to selected test cases if specified (SELECTED run mode)
         if (selectedTestCaseIds != null && !selectedTestCaseIds.isEmpty()) {
             java.util.Set<Long> selectedSet = new java.util.HashSet<>(selectedTestCaseIds);
             ctcList = ctcList.stream()
@@ -269,7 +266,7 @@ public class ExecutionService {
                         log.warn("[CAMPAIGN {}] Suite {} not found (TestCase {}), using base repo", campaignId, suiteId, tc.getId());
                     }
                     suiteForWorkDir = suite;
-                    // For UNIT/INTEGRATION suites without their own gitRepoUrl, inherit from environment
+                    // inherit from environment
                     String effectiveSuiteGitUrl = (suite != null && suite.getGitRepoUrl() != null && !suite.getGitRepoUrl().isBlank())
                             ? suite.getGitRepoUrl()
                             : ((env != null && env.getGitRepoUrl() != null && !env.getGitRepoUrl().isBlank()

@@ -7,7 +7,6 @@ import com.pfe.platform.msexecution.entity.UxEvaluation.Status;
 import com.pfe.platform.msexecution.entity.UxNavigationStep;
 import com.pfe.platform.msexecution.repository.UxEvaluationRepository;
 import com.pfe.platform.msexecution.repository.UxNavigationStepRepository;
-import io.github.bonigarcia.wdm.WebDriverManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.openqa.selenium.*;
@@ -183,10 +182,8 @@ public class AgenticEvaluationService {
         streamService.sendInfo(evaluationId, "🚀 Démarrage de l'évaluation UX (moteur IA : " + backend + ")");
         log.info("[UX-AGENT {}] Using vision backend: {}", evaluationId, backend);
         try {
-            // Configuration ChromeDriver — détecte la version de Chrome installée et télécharge le driver correspondant
-            WebDriverManager.chromedriver()
-                    .timeout(15)
-                    .setup();
+            // Selenium Manager (built into Selenium 4.11+) auto-resolves chromedriver
+            // No WebDriverManager.setup() needed — avoids network timeouts
             ChromeOptions opts = new ChromeOptions();
 
             boolean mobileMode = evaluation.getPlatform() == UxEvaluation.Platform.WEB_MOBILE

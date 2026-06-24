@@ -78,6 +78,7 @@ export interface OwaspCategory {
 
 export interface Vulnerability {
   id: string
+  rawId: number
   title: string
   severity: Severity
   type: ScanType

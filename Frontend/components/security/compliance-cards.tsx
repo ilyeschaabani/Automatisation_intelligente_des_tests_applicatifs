@@ -17,6 +17,12 @@ const OWASP_CATALOG = [
   { id: 'A10', name: 'SSRF' },
 ]
 
+// Score pondéré par sévérité : 100% = zéro finding ; chaque vuln pénalise selon sa gravité.
+function weightedScore(vulns: any[]): number {
+  const n = (s: string) => vulns.filter(v => (v.severity || '').toUpperCase() === s).length
+  return Math.max(0, 100 - (n('CRITICAL') * 15 + n('HIGH') * 12 + n('MEDIUM') * 4 + n('LOW') * 1))
+}
+
 interface ComplianceFramework {
   name: string
   version: string
@@ -63,7 +69,9 @@ export function ComplianceCards({ rawVulns, scans }: Props) {
 
     const owaspHits = new Set<string>()
     for (const v of rawVulns) {
-      if (v.owaspCategory) owaspHits.add(v.owaspCategory)
+      // owaspCategory ressemble à "A03:2021 Injection" → on extrait le préfixe "A03"
+      const m = v.owaspCategory ? String(v.owaspCategory).match(/A\d{2}/i) : null
+      if (m) owaspHits.add(m[0].toUpperCase())
     }
     const owaspPassed = OWASP_CATALOG.filter(c => !owaspHits.has(c.id)).length
     const owaspFailed = 10 - owaspPassed
@@ -80,11 +88,7 @@ export function ComplianceCards({ rawVulns, scans }: Props) {
     const sastCompleted = sastScans.filter(s => s.status === 'COMPLETED').length
     const sastTotal = Math.max(sastScans.length, 1)
     const sastVulns = rawVulns.filter((v: any) => (v.vulnType || '').toUpperCase() === 'SAST')
-    const sastCritHigh = sastVulns.filter((v: any) => {
-      const s = (v.severity || '').toUpperCase()
-      return s === 'CRITICAL' || s === 'HIGH'
-    }).length
-    const sastScore = sastCompleted > 0 ? Math.max(0, 100 - sastCritHigh * 15) : 0
+    const sastScore = sastCompleted > 0 ? weightedScore(sastVulns) : 0
     result.push({
       name: 'Secure Coding',
       version: 'SAST',
@@ -98,11 +102,7 @@ export function ComplianceCards({ rawVulns, scans }: Props) {
     const dastCompleted = dastScans.filter(s => s.status === 'COMPLETED').length
     const dastTotal = Math.max(dastScans.length, 1)
     const dastVulns = rawVulns.filter((v: any) => (v.vulnType || '').toUpperCase() === 'DAST')
-    const dastCritHigh = dastVulns.filter((v: any) => {
-      const s = (v.severity || '').toUpperCase()
-      return s === 'CRITICAL' || s === 'HIGH'
-    }).length
-    const dastScore = dastCompleted > 0 ? Math.max(0, 100 - dastCritHigh * 12) : 0
+    const dastScore = dastCompleted > 0 ? weightedScore(dastVulns) : 0
     result.push({
       name: 'Infrastructure',
       version: 'DAST',
@@ -116,11 +116,7 @@ export function ComplianceCards({ rawVulns, scans }: Props) {
     const scaCompleted = scaScans.filter(s => s.status === 'COMPLETED').length
     const scaTotal = Math.max(scaScans.length, 1)
     const scaVulns = rawVulns.filter((v: any) => (v.vulnType || '').toUpperCase() === 'SCA')
-    const scaCritHigh = scaVulns.filter((v: any) => {
-      const s = (v.severity || '').toUpperCase()
-      return s === 'CRITICAL' || s === 'HIGH'
-    }).length
-    const scaScore = scaCompleted > 0 ? Math.max(0, 100 - scaCritHigh * 10) : 0
+    const scaScore = scaCompleted > 0 ? weightedScore(scaVulns) : 0
     result.push({
       name: 'Dependencies',
       version: 'SCA',

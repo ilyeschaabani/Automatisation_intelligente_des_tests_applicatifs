@@ -86,7 +86,21 @@ function DepFindingCard({ v }: { v: VulnRecord }) {
             </div>
           )}
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="text-xs h-7"><ExternalLink className="h-3 w-3 mr-1" />NVD</Button>
+            {(() => {
+              const cve = (v.title.match(/CVE-\d{4}-\d+/i) || [])[0]
+              const href = cve
+                ? `https://nvd.nist.gov/vuln/detail/${cve}`
+                : v.cweId
+                  ? `https://cwe.mitre.org/data/definitions/${v.cweId.replace(/\D/g, '')}.html`
+                  : 'https://nvd.nist.gov/'
+              return (
+                <a href={href} target="_blank" rel="noopener noreferrer">
+                  <Button variant="outline" size="sm" className="text-xs h-7">
+                    <ExternalLink className="h-3 w-3 mr-1" />{cve ? `Voir ${cve} sur NVD` : 'Référence'}
+                  </Button>
+                </a>
+              )
+            })()}
           </div>
         </div>
       )}

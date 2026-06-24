@@ -12,8 +12,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 
 @Slf4j
-@Component
-@Order(100)
+// @Component  // DÉSACTIVÉ : ne plus injecter de données de sécurité fictives.
+//             Seuls les vrais scans (Semgrep / OWASP ZAP / Dependency-Check) peuplent la base.
 @RequiredArgsConstructor
 public class SecurityDataSeeder implements CommandLineRunner {
 

@@ -241,6 +241,7 @@ export function mapScanToDast(scan: BackendScan, vulns: BackendVuln[]): DastScan
 export function mapToVulnerability(v: BackendVuln): Vulnerability {
   return {
     id: `VULN-${String(v.id).padStart(3, '0')}`,
+    rawId: v.id,
     title: v.title,
     severity: v.severity.toLowerCase() as any,
     type: v.vulnType as any,
