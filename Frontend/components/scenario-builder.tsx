@@ -256,14 +256,12 @@ export function ScenarioBuilder({ skeleton, testDataJson, requestSchemaName, sui
 
     // Fetch REQUEST schema fields first, then generate test data
     const schemaToFetch = requestSchemaName ?? inferRequestSchemaName(selectedMethod?.returnType ?? '')
-    console.log('[ScenarioBuilder] returnType=', selectedMethod?.returnType, 'requestSchemaName=', requestSchemaName, '→ schemaToFetch=', schemaToFetch)
     setStep('4a')
 
     try {
       // Fetch REQUEST schema: try Swagger first, then DTO extraction from git
       let fields: SchemaField[] = []
       if (schemaToFetch) {
-        console.log('[ScenarioBuilder] Fetching Swagger schema:', schemaToFetch)
         const r = await fetch(`/api/llm/swagger?schema=${encodeURIComponent(schemaToFetch)}`)
         if (r.ok) {
           const data = await r.json()
@@ -273,13 +271,11 @@ export function ScenarioBuilder({ skeleton, testDataJson, requestSchemaName, sui
       if (fields.length === 0) {
         const requestDtoName = inferRequestDtoName(selectedMethod)
         if (requestDtoName) {
-          console.log('[ScenarioBuilder] Swagger empty — extracting DTO fields for:', requestDtoName)
           fields = await fetchDtoFields(requestDtoName)
         }
       }
       if (fields.length > 0) {
         setRequestFields(fields)
-        console.log('[ScenarioBuilder] Request fields resolved:', fields.length)
       }
 
       // Generate test data using LLM
@@ -296,7 +292,6 @@ export function ScenarioBuilder({ skeleton, testDataJson, requestSchemaName, sui
           required: f.required,
         })),
       }
-      console.log('[ScenarioBuilder] generate-testdata payload:', JSON.stringify(payload).substring(0, 500))
 
       const res = await fetch('/api/llm/generate-testdata', {
         method: 'POST',
@@ -304,18 +299,13 @@ export function ScenarioBuilder({ skeleton, testDataJson, requestSchemaName, sui
         body: JSON.stringify(payload),
       })
 
-      console.log('[ScenarioBuilder] generate-testdata response status:', res.status)
       if (res.ok) {
         const data = await res.json()
-        console.log('[ScenarioBuilder] Generated testData:', data.testData)
         setValidatedTestData(data.testData ?? '{}')
       } else {
-        const errText = await res.text()
-        console.error('[ScenarioBuilder] generate-testdata FAILED:', res.status, errText)
         setValidatedTestData(testDataJson || '{}')
       }
-    } catch (err) {
-      console.error('[ScenarioBuilder] Error in handleScenarioSelect:', err)
+    } catch {
       setValidatedTestData(testDataJson || '{}')
     } finally {
       setGeneratingTestData(false)

@@ -30,6 +30,14 @@ public class ZapScanService {
     @Value("${security.zap.timeout-minutes:15}")
     private int timeoutMinutes;
 
+    /** Minutes max pour le spider (découverte des URLs). */
+    @Value("${security.zap.spider-minutes:1}")
+    private int spiderMinutes;
+
+    /** Minutes max d'attente du passive scan (borne le temps total du scan). */
+    @Value("${security.zap.scan-minutes:3}")
+    private int scanMinutes;
+
     private static final Map<String, SecurityVulnerability.Severity> RISK_MAP = Map.of(
             "0", SecurityVulnerability.Severity.INFO,
             "1", SecurityVulnerability.Severity.LOW,
@@ -81,10 +89,22 @@ public class ZapScanService {
                 return List.of();
             }
 
-            return parseResults(reportFile, effectiveUrl);
+            // On parse en remettant l'URL d'origine (pas le hostname Docker interne).
+            return parseResults(reportFile, targetUrl);
         } finally {
             Files.deleteIfExists(reportFile);
         }
+    }
+
+    /** Remplace host.docker.internal (usage interne Docker) par l'host réel pour l'affichage. */
+    private String unmapDockerHost(String uri, String originalUrl) {
+        if (uri == null || uri.isBlank() || !uri.contains("host.docker.internal")) return uri;
+        String host = "localhost";
+        try {
+            String h = java.net.URI.create(originalUrl).getHost();
+            if (h != null && !h.isBlank()) host = h;
+        } catch (Exception ignored) {}
+        return uri.replace("host.docker.internal", host);
     }
 
     private String resolveDockerUrl(String url) {
@@ -106,6 +126,8 @@ public class ZapScanService {
                 "zap-baseline.py",
                 "-t", targetUrl,
                 "-J", reportName,
+                "-m", String.valueOf(spiderMinutes),  // spider borné (défaut 1 min)
+                "-T", String.valueOf(scanMinutes),     // passive scan borné (défaut 3 min)
                 "-I"
         );
     }
@@ -144,7 +166,7 @@ public class ZapScanService {
                 JsonNode instances = alert.path("instances");
                 if (instances.isArray() && instances.size() > 0) {
                     JsonNode first = instances.get(0);
-                    v.setEndpoint(first.path("uri").asText(""));
+                    v.setEndpoint(unmapDockerHost(first.path("uri").asText(""), targetUrl));
                     v.setHttpMethod(first.path("method").asText(""));
                     v.setParameter(first.path("param").asText(""));
                     if (v.getEvidence() == null || v.getEvidence().isEmpty()) {

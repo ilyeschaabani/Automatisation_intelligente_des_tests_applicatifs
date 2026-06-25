@@ -555,13 +555,27 @@ public class AgenticEvaluationService {
             evaluation.setErrorMessage(e.getMessage());
             evaluation.setDurationMs(Duration.between(startedAt, Instant.now()).toMillis());
             evaluationRepository.save(evaluation);
-            streamService.sendFailed(evaluationId, e.getMessage() != null ? e.getMessage() : "Erreur inconnue");
+            streamService.sendFailed(evaluationId, sanitizeError(e));
         } finally {
             humanInputService.cancel(evaluationId); // release any pending HITL future
             if (driver != null) {
                 try { driver.quit(); } catch (Exception ignored) {}
             }
         }
+    }
+
+    /** Message d'erreur lisible pour l'utilisateur : retire stacktraces et dumps techniques. */
+    private String sanitizeError(Throwable e) {
+        String msg = e.getMessage();
+        if (msg == null || msg.isBlank()) return "Une erreur technique est survenue pendant l'évaluation.";
+        int cut = msg.length();
+        for (String marker : new String[]{"{\"value\"", "stacktrace", "\n\tat ", "\n    at ", "UnknownError", "\tat "}) {
+            int i = msg.indexOf(marker);
+            if (i >= 0 && i < cut) cut = i;
+        }
+        String clean = msg.substring(0, cut).trim();
+        if (clean.isEmpty()) clean = msg.substring(0, Math.min(msg.length(), 160)).trim();
+        return clean.length() > 200 ? clean.substring(0, 200) + "…" : clean;
     }
 
     // Construction des prompts
@@ -1378,7 +1392,7 @@ public class AgenticEvaluationService {
             evaluation.setErrorMessage(e.getMessage());
             evaluation.setDurationMs(Duration.between(startedAt, Instant.now()).toMillis());
             evaluationRepository.save(evaluation);
-            streamService.sendFailed(evaluationId, e.getMessage() != null ? e.getMessage() : "Erreur inconnue");
+            streamService.sendFailed(evaluationId, sanitizeError(e));
         } finally {
             humanInputService.cancel(evaluationId);
             appiumDriverService.deleteSession();

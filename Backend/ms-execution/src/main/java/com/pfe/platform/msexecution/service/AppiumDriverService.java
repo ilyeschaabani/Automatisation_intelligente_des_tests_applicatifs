@@ -44,28 +44,49 @@ public class AppiumDriverService {
     public int getScreenHeight() { return screenHeight; }
 
     public void ensureEmulatorRunning() throws Exception {
-        if (isContainerRunning()) {
-            log.info("[APPIUM] Android emulator container already running");
-        } else if (isContainerExists()) {
-            log.info("[APPIUM] Starting existing container {}", CONTAINER_NAME);
-            exec("docker", "start", CONTAINER_NAME);
-        } else {
-            log.info("[APPIUM] Pulling and starting Android emulator container...");
-            exec("docker", "run", "-d",
-                    "--name", CONTAINER_NAME,
-                    "--privileged",
-                    "--device", "/dev/kvm",
-                    "--group-add", kvmGroupId(),
-                    "-p", APPIUM_PORT + ":4723",
-                    "-p", "6090:6080",
-                    "-e", "EMULATOR_DEVICE=Samsung Galaxy S10",
-                    "-e", "WEB_VNC=true",
-                    "-e", "APPIUM=true",
-                    DOCKER_IMAGE);
+        // Si le conteneur tourne déjà ET que le device est booté, on le réutilise.
+        if (isContainerRunning() && isDeviceBooted()) {
+            log.info("[APPIUM] Android emulator container already running and booted");
+            return;
         }
+
+        // budtmo/docker-android ne survit PAS à un stop/start : ses services internes
+        // (supervisord, émulateur, Appium) ne redémarrent pas. On recrée donc à neuf
+        // si le conteneur est absent, arrêté, ou démarré mais non fonctionnel.
+        log.info("[APPIUM] (Re)creating fresh Android emulator container...");
+        removeContainerQuietly();
+        exec("docker", "run", "-d",
+                "--name", CONTAINER_NAME,
+                "--privileged",
+                "--device", "/dev/kvm",
+                "--group-add", kvmGroupId(),
+                "-p", APPIUM_PORT + ":4723",
+                "-p", "6090:6080",
+                "-e", "EMULATOR_DEVICE=Samsung Galaxy S10",
+                "-e", "WEB_VNC=true",
+                "-e", "APPIUM=true",
+                DOCKER_IMAGE);
 
         waitForAppiumReady(300);
         waitForDeviceBoot(180);
+    }
+
+    /** Vérifie rapidement que le device Android a fini de booter (sys.boot_completed == 1). */
+    private boolean isDeviceBooted() {
+        try {
+            String out = execOutput("docker", "exec", CONTAINER_NAME,
+                    "adb", "shell", "getprop", "sys.boot_completed");
+            return "1".equals(out.trim());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** Supprime le conteneur (s'il existe) pour repartir d'un état propre. */
+    private void removeContainerQuietly() {
+        try {
+            execOutput("docker", "rm", "-f", CONTAINER_NAME);
+        } catch (Exception ignored) {}
     }
 
     public void copyApkToContainer(String hostApkPath) throws Exception {
