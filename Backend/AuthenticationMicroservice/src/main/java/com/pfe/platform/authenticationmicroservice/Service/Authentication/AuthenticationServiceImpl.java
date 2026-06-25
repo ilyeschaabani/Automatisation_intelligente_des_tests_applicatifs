@@ -24,6 +24,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JWTservice jwtservice;
+    private final com.pfe.platform.authenticationmicroservice.Service.User.UserService userService;
 
     @Override
     public User singUp(SignUpRequest signUpRequest) {
@@ -51,6 +52,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         User user = (User) authentication.getPrincipal();
         String token = jwtservice.generateToken(user);
         String refreshToken = jwtservice.generateRefreshToken(Map.of(), user);
+
+        userService.updateLastLogin(user.getEmail());
 
         JwtAuthenticationResponse response = new JwtAuthenticationResponse();
         response.setToken(token);

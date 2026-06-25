@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,6 +19,7 @@ public class ProjectController {
     private final ProjectService projectService;
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER')")
     public ResponseEntity<ProjectResponse> create(@Valid @RequestBody CreateProjectRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(projectService.create(request));
     }
@@ -33,18 +35,21 @@ public class ProjectController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER')")
     public ResponseEntity<ProjectResponse> update(@PathVariable Long id,
                                                   @Valid @RequestBody CreateProjectRequest request) {
         return ResponseEntity.ok(projectService.update(id, request));
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         projectService.delete(id);
         return ResponseEntity.noContent().build();
     }
 
     @PatchMapping("/{id}/archive")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER')")
     public ResponseEntity<Void> archive(@PathVariable Long id) {
         projectService.archive(id);
         return ResponseEntity.noContent().build();

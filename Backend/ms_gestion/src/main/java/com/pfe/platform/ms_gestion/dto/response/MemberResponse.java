@@ -8,5 +8,4 @@ import lombok.Data;
 @Builder
 public class MemberResponse {
     private Long userId;
-    private String role;
 }

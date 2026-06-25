@@ -533,7 +533,6 @@ public class LlmService {
                 == CONFIGURATION DES MOCKS (section Given) ==
                 - TRACE TOUTES LES MÉTHODES PRIVÉES appelées par la méthode cible. Lis leur code et identifie
                   CHAQUE appel repository/service. Exemples courants à ne PAS oublier :
-                    → checkProjectRole() appelle findByProjectIdAndUserId → mock avec Optional.of(member) + setRole(ADMIN)
                     → checkMembership() appelle existsByProjectIdAndUserId → mock avec thenReturn(true)
                     → getProjectOrThrow() appelle projectRepository.findById → mock avec Optional.of(project)
                   Tu DOIS identifier et mocker TOUTES ces méthodes, pas seulement les plus évidentes.
@@ -560,7 +559,6 @@ public class LlmService {
                   tu DOIS configurer toute la chaîne : environment.setProject(project); project.setId(1L);
                 - Fais ça pour CHAQUE niveau d'imbrication : tc.getSuite().getProject().getId() nécessite
                   tc.setSuite(suite); suite.setProject(project); project.setId(projectId);
-                - Pour Role : si checkProjectRole vérifie member.getRole(), le member DOIT avoir setRole(ProjectMember.Role.ADMIN).
                 - Pour les enums : si le code fait Enum.valueOf(request.getXxx().toUpperCase()), utilise une valeur EXACTE de l'enum.
                   Exemple : TriggerMode.valueOf("MANUAL") → request.setTriggerMode("MANUAL").
                   Regarde les valeurs de l'enum dans les CLASSES DÉPENDANTES ci-dessus.
@@ -575,9 +573,8 @@ public class LlmService {
                 == VERIFY (section Then) ==
                 - INTERDIT d'utiliser verifyNoMoreInteractions() — ça casse quand un mock a des appels internes.
                 - Ne verify QUE les méthodes qui sont RÉELLEMENT appelées dans le chemin d'exécution testé.
-                - TRACE le code : si add() appelle checkProjectRole() qui appelle findByProjectIdAndUserId(),
-                  verify findByProjectIdAndUserId() (car c'est RÉELLEMENT appelé),
-                  NE PAS verify existsByProjectIdAndUserId() (car c'est checkMembership, pas checkProjectRole).
+                - TRACE le code : si add() appelle checkMembership() qui appelle existsByProjectIdAndUserId(),
+                  verify existsByProjectIdAndUserId() (car c'est RÉELLEMENT appelé).
                 - En cas de doute, ne verify PAS — les assertions sur le résultat suffisent.
 
                 == STRUCTURE DU TEST ==
@@ -616,7 +613,7 @@ public class LlmService {
                 == PRÉPARATION DES DONNÉES (@BeforeMethod) ==
                 - Trace l'exécution de la méthode cible (Y COMPRIS les méthodes privées) pour identifier TOUTES les entités pré-requises.
                 - Exemple : si create() appelle getProjectOrThrow(projectId), tu DOIS insérer un Project en DB avant le test.
-                - Exemple : si checkProjectRole() appelle findByProjectIdAndUserId(), tu DOIS insérer un ProjectMember avec le bon rôle.
+                - Exemple : si checkMembership() appelle existsByProjectIdAndUserId(), tu DOIS insérer un ProjectMember en DB.
                 - Utilise les repositories @Autowired pour faire les save() dans @BeforeMethod.
                 - Stocke les IDs générés dans des champs de la classe de test (private Long projectId, private Long envId...).
                 - ANTI-NPE : si le code fait env.getProject().getId(), l'entité Environment en DB DOIT avoir un Project associé.

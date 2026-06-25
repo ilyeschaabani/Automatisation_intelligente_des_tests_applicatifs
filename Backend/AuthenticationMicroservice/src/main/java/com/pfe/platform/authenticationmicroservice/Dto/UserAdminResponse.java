@@ -6,11 +6,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.Instant;
 import java.util.Set;
 
-/**
- * Vue d'un utilisateur pour l'ecran d'administration des roles.
- */
 @Data
 @Builder
 @NoArgsConstructor
@@ -24,4 +22,8 @@ public class UserAdminResponse {
     private String githubUsername;
     private Boolean githubConnected;
     private Set<GlobalRole> roles;
+    private Boolean enabled;
+    private Boolean superAdmin;
+    private Instant createdAt;
+    private Instant lastLoginAt;
 }

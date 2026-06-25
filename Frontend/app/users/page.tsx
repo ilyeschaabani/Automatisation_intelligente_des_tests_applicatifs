@@ -1,279 +1,436 @@
+'use client'
+
+import { Fragment, useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { Header } from '@/components/header'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { Plus, Edit2, Trash2, Shield } from 'lucide-react'
+import {
+  Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription,
+} from '@/components/ui/dialog'
+import { Plus, Edit2, Trash2, Shield, Eye, EyeOff, Users, UserCheck, ShieldCheck } from 'lucide-react'
+import {
+  type UserAdmin, type GlobalRole,
+  ROLE_LABELS, ROLE_COLORS, ASSIGNABLE_ROLES, ROLE_DESCRIPTIONS,
+} from '@/types/user-admin'
 
-const users = [
+function getInitials(user: UserAdmin): string {
+  if (user.nom && user.prenom) {
+    return `${user.prenom[0]}${user.nom[0]}`.toUpperCase()
+  }
+  return user.email.substring(0, 2).toUpperCase()
+}
+
+function getDisplayName(user: UserAdmin): string {
+  if (user.prenom && user.nom) return `${user.prenom} ${user.nom}`
+  if (user.prenom) return user.prenom
+  if (user.nom) return user.nom
+  return user.email
+}
+
+function formatDate(iso: string | null): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  return d.toLocaleDateString('fr-FR', { year: 'numeric', month: '2-digit', day: '2-digit' })
+}
+
+function formatDateTime(iso: string | null): string {
+  if (!iso) return 'Jamais'
+  const d = new Date(iso)
+  return d.toLocaleDateString('fr-FR', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+  })
+}
+
+// ─── Permission matrix ────────────────────────────────────────
+type PermissionEntry = { label: string; roles: GlobalRole[] }
+type PermissionGroup = { group: string; permissions: PermissionEntry[] }
+
+const PERMISSION_GROUPS: PermissionGroup[] = [
   {
-    id: 1,
-    name: 'Ahmed Ben Ali',
-    email: 'ahmed.benali@bankingcorp.com',
-    role: 'Admin',
-    status: 'Active',
-    joinDate: '2024-01-15',
-    lastLogin: '2024-02-11 14:20',
+    group: 'Gestion des utilisateurs',
+    permissions: [
+      { label: 'Créer / supprimer des utilisateurs', roles: ['ADMIN'] },
+      { label: 'Affecter / modifier les rôles', roles: ['ADMIN'] },
+      { label: 'Activer / désactiver un compte', roles: ['ADMIN'] },
+    ],
   },
   {
-    id: 2,
-    name: 'Fatima Karim',
-    email: 'fatima.karim@bankingcorp.com',
-    role: 'Test Manager',
-    status: 'Active',
-    joinDate: '2024-01-20',
-    lastLogin: '2024-02-11 10:35',
+    group: 'Projets',
+    permissions: [
+      { label: 'Créer un projet', roles: ['ADMIN', 'TEST_MANAGER'] },
+      { label: 'Modifier / archiver un projet', roles: ['ADMIN', 'TEST_MANAGER'] },
+      { label: 'Supprimer un projet', roles: ['ADMIN'] },
+      { label: 'Consulter les projets', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER', 'DEVELOPER', 'VIEWER'] },
+      { label: 'Gérer les membres du projet', roles: ['ADMIN', 'TEST_MANAGER'] },
+    ],
   },
   {
-    id: 3,
-    name: 'Mohamed Hassan',
-    email: 'mohamed.hassan@bankingcorp.com',
-    role: 'QA Engineer',
-    status: 'Active',
-    joinDate: '2024-02-01',
-    lastLogin: '2024-02-10 16:45',
+    group: 'Environnements',
+    permissions: [
+      { label: 'Créer / modifier un environnement', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER'] },
+      { label: 'Supprimer un environnement', roles: ['ADMIN', 'TEST_MANAGER'] },
+    ],
   },
   {
-    id: 4,
-    name: 'Leila Souissi',
-    email: 'leila.souissi@bankingcorp.com',
-    role: 'QA Engineer',
-    status: 'Active',
-    joinDate: '2024-02-03',
-    lastLogin: '2024-02-11 09:10',
+    group: 'Suites de tests',
+    permissions: [
+      { label: 'Créer / modifier une suite', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER'] },
+      { label: 'Supprimer une suite', roles: ['ADMIN', 'TEST_MANAGER'] },
+    ],
   },
   {
-    id: 5,
-    name: 'Karim Bouzidi',
-    email: 'karim.bouzidi@bankingcorp.com',
-    role: 'DevOps Engineer',
-    status: 'Inactive',
-    joinDate: '2024-01-25',
-    lastLogin: '2024-02-05 11:20',
+    group: 'Cas de test',
+    permissions: [
+      { label: 'Créer / modifier un cas de test', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER'] },
+      { label: 'Supprimer un cas de test', roles: ['ADMIN', 'TEST_MANAGER'] },
+      { label: 'Générer des tests via IA (LLM)', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER'] },
+    ],
   },
   {
-    id: 6,
-    name: 'Amina Belkebir',
-    email: 'amina.belkebir@bankingcorp.com',
-    role: 'Viewer',
-    status: 'Active',
-    joinDate: '2024-02-08',
-    lastLogin: '2024-02-11 13:00',
+    group: 'Campagnes',
+    permissions: [
+      { label: 'Créer une campagne', roles: ['ADMIN', 'TEST_MANAGER'] },
+      { label: 'Modifier / ajouter des tests', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER'] },
+      { label: 'Supprimer une campagne', roles: ['ADMIN', 'TEST_MANAGER'] },
+    ],
+  },
+  {
+    group: 'Exécution',
+    permissions: [
+      { label: 'Lancer une campagne', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER'] },
+      { label: 'Arrêter une exécution en cours', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER'] },
+      { label: 'Consulter les résultats d\'exécution', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER', 'DEVELOPER', 'VIEWER'] },
+      { label: 'Consulter l\'analyse IA des échecs', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER', 'DEVELOPER', 'VIEWER'] },
+    ],
+  },
+  {
+    group: 'Rapports',
+    permissions: [
+      { label: 'Générer un rapport PDF', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER'] },
+      { label: 'Télécharger un rapport', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER', 'DEVELOPER', 'VIEWER'] },
+      { label: 'Consulter les KPIs / tableaux de bord', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER', 'DEVELOPER', 'VIEWER'] },
+    ],
+  },
+  {
+    group: 'Évaluation UX',
+    permissions: [
+      { label: 'Créer une évaluation UX', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER'] },
+      { label: 'Lancer / pause / arrêter', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER'] },
+      { label: 'Consulter les résultats', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER', 'DEVELOPER', 'VIEWER'] },
+    ],
+  },
+  {
+    group: 'Sécurité & conformité',
+    permissions: [
+      { label: 'Lancer un scan (SAST / DAST / SCA)', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER'] },
+      { label: 'Consulter les vulnérabilités', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER', 'DEVELOPER', 'VIEWER'] },
+      { label: 'Modifier le statut d\'une vulnérabilité', roles: ['ADMIN', 'TEST_MANAGER'] },
+      { label: 'Télécharger un rapport de sécurité', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER', 'DEVELOPER'] },
+    ],
+  },
+  {
+    group: 'GitHub & intégration',
+    permissions: [
+      { label: 'Connecter / déconnecter GitHub', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER', 'DEVELOPER'] },
+      { label: 'Parcourir les repos / fichiers', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER', 'DEVELOPER'] },
+    ],
+  },
+  {
+    group: 'Paramètres système',
+    permissions: [
+      { label: 'Accéder aux paramètres globaux', roles: ['ADMIN'] },
+    ],
   },
 ]
 
-const roleConfig = {
-  Admin: 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-400',
-  'Test Manager': 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-400',
-  'QA Engineer': 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-400',
-  'DevOps Engineer': 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400',
-  Viewer: 'bg-gray-100 text-gray-800 dark:bg-gray-950 dark:text-gray-400',
-}
-
-const statusConfig = {
-  Active: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400',
-  Inactive: 'bg-gray-100 text-gray-800 dark:bg-gray-950 dark:text-gray-400',
-}
+const MATRIX_ROLES: GlobalRole[] = ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER', 'DEVELOPER', 'VIEWER']
 
 export default function UsersPage() {
+  const router = useRouter()
+  const [users, setUsers] = useState<UserAdmin[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
+  // Modal states
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [editUser, setEditUser] = useState<UserAdmin | null>(null)
+  const [rolesUser, setRolesUser] = useState<UserAdmin | null>(null)
+  const [deleteUser, setDeleteUser] = useState<UserAdmin | null>(null)
+
+  // Current user email and roles from JWT
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null)
+
+  const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }, [])
+
+  const fetchUsers = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/users')
+      if (!res.ok) throw new Error('Erreur de chargement')
+      const data = await res.json()
+      setUsers(data)
+      setError(null)
+    } catch {
+      setError('Impossible de charger les utilisateurs')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchUsers()
+    // Decode current user email and roles from JWT in localStorage
+    try {
+      const token = localStorage.getItem('access_token')
+      if (token) {
+        const payload = JSON.parse(atob(token.split('.')[1]))
+        setCurrentUserEmail(payload.sub || null)
+        const roles: string[] = Array.isArray(payload.roles) ? payload.roles : []
+        if (!roles.includes('ADMIN')) {
+          router.replace('/dashboard')
+          return
+        }
+      }
+    } catch { /* ignore */ }
+  }, [fetchUsers])
+
+  // Stats
+  const totalUsers = users.length
+  const activeUsers = users.filter(u => u.enabled).length
+  const adminUsers = users.filter(u => u.roles?.includes('ADMIN')).length
+
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
-
       <main className="flex-1 lg:ml-0 pt-16 lg:pt-0">
         <Header />
-
         <div className="p-6 max-w-7xl">
+          {/* Toast */}
+          {toast && (
+            <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-white transition-all ${
+              toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'
+            }`}>
+              {toast.message}
+            </div>
+          )}
+
           {/* Page Header */}
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Users & Roles</h1>
-              <p className="text-muted-foreground mt-1">
-                Manage user access and permissions
-              </p>
+              <h1 className="text-3xl font-bold text-foreground">Utilisateurs & Rôles</h1>
+              <p className="text-muted-foreground mt-1">Gérer les accès et permissions des utilisateurs</p>
             </div>
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
+            <Button onClick={() => setShowAddModal(true)} className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
               <Plus size={20} />
-              Add User
+              Ajouter un utilisateur
             </Button>
           </div>
 
           {/* Summary */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <Card className="p-6">
-              <p className="text-sm text-muted-foreground">Total Users</p>
-              <p className="text-3xl font-bold text-foreground mt-2">6</p>
+            <Card className="p-6 flex items-center gap-4">
+              <div className="p-3 rounded-lg bg-blue-100 dark:bg-blue-950">
+                <Users className="text-blue-600 dark:text-blue-400" size={24} />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Total utilisateurs</p>
+                <p className="text-3xl font-bold text-foreground">{totalUsers}</p>
+              </div>
             </Card>
-            <Card className="p-6">
-              <p className="text-sm text-muted-foreground">Active Users</p>
-              <p className="text-3xl font-bold text-foreground mt-2">5</p>
+            <Card className="p-6 flex items-center gap-4">
+              <div className="p-3 rounded-lg bg-green-100 dark:bg-green-950">
+                <UserCheck className="text-green-600 dark:text-green-400" size={24} />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Utilisateurs actifs</p>
+                <p className="text-3xl font-bold text-foreground">{activeUsers}</p>
+              </div>
             </Card>
-            <Card className="p-6">
-              <p className="text-sm text-muted-foreground">Admin Users</p>
-              <p className="text-3xl font-bold text-foreground mt-2">1</p>
+            <Card className="p-6 flex items-center gap-4">
+              <div className="p-3 rounded-lg bg-red-100 dark:bg-red-950">
+                <ShieldCheck className="text-red-600 dark:text-red-400" size={24} />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Administrateurs</p>
+                <p className="text-3xl font-bold text-foreground">{adminUsers}</p>
+              </div>
             </Card>
           </div>
 
           {/* Users Table */}
-          <Card className="overflow-hidden">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-b border-border">
-                    <TableHead className="text-left">Name</TableHead>
-                    <TableHead className="text-left">Email</TableHead>
-                    <TableHead className="text-center">Role</TableHead>
-                    <TableHead className="text-center">Status</TableHead>
-                    <TableHead className="text-center">Join Date</TableHead>
-                    <TableHead className="text-center">Last Login</TableHead>
-                    <TableHead className="text-center">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {users.map((user) => (
-                    <TableRow
-                      key={user.id}
-                      className="border-b border-border hover:bg-secondary/50"
-                    >
-                      <TableCell className="font-medium text-foreground">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center">
-                            <span className="text-xs font-bold text-primary-foreground">
-                              {user.name
-                                .split(' ')
-                                .map((n) => n[0])
-                                .join('')}
-                            </span>
-                          </div>
-                          {user.name}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {user.email}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge
-                          variant="outline"
-                          className={
-                            roleConfig[user.role as keyof typeof roleConfig]
-                          }
-                        >
-                          {user.role}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge
-                          variant="outline"
-                          className={
-                            statusConfig[user.status as keyof typeof statusConfig]
-                          }
-                        >
-                          {user.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center text-muted-foreground">
-                        {user.joinDate}
-                      </TableCell>
-                      <TableCell className="text-center text-muted-foreground text-sm">
-                        {user.lastLogin}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <Button variant="ghost" size="sm">
-                            <Edit2 size={16} />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive hover:bg-destructive/10"
-                          >
-                            <Trash2 size={16} />
-                          </Button>
-                        </div>
-                      </TableCell>
+          {loading ? (
+            <Card className="p-12 text-center text-muted-foreground">Chargement...</Card>
+          ) : error ? (
+            <Card className="p-12 text-center text-red-500">{error}</Card>
+          ) : (
+            <Card className="overflow-hidden">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-b border-border">
+                      <TableHead className="text-left">Nom</TableHead>
+                      <TableHead className="text-left">Email</TableHead>
+                      <TableHead className="text-center">Rôles</TableHead>
+                      <TableHead className="text-center">Statut</TableHead>
+                      <TableHead className="text-center">Date d&apos;inscription</TableHead>
+                      <TableHead className="text-center">Dernière connexion</TableHead>
+                      <TableHead className="text-center">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {users.map((user) => (
+                      <TableRow key={user.id} className="border-b border-border hover:bg-secondary/50">
+                        <TableCell className="font-medium text-foreground">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center flex-shrink-0">
+                              <span className="text-xs font-bold text-primary-foreground">
+                                {getInitials(user)}
+                              </span>
+                            </div>
+                            {getDisplayName(user)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{user.email}</TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex flex-wrap gap-1 justify-center">
+                            {user.roles && user.roles.length > 0 ? (
+                              user.roles.map(role => (
+                                <Badge key={role} variant="outline" className={ROLE_COLORS[role] || ''}>
+                                  {ROLE_LABELS[role] || role}
+                                </Badge>
+                              ))
+                            ) : (
+                              <span className="text-xs text-muted-foreground italic">Aucun rôle</span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="outline" className={
+                            user.enabled
+                              ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400'
+                              : 'bg-gray-100 text-gray-800 dark:bg-gray-950 dark:text-gray-400'
+                          }>
+                            {user.enabled ? 'Actif' : 'Inactif'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center text-muted-foreground">
+                          {formatDate(user.createdAt)}
+                        </TableCell>
+                        <TableCell className="text-center text-muted-foreground text-sm">
+                          {formatDateTime(user.lastLoginAt)}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <Button variant="ghost" size="sm" title="Modifier le profil"
+                              onClick={() => setEditUser(user)}>
+                              <Edit2 size={16} />
+                            </Button>
+                            {!user.superAdmin && (
+                              <Button variant="ghost" size="sm" title="Gérer les rôles"
+                                onClick={() => setRolesUser(user)}>
+                                <Shield size={16} className="text-blue-500" />
+                              </Button>
+                            )}
+                            {user.superAdmin ? (
+                              <span className="text-xs text-muted-foreground px-2" title="Compte protégé">🔒</span>
+                            ) : (
+                              <>
+                                <Button variant="ghost" size="sm"
+                                  title={user.enabled ? 'Désactiver' : 'Activer'}
+                                  onClick={async () => {
+                                    try {
+                                      const res = await fetch(`/api/admin/users/${user.id}/status`, {
+                                        method: 'PATCH',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ enabled: !user.enabled }),
+                                      })
+                                      if (!res.ok) {
+                                        const data = await res.json().catch(() => ({}))
+                                        throw new Error(data.message || 'Erreur')
+                                      }
+                                      const updated = await res.json()
+                                      setUsers(prev => prev.map(u => u.id === user.id ? updated : u))
+                                      showToast(updated.enabled ? 'Utilisateur activé' : 'Utilisateur désactivé')
+                                    } catch (err: unknown) {
+                                      showToast(err instanceof Error ? err.message : 'Erreur', 'error')
+                                    }
+                                  }}>
+                                  {user.enabled
+                                    ? <EyeOff size={16} className="text-orange-500" />
+                                    : <Eye size={16} className="text-green-500" />}
+                                </Button>
+                                <Button variant="ghost" size="sm"
+                                  className="text-destructive hover:bg-destructive/10"
+                                  title="Supprimer"
+                                  onClick={() => setDeleteUser(user)}>
+                                  <Trash2 size={16} />
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </Card>
+          )}
 
-          {/* Role Permissions */}
+          {/* Role Permissions Matrix */}
           <Card className="p-6 mt-8">
             <div className="flex items-center gap-3 mb-6">
               <Shield className="text-primary" />
-              <h2 className="text-lg font-bold text-foreground">
-                Role Permissions
-              </h2>
+              <h2 className="text-lg font-bold text-foreground">Matrice des permissions</h2>
             </div>
-
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="text-left py-3 px-4 font-semibold text-foreground">
-                      Permission
-                    </th>
-                    <th className="text-center py-3 px-4 font-semibold text-foreground">
-                      Admin
-                    </th>
-                    <th className="text-center py-3 px-4 font-semibold text-foreground">
-                      Test Manager
-                    </th>
-                    <th className="text-center py-3 px-4 font-semibold text-foreground">
-                      QA Engineer
-                    </th>
-                    <th className="text-center py-3 px-4 font-semibold text-foreground">
-                      Viewer
-                    </th>
+                    <th className="text-left py-3 px-4 font-semibold text-foreground min-w-[240px]">Permission</th>
+                    {MATRIX_ROLES.map(role => (
+                      <th key={role} className="text-center py-3 px-4 font-semibold text-foreground">
+                        {ROLE_LABELS[role]}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {[
-                    'Create Campaigns',
-                    'Run Tests',
-                    'View Results',
-                    'Generate Reports',
-                    'Manage Users',
-                    'System Settings',
-                  ].map((permission) => (
-                    <tr key={permission} className="border-b border-border">
-                      <td className="py-3 px-4 text-foreground">{permission}</td>
-                      <td className="text-center py-3 px-4">
-                        <span className="text-green-600 dark:text-green-400 font-bold">
-                          ✓
-                        </span>
-                      </td>
-                      <td className="text-center py-3 px-4">
-                        <span className="text-green-600 dark:text-green-400 font-bold">
-                          {['Create Campaigns', 'Run Tests', 'View Results', 'Generate Reports'].includes(
-                            permission
-                          )
-                            ? '✓'
-                            : '✗'}
-                        </span>
-                      </td>
-                      <td className="text-center py-3 px-4">
-                        <span className="text-green-600 dark:text-green-400 font-bold">
-                          {['Run Tests', 'View Results', 'Generate Reports'].includes(permission)
-                            ? '✓'
-                            : '✗'}
-                        </span>
-                      </td>
-                      <td className="text-center py-3 px-4">
-                        <span className="text-green-600 dark:text-green-400 font-bold">
-                          {permission === 'View Results' ? '✓' : '✗'}
-                        </span>
-                      </td>
-                    </tr>
+                  {PERMISSION_GROUPS.map(({ group, permissions }) => (
+                    <Fragment key={group}>
+                      <tr className="bg-secondary/50">
+                        <td colSpan={MATRIX_ROLES.length + 1} className="py-2 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          {group}
+                        </td>
+                      </tr>
+                      {permissions.map(({ label, roles }) => (
+                        <tr key={label} className="border-b border-border">
+                          <td className="py-2.5 px-4 text-foreground">{label}</td>
+                          {MATRIX_ROLES.map(role => (
+                            <td key={role} className="text-center py-2.5 px-4">
+                              {roles.includes(role) ? (
+                                <span className="text-green-600 dark:text-green-400 font-bold">✓</span>
+                              ) : (
+                                <span className="text-muted-foreground/40">✗</span>
+                              )}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
@@ -281,6 +438,364 @@ export default function UsersPage() {
           </Card>
         </div>
       </main>
+
+      {/* ─── Add User Modal ─── */}
+      <AddUserModal
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSuccess={(newUser) => {
+          setUsers(prev => [...prev, newUser])
+          setShowAddModal(false)
+          showToast('Utilisateur créé avec succès')
+        }}
+        onError={(msg) => showToast(msg, 'error')}
+      />
+
+      {/* ─── Edit Profile Modal ─── */}
+      <EditProfileModal
+        user={editUser}
+        onClose={() => setEditUser(null)}
+        onSuccess={(updated) => {
+          setUsers(prev => prev.map(u => u.id === updated.id ? updated : u))
+          setEditUser(null)
+          showToast('Profil mis à jour')
+        }}
+        onError={(msg) => showToast(msg, 'error')}
+      />
+
+      {/* ─── Manage Roles Modal ─── */}
+      <ManageRolesModal
+        user={rolesUser}
+        currentUserEmail={currentUserEmail}
+        onClose={() => setRolesUser(null)}
+        onSuccess={(updated) => {
+          setUsers(prev => prev.map(u => u.id === updated.id ? updated : u))
+          setRolesUser(null)
+          showToast('Rôles mis à jour')
+        }}
+        onError={(msg) => showToast(msg, 'error')}
+      />
+
+      {/* ─── Delete Confirmation ─── */}
+      <DeleteConfirmModal
+        user={deleteUser}
+        onClose={() => setDeleteUser(null)}
+        onSuccess={(id) => {
+          setUsers(prev => prev.filter(u => u.id !== id))
+          setDeleteUser(null)
+          showToast('Utilisateur supprimé')
+        }}
+        onError={(msg) => showToast(msg, 'error')}
+      />
     </div>
+  )
+}
+
+// ─── Add User Modal ────────────────────────────────────────────
+function AddUserModal({ open, onClose, onSuccess, onError }: {
+  open: boolean
+  onClose: () => void
+  onSuccess: (user: UserAdmin) => void
+  onError: (msg: string) => void
+}) {
+  const [form, setForm] = useState({ nom: '', prenom: '', email: '', password: '', roles: [] as GlobalRole[] })
+  const [submitting, setSubmitting] = useState(false)
+
+  const reset = () => setForm({ nom: '', prenom: '', email: '', password: '', roles: [] })
+
+  const handleSubmit = async () => {
+    if (!form.email.trim()) return onError('Email requis')
+    if (form.password.length < 6) return onError('Mot de passe: minimum 6 caractères')
+    setSubmitting(true)
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, roles: form.roles }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.message || data.error || `Erreur ${res.status}`)
+      }
+      const created = await res.json()
+      reset()
+      onSuccess(created)
+    } catch (err: unknown) {
+      onError(err instanceof Error ? err.message : 'Erreur de création')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const toggleRole = (role: GlobalRole) => {
+    setForm(prev => ({
+      ...prev,
+      roles: prev.roles.includes(role)
+        ? prev.roles.filter(r => r !== role)
+        : [...prev.roles, role],
+    }))
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { reset(); onClose() } }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Ajouter un utilisateur</DialogTitle>
+          <DialogDescription>Créer un nouveau compte avec les rôles sélectionnés</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Prénom</Label>
+              <Input value={form.prenom} onChange={e => setForm(f => ({ ...f, prenom: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Nom</Label>
+              <Input value={form.nom} onChange={e => setForm(f => ({ ...f, nom: e.target.value }))} />
+            </div>
+          </div>
+          <div>
+            <Label>Email *</Label>
+            <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+          </div>
+          <div>
+            <Label>Mot de passe *</Label>
+            <Input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
+            <p className="text-xs text-muted-foreground mt-1">Minimum 6 caractères</p>
+          </div>
+          <div>
+            <Label>Rôles</Label>
+            <div className="space-y-2 mt-2">
+              {ASSIGNABLE_ROLES.map(role => (
+                <label key={role} className="flex items-center gap-3 cursor-pointer">
+                  <Checkbox
+                    checked={form.roles.includes(role)}
+                    onCheckedChange={() => toggleRole(role)}
+                  />
+                  <div>
+                    <span className="font-medium text-sm">{ROLE_LABELS[role]}</span>
+                    <span className="text-xs text-muted-foreground ml-2">— {ROLE_DESCRIPTIONS[role]}</span>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => { reset(); onClose() }}>Annuler</Button>
+          <Button onClick={handleSubmit} disabled={submitting}>
+            {submitting ? 'Création...' : 'Créer'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── Edit Profile Modal ────────────────────────────────────────
+function EditProfileModal({ user, onClose, onSuccess, onError }: {
+  user: UserAdmin | null
+  onClose: () => void
+  onSuccess: (user: UserAdmin) => void
+  onError: (msg: string) => void
+}) {
+  const [nom, setNom] = useState('')
+  const [prenom, setPrenom] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (user) {
+      setNom(user.nom || '')
+      setPrenom(user.prenom || '')
+    }
+  }, [user])
+
+  const handleSubmit = async () => {
+    if (!user) return
+    setSubmitting(true)
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}/profile`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nom, prenom }),
+      })
+      if (!res.ok) throw new Error('Erreur de mise à jour')
+      const updated = await res.json()
+      onSuccess(updated)
+    } catch (err: unknown) {
+      onError(err instanceof Error ? err.message : 'Erreur')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Dialog open={!!user} onOpenChange={(v) => { if (!v) onClose() }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Modifier le profil</DialogTitle>
+          <DialogDescription>{user?.email}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div>
+            <Label>Prénom</Label>
+            <Input value={prenom} onChange={e => setPrenom(e.target.value)} />
+          </div>
+          <div>
+            <Label>Nom</Label>
+            <Input value={nom} onChange={e => setNom(e.target.value)} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Annuler</Button>
+          <Button onClick={handleSubmit} disabled={submitting}>
+            {submitting ? 'Enregistrement...' : 'Enregistrer'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── Manage Roles Modal ────────────────────────────────────────
+function ManageRolesModal({ user, currentUserEmail, onClose, onSuccess, onError }: {
+  user: UserAdmin | null
+  currentUserEmail: string | null
+  onClose: () => void
+  onSuccess: (user: UserAdmin) => void
+  onError: (msg: string) => void
+}) {
+  const [selectedRoles, setSelectedRoles] = useState<GlobalRole[]>([])
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (user) {
+      setSelectedRoles([...(user.roles || [])])
+    }
+  }, [user])
+
+  const isSelf = user && currentUserEmail && user.email.toLowerCase() === currentUserEmail.toLowerCase()
+  const selfRemovingAdmin = isSelf && !selectedRoles.includes('ADMIN')
+
+  const toggleRole = (role: GlobalRole) => {
+    setSelectedRoles(prev =>
+      prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]
+    )
+  }
+
+  const handleSubmit = async () => {
+    if (!user || selfRemovingAdmin) return
+    setSubmitting(true)
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}/roles`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roles: selectedRoles }),
+      })
+      if (!res.ok) throw new Error('Erreur de mise à jour des rôles')
+      const updated = await res.json()
+      onSuccess(updated)
+    } catch (err: unknown) {
+      onError(err instanceof Error ? err.message : 'Erreur')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Dialog open={!!user} onOpenChange={(v) => { if (!v) onClose() }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Gérer les rôles</DialogTitle>
+          <DialogDescription>
+            {user ? `${getDisplayName(user)} — ${user.email}` : ''}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-4">
+          {ASSIGNABLE_ROLES.map(role => (
+            <label key={role} className="flex items-start gap-3 cursor-pointer p-2 rounded-lg hover:bg-secondary/50">
+              <Checkbox
+                checked={selectedRoles.includes(role)}
+                onCheckedChange={() => toggleRole(role)}
+                className="mt-0.5"
+              />
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className={ROLE_COLORS[role]}>
+                    {ROLE_LABELS[role]}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">{ROLE_DESCRIPTIONS[role]}</p>
+              </div>
+            </label>
+          ))}
+
+          {selectedRoles.length === 0 && (
+            <p className="text-sm text-orange-500 bg-orange-50 dark:bg-orange-950/30 p-3 rounded-lg">
+              ⚠ Un utilisateur sans rôle n&apos;aura accès à aucune fonctionnalité.
+            </p>
+          )}
+
+          {selfRemovingAdmin && (
+            <p className="text-sm text-red-500 bg-red-50 dark:bg-red-950/30 p-3 rounded-lg">
+              ⚠ Retirer votre propre rôle ADMIN vous empêchera de gérer les utilisateurs.
+            </p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Annuler</Button>
+          <Button onClick={handleSubmit} disabled={submitting || !!selfRemovingAdmin}>
+            {submitting ? 'Enregistrement...' : 'Sauvegarder'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── Delete Confirmation Modal ─────────────────────────────────
+function DeleteConfirmModal({ user, onClose, onSuccess, onError }: {
+  user: UserAdmin | null
+  onClose: () => void
+  onSuccess: (id: number) => void
+  onError: (msg: string) => void
+}) {
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleDelete = async () => {
+    if (!user) return
+    setSubmitting(true)
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.message || 'Erreur de suppression')
+      }
+      onSuccess(user.id)
+    } catch (err: unknown) {
+      onError(err instanceof Error ? err.message : 'Erreur')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Dialog open={!!user} onOpenChange={(v) => { if (!v) onClose() }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Confirmer la suppression</DialogTitle>
+          <DialogDescription>
+            Êtes-vous sûr de vouloir supprimer <strong>{user ? getDisplayName(user) : ''}</strong> ?
+            Cette action est irréversible.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Annuler</Button>
+          <Button variant="destructive" onClick={handleDelete} disabled={submitting}>
+            {submitting ? 'Suppression...' : 'Supprimer'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

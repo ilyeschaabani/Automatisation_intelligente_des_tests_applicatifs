@@ -3,12 +3,9 @@ package com.pfe.platform.ms_gestion.service;
 import com.pfe.platform.ms_gestion.dto.request.CreateTestSuiteRequest;
 import com.pfe.platform.ms_gestion.dto.response.TestSuiteResponse;
 import com.pfe.platform.ms_gestion.entity.Project;
-import com.pfe.platform.ms_gestion.entity.ProjectMember;
 import com.pfe.platform.ms_gestion.entity.TestSuite;
-import com.pfe.platform.ms_gestion.repository.ProjectMemberRepository;
 import com.pfe.platform.ms_gestion.repository.ProjectRepository;
 import com.pfe.platform.ms_gestion.repository.TestSuiteRepository;
-import com.pfe.platform.ms_gestion.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.http.HttpStatus;
@@ -25,12 +22,12 @@ import java.util.stream.Collectors;
 public class TestSuiteService {
     private final TestSuiteRepository testSuiteRepository;
     private final ProjectRepository projectRepository;
-    private final ProjectMemberRepository projectMemberRepository;
+    private final ProjectAccessService projectAccessService;
 
     @Transactional
     public TestSuiteResponse add(Long projectId, CreateTestSuiteRequest request) {
         Project project = getProjectOrThrow(projectId);
-        checkProjectRole(project, ProjectMember.Role.ADMIN, ProjectMember.Role.TESTER);
+        projectAccessService.checkMembership(project);
 
         if (testSuiteRepository.existsByProjectIdAndName(projectId, request.getName())) {
             throw new RuntimeException("Une suite avec ce nom existe déjà dans ce projet");
@@ -58,21 +55,21 @@ public class TestSuiteService {
 
     public List<TestSuiteResponse> list(Long projectId) {
         Project project = getProjectOrThrow(projectId);
-        checkMembership(project);
+        projectAccessService.checkMembership(project);
         return testSuiteRepository.findByProjectId(projectId)
                 .stream().map(this::mapToResponse).collect(Collectors.toList());
     }
 
     public TestSuiteResponse get(Long projectId, Long suiteId) {
         TestSuite suite = getSuiteOrThrow(suiteId, projectId);
-        checkMembership(suite.getProject());
+        projectAccessService.checkMembership(suite.getProject());
         return mapToResponse(suite);
     }
 
     @Transactional
     public TestSuiteResponse update(Long projectId, Long suiteId, CreateTestSuiteRequest request) {
         TestSuite suite = getSuiteOrThrow(suiteId, projectId);
-        checkProjectRole(suite.getProject(), ProjectMember.Role.ADMIN, ProjectMember.Role.TESTER);
+        projectAccessService.checkMembership(suite.getProject());
 
         if (!suite.getName().equals(request.getName()) &&
                 testSuiteRepository.existsByProjectIdAndName(projectId, request.getName())) {
@@ -102,7 +99,7 @@ public class TestSuiteService {
     @Transactional
     public void delete(Long projectId, Long suiteId) {
         TestSuite suite = getSuiteOrThrow(suiteId, projectId);
-        checkProjectRole(suite.getProject(), ProjectMember.Role.ADMIN);
+        projectAccessService.checkMembership(suite.getProject());
         testSuiteRepository.delete(suite);
     }
 
@@ -118,28 +115,6 @@ public class TestSuiteService {
     private Project getProjectOrThrow(Long id) {
         return projectRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Projet non trouvé"));
-    }
-
-    private void checkMembership(Project project) {
-        Long userId = SecurityUtils.getCurrentUserId();
-        if (!projectMemberRepository.existsByProjectIdAndUserId(project.getId(), userId)) {
-            throw new RuntimeException("Vous n'êtes pas membre de ce projet");
-        }
-    }
-
-    private void checkProjectRole(Project project, ProjectMember.Role... allowedRoles) {
-        Long userId = SecurityUtils.getCurrentUserId();
-        ProjectMember member = projectMemberRepository
-                .findByProjectIdAndUserId(project.getId(), userId)
-                .orElseThrow(() -> new RuntimeException("Vous n'êtes pas membre de ce projet"));
-        boolean authorized = false;
-        for (ProjectMember.Role role : allowedRoles) {
-            if (member.getRole() == role || member.getRole() == ProjectMember.Role.ADMIN) {
-                authorized = true;
-                break;
-            }
-        }
-        if (!authorized) throw new RuntimeException("Action non autorisée");
     }
 
     private TestSuiteResponse mapToResponse(TestSuite s) {

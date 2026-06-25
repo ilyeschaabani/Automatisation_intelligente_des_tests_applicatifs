@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,6 +19,7 @@ public class EnvironmentController {
     private final EnvironmentService environmentService;
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'QA_ENGINEER')")
     public ResponseEntity<EnvironmentResponse> add(@PathVariable Long projectId,
                                                    @Valid @RequestBody CreateEnvironmentRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(environmentService.add(projectId, request));
@@ -35,6 +37,7 @@ public class EnvironmentController {
     }
 
     @PutMapping("/{envId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'QA_ENGINEER')")
     public ResponseEntity<EnvironmentResponse> update(@PathVariable Long projectId,
                                                       @PathVariable Long envId,
                                                       @Valid @RequestBody CreateEnvironmentRequest request) {
@@ -42,6 +45,7 @@ public class EnvironmentController {
     }
 
     @DeleteMapping("/{envId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER')")
     public ResponseEntity<Void> delete(@PathVariable Long projectId,
                                        @PathVariable Long envId) {
         environmentService.delete(projectId, envId);

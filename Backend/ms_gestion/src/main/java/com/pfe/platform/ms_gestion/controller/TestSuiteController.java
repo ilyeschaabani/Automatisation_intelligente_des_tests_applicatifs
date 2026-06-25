@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,6 +19,7 @@ public class TestSuiteController {
     private final TestSuiteService suiteService;
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'QA_ENGINEER')")
     public ResponseEntity<TestSuiteResponse> add(@PathVariable Long projectId,
                                                  @Valid @RequestBody CreateTestSuiteRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(suiteService.add(projectId, request));
@@ -35,6 +37,7 @@ public class TestSuiteController {
     }
 
     @PutMapping("/{suiteId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'QA_ENGINEER')")
     public ResponseEntity<TestSuiteResponse> update(@PathVariable Long projectId,
                                                     @PathVariable Long suiteId,
                                                     @Valid @RequestBody CreateTestSuiteRequest request) {
@@ -42,6 +45,7 @@ public class TestSuiteController {
     }
 
     @DeleteMapping("/{suiteId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER')")
     public ResponseEntity<Void> delete(@PathVariable Long projectId,
                                        @PathVariable Long suiteId) {
         suiteService.delete(projectId, suiteId);

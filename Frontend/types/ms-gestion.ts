@@ -1,8 +1,6 @@
 export type ProjectStatus = 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
 export type TestType = 'WEB' | 'UNIT' | 'INTEGRATION';
 export type RiskLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
-export type MemberRole = 'ADMIN' | 'TESTER' | 'DEVELOPER';
-
 export interface Project {
   id: number;
   name: string;
@@ -12,6 +10,7 @@ export interface Project {
   status: ProjectStatus;
   aiBuiltin?: boolean; // True when project uses AI-built template (no Git repo)
   aiProject?: boolean; // True when project is considered AI (no git repo)
+  createdBy?: number;
   createdAt: string;
 }
 
@@ -115,10 +114,8 @@ export interface UpdateTestCaseRequest extends CreateTestCaseRequest {}
 
 export interface Member {
   userId: number;
-  role: MemberRole;
 }
 
 export interface AddMemberRequest {
   userId: number;
-  role: MemberRole;
 }

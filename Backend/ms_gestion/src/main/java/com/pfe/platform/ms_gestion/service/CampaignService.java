@@ -27,7 +27,7 @@ public class CampaignService {
     private final ProjectRepository projectRepository;
     private final EnvironmentRepository environmentRepository;
     private final TestCaseRepository testCaseRepository;
-    private final ProjectMemberRepository projectMemberRepository;
+    private final ProjectAccessService projectAccessService;
     private final RestTemplate restTemplate;
 
     @Value("${ms-execution.service.url:http://localhost:8083}")
@@ -37,7 +37,7 @@ public class CampaignService {
     public CampaignResponse create(Long projectId, CreateCampaignRequest request) {
         Long userId = SecurityUtils.getCurrentUserId();
         Project project = getProjectOrThrow(projectId);
-        checkProjectRole(project, userId, ProjectMember.Role.ADMIN, ProjectMember.Role.TESTER);
+        projectAccessService.checkMembership(project);
 
         Environment env = environmentRepository.findById(request.getEnvironmentId())
                 .orElseThrow(() -> new RuntimeException("Environnement non trouvé"));
@@ -78,35 +78,27 @@ public class CampaignService {
 
     public List<CampaignResponse> listForProject(Long projectId) {
         Project project = getProjectOrThrow(projectId);
-        checkMembership(project, SecurityUtils.getCurrentUserId());
+        projectAccessService.checkMembership(project);
         return campaignRepository.findByProjectId(projectId)
                 .stream().map(this::mapToResponse).collect(Collectors.toList());
     }
 
-        public List<CampaignResponse> listAll() {
-            // List all campaigns accessible to the current user (campaigns in projects they're members of)
-            Long userId = SecurityUtils.getCurrentUserId();
-            List<Long> projectIds = projectMemberRepository.findByUserId(userId)
-                    .stream()
-                    .map(member -> member.getProject().getId())
-                    .collect(Collectors.toList());
-        
-            if (projectIds.isEmpty()) {
-                return List.of();
-            }
-        
-            return campaignRepository.findByProjectIdIn(projectIds)
-                    .stream().map(this::mapToResponse).collect(Collectors.toList());
-        }
+    public List<CampaignResponse> listAll() {
+        List<Long> projectIds = projectAccessService.getAccessibleProjectIds();
+        if (projectIds.isEmpty()) return List.of();
+        return campaignRepository.findByProjectIdIn(projectIds)
+                .stream().map(this::mapToResponse).collect(Collectors.toList());
+    }
+
     public CampaignResponse getCampaign(Long projectId, Long campaignId) {
         Campaign campaign = getCampaignOrThrow(campaignId, projectId);
-        checkMembership(campaign.getProject(), SecurityUtils.getCurrentUserId());
+        projectAccessService.checkMembership(campaign.getProject());
         return mapToResponse(campaign);
     }
 
     public List<TestCaseWithStatusResponse> getTestCasesForCampaign(Long projectId, Long campaignId) {
         Campaign campaign = getCampaignOrThrow(campaignId, projectId);
-        checkMembership(campaign.getProject(), SecurityUtils.getCurrentUserId());
+        projectAccessService.checkMembership(campaign.getProject());
 
         // Fetch test cases linked to this campaign
         List<CampaignTestCase> campaignTestCases = campaignTestCaseRepository.findByCampaignId(campaignId);
@@ -186,26 +178,6 @@ public class CampaignService {
         return campaign;
     }
 
-    private void checkMembership(Project project, Long userId) {
-        if (!projectMemberRepository.existsByProjectIdAndUserId(project.getId(), userId)) {
-            throw new RuntimeException("Vous n'êtes pas membre de ce projet");
-        }
-    }
-
-    private void checkProjectRole(Project project, Long userId, ProjectMember.Role... allowedRoles) {
-        ProjectMember member = projectMemberRepository
-                .findByProjectIdAndUserId(project.getId(), userId)
-                .orElseThrow(() -> new RuntimeException("Vous n'êtes pas membre de ce projet"));
-        boolean authorized = false;
-        for (ProjectMember.Role role : allowedRoles) {
-            if (member.getRole() == role || member.getRole() == ProjectMember.Role.ADMIN) {
-                authorized = true;
-                break;
-            }
-        }
-        if (!authorized) throw new RuntimeException("Action non autorisée");
-    }
-
     private CampaignResponse mapToResponse(Campaign c) {
         return CampaignResponse.builder()
                 .id(c.getId())
@@ -238,7 +210,7 @@ public class CampaignService {
      */
     public List<TestCaseWithStatusResponse> getAvailableTestCases(Long projectId, Long campaignId) {
         Campaign campaign = getCampaignOrThrow(campaignId, projectId);
-        checkMembership(campaign.getProject(), SecurityUtils.getCurrentUserId());
+        projectAccessService.checkMembership(campaign.getProject());
 
         // IDs already in the campaign
         List<Long> alreadyIn = campaignTestCaseRepository.findByCampaignId(campaignId)
@@ -259,9 +231,8 @@ public class CampaignService {
      */
     @Transactional
     public void addTestCasesToCampaign(Long projectId, Long campaignId, List<Long> testCaseIds) {
-        Long userId = SecurityUtils.getCurrentUserId();
         Campaign campaign = getCampaignOrThrow(campaignId, projectId);
-        checkProjectRole(campaign.getProject(), userId, ProjectMember.Role.ADMIN, ProjectMember.Role.TESTER);
+        projectAccessService.checkMembership(campaign.getProject());
 
         if (campaign.getStatus() == Campaign.CampaignStatus.RUNNING) {
             throw new RuntimeException("Impossible d'ajouter des tests à une campagne en cours d'exécution.");
@@ -296,9 +267,8 @@ public class CampaignService {
      */
     @Transactional
     public void removeTestCaseFromCampaign(Long projectId, Long campaignId, Long testCaseId) {
-        Long userId = SecurityUtils.getCurrentUserId();
         Campaign campaign = getCampaignOrThrow(campaignId, projectId);
-        checkProjectRole(campaign.getProject(), userId, ProjectMember.Role.ADMIN, ProjectMember.Role.TESTER);
+        projectAccessService.checkMembership(campaign.getProject());
 
         if (campaign.getStatus() == Campaign.CampaignStatus.RUNNING) {
             throw new RuntimeException("Impossible de retirer un test d'une campagne en cours d'exécution.");
@@ -308,9 +278,8 @@ public class CampaignService {
 
     @Transactional
     public void delete(Long projectId, Long campaignId) {
-        Long userId = SecurityUtils.getCurrentUserId();
         Campaign campaign = getCampaignOrThrow(campaignId, projectId);
-        checkProjectRole(campaign.getProject(), userId, ProjectMember.Role.ADMIN, ProjectMember.Role.TESTER, ProjectMember.Role.DEVELOPER);
+        projectAccessService.checkMembership(campaign.getProject());
         
         // Delete associated campaign test cases
         campaignTestCaseRepository.deleteByCampaignId(campaignId);

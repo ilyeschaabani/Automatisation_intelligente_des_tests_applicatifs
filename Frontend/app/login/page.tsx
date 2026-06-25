@@ -1,7 +1,6 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -88,12 +87,9 @@ export default function LoginPage() {
           </Button>
         </form>
 
-        <div className="mt-6 text-sm text-muted-foreground">
-          Don’t have an account?{' '}
-          <Link href="/signup" className="text-primary hover:underline">
-            Create one
-          </Link>
-        </div>
+        <p className="mt-6 text-xs text-muted-foreground text-center">
+          Contactez votre administrateur pour obtenir un compte.
+        </p>
       </Card>
     </div>
   )

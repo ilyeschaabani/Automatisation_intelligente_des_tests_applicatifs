@@ -21,10 +21,4 @@ public class ProjectMember {
 
     @Column(name = "user_id", nullable = false)
     private Long userId;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private Role role;
-
-    public enum Role { ADMIN, TESTER, DEVELOPER }
 }

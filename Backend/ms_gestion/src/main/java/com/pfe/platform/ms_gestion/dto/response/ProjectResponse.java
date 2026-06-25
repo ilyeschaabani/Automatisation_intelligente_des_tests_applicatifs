@@ -15,6 +15,7 @@ public class ProjectResponse {
     private String gitRepoUrl;
     private String gitDefaultBranch;
     private String status;
+    private Long createdBy;
     private LocalDateTime createdAt;
     private Boolean aiProject;
 }

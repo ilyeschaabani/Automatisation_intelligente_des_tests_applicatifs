@@ -7,6 +7,7 @@ import com.pfe.platform.msexecution.entity.Campaign;
 import com.pfe.platform.msexecution.repository.CampaignRepository;
 import com.pfe.platform.msexecution.repository.ExecutionResultRepository;
 import com.pfe.platform.msexecution.service.ExecutionService;
+import com.pfe.platform.msexecution.service.ProjectAccessService;
 import lombok.RequiredArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
@@ -27,9 +28,11 @@ public class ExecutionController {
     private final ExecutionService executionService;
     private final CampaignRepository campaignRepository;
     private final ExecutionResultRepository executionResultRepository;
+    private final ProjectAccessService projectAccessService;
 
 
     @PostMapping("/run/{campaignId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'QA_ENGINEER')")
     public ResponseEntity<CampaignRunResponseDto> runCampaign(
             @PathVariable Long campaignId,
             @RequestBody(required = false) Map<String, Object> body) {
@@ -39,6 +42,7 @@ public class ExecutionController {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(CampaignRunResponseDto.error("Campaign not found"));
             }
+            projectAccessService.checkMembership(campaign.getProjectId());
             if (campaign.getStatus() == Campaign.CampaignStatus.RUNNING) {
                 return ResponseEntity.ok(CampaignRunResponseDto.alreadyRunning(campaignId));
             }
@@ -82,10 +86,11 @@ public class ExecutionController {
     public ResponseEntity<CampaignStatusDto> getStatus(@PathVariable Long campaignId) {
         Campaign campaign = campaignRepository.findById(campaignId)
                 .orElse(null);
-        
+
         if (campaign == null) {
             return ResponseEntity.notFound().build();
         }
+        projectAccessService.checkMembership(campaign.getProjectId());
 
         List<ExecutionResultDto> results = executionResultRepository.findByCampaignId(campaignId)
                 .stream()
@@ -98,6 +103,10 @@ public class ExecutionController {
 
     @GetMapping("/results/{campaignId}")
     public ResponseEntity<List<ExecutionResultDto>> getExecutionResults(@PathVariable Long campaignId) {
+        Campaign campaign = campaignRepository.findById(campaignId).orElse(null);
+        if (campaign != null) {
+            projectAccessService.checkMembership(campaign.getProjectId());
+        }
         List<ExecutionResultDto> results = executionResultRepository.findByCampaignId(campaignId)
                 .stream()
                 .map(ExecutionResultDto::fromEntity)
@@ -106,15 +115,17 @@ public class ExecutionController {
     }
 
     @PutMapping("/stop/{campaignId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'QA_ENGINEER')")
     public ResponseEntity<?> stopCampaign(@PathVariable Long campaignId) {
         try {
             Campaign campaign = campaignRepository.findById(campaignId)
                     .orElse(null);
-            
+
             if (campaign == null) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(new ResponseDto("Campaign not found"));
             }
+            projectAccessService.checkMembership(campaign.getProjectId());
 
             if (campaign.getStatus() == Campaign.CampaignStatus.RUNNING) {
                 campaign.setStatus(Campaign.CampaignStatus.ABORTED);

@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -21,6 +22,7 @@ public class CampaignController {
     private final CampaignService campaignService;
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER')")
     public ResponseEntity<CampaignResponse> create(@PathVariable Long projectId,
                                                    @Valid @RequestBody CreateCampaignRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(campaignService.create(projectId, request));
@@ -52,6 +54,7 @@ public class CampaignController {
 
     /** Add one or more test cases to an existing campaign */
     @PostMapping("/{campaignId}/testcases")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'QA_ENGINEER')")
     public ResponseEntity<?> addTestCases(
             @PathVariable Long projectId,
             @PathVariable Long campaignId,
@@ -66,6 +69,7 @@ public class CampaignController {
 
     /** Remove a test case from an existing campaign */
     @DeleteMapping("/{campaignId}/testcases/{testCaseId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'QA_ENGINEER')")
     public ResponseEntity<?> removeTestCase(
             @PathVariable Long projectId,
             @PathVariable Long campaignId,
@@ -81,6 +85,7 @@ public class CampaignController {
     }
 
     @DeleteMapping("/{campaignId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER')")
     public ResponseEntity<?> delete(@PathVariable Long projectId,
                                    @PathVariable Long campaignId) {
         campaignService.delete(projectId, campaignId);

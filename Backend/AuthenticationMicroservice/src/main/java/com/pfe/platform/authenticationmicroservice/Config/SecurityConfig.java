@@ -12,7 +12,6 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -26,6 +25,7 @@ public class SecurityConfig {
 
     private final JWtAuthFIlter jwtAuthFilter;
     private final UserService userService;
+    private final PasswordEncoder passwordEncoder;
 
     @Autowired
     private CorsConfigurationSource corsConfigurationSource;
@@ -37,7 +37,6 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(ex -> ex
-                        // For APIs, return 401 when not authenticated.
                         .authenticationEntryPoint((request, response, authException) -> response.sendError(401))
                 )
                 .authorizeHttpRequests(auth -> auth
@@ -45,7 +44,7 @@ public class SecurityConfig {
                         .requestMatchers("/AuthenticationMicroService/**").permitAll()
                         .requestMatchers("/api/ticket/activity/log").permitAll()
                         .requestMatchers("/api/ticket/**").permitAll()
-                        .requestMatchers("/api/auth/signup", "/api/auth/signin", "/api/auth/refreshToken").permitAll()
+                        .requestMatchers("/api/auth/signin", "/api/auth/refreshToken").permitAll()
                         .requestMatchers("/api/github/connect", "/api/github/callback").permitAll()
                         .requestMatchers("/uploads/**").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
@@ -64,13 +63,8 @@ public class SecurityConfig {
     public AuthenticationProvider authentificationProvider() {
         DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
         provider.setUserDetailsService(userService.userDetailsService());
-        provider.setPasswordEncoder(passwordEncoder());
+        provider.setPasswordEncoder(passwordEncoder);
         return provider;
-    }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
     }
 
     @Bean

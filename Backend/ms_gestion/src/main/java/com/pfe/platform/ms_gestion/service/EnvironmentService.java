@@ -4,14 +4,11 @@ import com.pfe.platform.ms_gestion.dto.request.CreateEnvironmentRequest;
 import com.pfe.platform.ms_gestion.dto.response.EnvironmentResponse;
 import com.pfe.platform.ms_gestion.entity.Environment;
 import com.pfe.platform.ms_gestion.entity.Project;
-import com.pfe.platform.ms_gestion.entity.ProjectMember;
 import com.pfe.platform.ms_gestion.repository.CampaignRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import com.pfe.platform.ms_gestion.repository.EnvironmentRepository;
-import com.pfe.platform.ms_gestion.repository.ProjectMemberRepository;
 import com.pfe.platform.ms_gestion.repository.ProjectRepository;
-import com.pfe.platform.ms_gestion.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,13 +21,13 @@ import java.util.stream.Collectors;
 public class EnvironmentService {
     private final EnvironmentRepository environmentRepository;
     private final ProjectRepository projectRepository;
-    private final ProjectMemberRepository projectMemberRepository;
+    private final ProjectAccessService projectAccessService;
     private final CampaignRepository campaignRepository;
 
     @Transactional
     public EnvironmentResponse add(Long projectId, CreateEnvironmentRequest request) {
         Project project = getProjectOrThrow(projectId);
-        checkProjectRole(project, ProjectMember.Role.ADMIN, ProjectMember.Role.TESTER);
+        projectAccessService.checkMembership(project);
 
         if (environmentRepository.existsByProjectIdAndName(projectId, request.getName())) {
             throw new RuntimeException("Un environnement avec ce nom existe déjà dans ce projet");
@@ -50,21 +47,21 @@ public class EnvironmentService {
 
     public List<EnvironmentResponse> list(Long projectId) {
         Project project = getProjectOrThrow(projectId);
-        checkMembership(project);
+        projectAccessService.checkMembership(project);
         return environmentRepository.findByProjectId(projectId)
                 .stream().map(this::mapToResponse).collect(Collectors.toList());
     }
 
     public EnvironmentResponse get(Long projectId, Long envId) {
         Environment env = getEnvOrThrow(envId, projectId);
-        checkMembership(env.getProject());
+        projectAccessService.checkMembership(env.getProject());
         return mapToResponse(env);
     }
 
     @Transactional
     public EnvironmentResponse update(Long projectId, Long envId, CreateEnvironmentRequest request) {
         Environment env = getEnvOrThrow(envId, projectId);
-        checkProjectRole(env.getProject(), ProjectMember.Role.ADMIN, ProjectMember.Role.TESTER);
+        projectAccessService.checkMembership(env.getProject());
 
         if (!env.getName().equals(request.getName()) &&
                 environmentRepository.existsByProjectIdAndName(projectId, request.getName())) {
@@ -83,7 +80,7 @@ public class EnvironmentService {
     @Transactional
     public void delete(Long projectId, Long envId) {
         Environment env = getEnvOrThrow(envId, projectId);
-        checkProjectRole(env.getProject(), ProjectMember.Role.ADMIN);
+        projectAccessService.checkMembership(env.getProject());
 
         long campaignCount = campaignRepository.countByEnvironmentId(envId);
         if (campaignCount > 0) {
@@ -95,28 +92,6 @@ public class EnvironmentService {
         }
 
         environmentRepository.delete(env);
-    }
-
-    private void checkMembership(Project project) {
-        Long userId = SecurityUtils.getCurrentUserId();
-        if (!projectMemberRepository.existsByProjectIdAndUserId(project.getId(), userId)) {
-            throw new RuntimeException("Vous n'êtes pas membre de ce projet");
-        }
-    }
-
-    private void checkProjectRole(Project project, ProjectMember.Role... allowedRoles) {
-        Long userId = SecurityUtils.getCurrentUserId();
-        ProjectMember member = projectMemberRepository
-                .findByProjectIdAndUserId(project.getId(), userId)
-                .orElseThrow(() -> new RuntimeException("Vous n'êtes pas membre de ce projet"));
-        boolean authorized = false;
-        for (ProjectMember.Role role : allowedRoles) {
-            if (member.getRole() == role || member.getRole() == ProjectMember.Role.ADMIN) {
-                authorized = true;
-                break;
-            }
-        }
-        if (!authorized) throw new RuntimeException("Action non autorisée");
     }
 
     private Environment getEnvOrThrow(Long envId, Long projectId) {

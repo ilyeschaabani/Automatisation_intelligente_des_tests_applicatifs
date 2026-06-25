@@ -45,7 +45,6 @@ import type {
   CreateTestSuiteRequest,
   Environment,
   Member,
-  MemberRole,
   Project,
   ProjectStatus,
   TestSuite,
@@ -86,7 +85,6 @@ type SuiteType = 'WEB' | 'UNIT' | 'INTEGRATION'
 
 type MemberFormState = {
   userId: string
-  role: MemberRole
 }
 
 const emptyEnvForm: EnvironmentFormState = {
@@ -111,7 +109,6 @@ const emptySuiteForm: SuiteFormState = {
 
 const emptyMemberForm: MemberFormState = {
   userId: '',
-  role: 'TESTER',
 }
 
 const statusVariant: Record<
@@ -345,7 +342,7 @@ export default function ProjectDetailsPage() {
   }
 
   const loadAll = async () => {
-    await Promise.all([loadProject(), loadEnvironments(), loadSuites(), loadMembers()])
+    await Promise.all([loadProject(), loadEnvironments(), loadSuites(), loadMembers(), loadUsers()])
   }
 
   useEffect(() => {
@@ -863,7 +860,6 @@ export default function ProjectDetailsPage() {
     try {
       const payload: AddMemberRequest = {
         userId,
-        role: memberForm.role,
       }
       await memberService.add(projectId, payload)
       setMemberAddOpen(false)
@@ -1086,16 +1082,27 @@ export default function ProjectDetailsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>User ID</TableHead>
-                        <TableHead>Role</TableHead>
+                        <TableHead>Membre</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {members.map((member) => (
                         <TableRow key={member.userId}>
-                          <TableCell className="font-medium">{member.userId}</TableCell>
-                          <TableCell>{member.role}</TableCell>
+                          <TableCell className="font-medium">
+                            <span className="flex items-center gap-2">
+                              {(() => {
+                                const u = users.find(u => u.id === member.userId)
+                                if (!u) return `Utilisateur #${member.userId}`
+                                return formatUserLabel(u)
+                              })()}
+                              {project?.createdBy === member.userId && (
+                                <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-400">
+                                  Owner
+                                </span>
+                              )}
+                            </span>
+                          </TableCell>
                           <TableCell className="text-right">
                             <Button
                               size="sm"
@@ -1551,22 +1558,6 @@ export default function ProjectDetailsPage() {
             <p className="text-xs text-muted-foreground">All users are already members.</p>
           ) : null}
         </div>
-        <div className="space-y-2">
-          <Label>Role</Label>
-          <Select
-            value={memberForm.role}
-            onValueChange={(value) => setMemberForm((prev) => ({ ...prev, role: value as MemberRole }))}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select role" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ADMIN">Administrateur</SelectItem>
-              <SelectItem value="TESTER">Testeur / QA</SelectItem>
-              <SelectItem value="DEVELOPER">Développeur</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
         {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
       </FormDialog>
 
@@ -1576,8 +1567,11 @@ export default function ProjectDetailsPage() {
         title="Remove member"
         description={
           memberDeleting
-            ? `Remove user ${memberDeleting.userId} from the project?`
-            : 'Remove member?'
+            ? `Retirer ${(() => {
+                const u = users.find(u => u.id === memberDeleting.userId)
+                return u ? formatUserLabel(u) : `Utilisateur #${memberDeleting.userId}`
+              })()} du projet ?`
+            : 'Retirer le membre ?'
         }
         confirmLabel="Remove"
         isConfirming={isMemberDeleting}

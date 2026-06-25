@@ -36,6 +36,8 @@ public class Project {
     @Enumerated(EnumType.STRING)
     private Status status = Status.ACTIVE;
 
+    private Long createdBy;
+
     private LocalDateTime createdAt = LocalDateTime.now();
 
     @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)

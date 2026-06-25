@@ -18,10 +18,12 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
+import { useUserRoles } from '@/hooks/use-roles'
 
 export function Sidebar() {
   const pathname = usePathname()
   const [isOpen, setIsOpen] = useState(true)
+  const { isAdmin } = useUserRoles()
 
   const menuItems = [
     {
@@ -63,6 +65,7 @@ export function Sidebar() {
       label: 'Users & Roles',
       href: '/users',
       icon: Users,
+      adminOnly: true,
     },
     {
       label: 'Settings',
@@ -105,7 +108,7 @@ export function Sidebar() {
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-6 px-3">
           <ul className="space-y-2">
-            {menuItems.map((item) => {
+            {menuItems.filter(item => !item.adminOnly || isAdmin).map((item) => {
               const Icon = item.icon
               const isActive = pathname === item.href
               return (

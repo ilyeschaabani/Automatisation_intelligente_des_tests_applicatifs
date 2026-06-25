@@ -75,6 +75,21 @@ public class User  implements UserDetails {
     Instant githubTokenCreatedAt;
 
     // -----------------------------
+    // Account status & timestamps
+    // -----------------------------
+
+    @Column(nullable = false)
+    Boolean enabled = true;
+
+    @Column(nullable = false)
+    Boolean superAdmin = false;
+
+    @Column(updatable = false)
+    Instant createdAt;
+
+    Instant lastLoginAt;
+
+    // -----------------------------
     // Roles (badges, multi-roles)
     // -----------------------------
 
@@ -86,11 +101,16 @@ public class User  implements UserDetails {
     Set<GlobalRole> globalRoles = new HashSet<>();
 
     @PrePersist
+    void onCreate() {
+        if (email != null) email = email.trim().toLowerCase();
+        if (createdAt == null) createdAt = Instant.now();
+        if (enabled == null) enabled = true;
+        if (superAdmin == null) superAdmin = false;
+    }
+
     @PreUpdate
-    void normalize() {
-        if (email != null) {
-            email = email.trim().toLowerCase();
-        }
+    void onUpdate() {
+        if (email != null) email = email.trim().toLowerCase();
     }
 
     @Override
@@ -126,6 +146,6 @@ public class User  implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return UserDetails.super.isEnabled();
+        return Boolean.TRUE.equals(enabled);
     }
 }

@@ -8,15 +8,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
-/**
- * Au demarrage, promeut un utilisateur (par email) au role ADMIN s'il ne l'a pas deja.
- * Indispensable pour amorcer la gestion des roles : sans cela, aucun compte ne peut
- * acceder a /api/admin/** pour assigner des roles aux autres.
- *
- * Configurable via la propriete app.bootstrap.admin-email (vide = desactive).
- */
+import java.util.HashSet;
+import java.util.Set;
+
 @Component
 @RequiredArgsConstructor
 public class AdminBootstrap implements CommandLineRunner {
@@ -24,9 +21,19 @@ public class AdminBootstrap implements CommandLineRunner {
     private static final Logger log = LoggerFactory.getLogger(AdminBootstrap.class);
 
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Value("${app.bootstrap.admin-email:}")
     private String adminEmail;
+
+    @Value("${app.bootstrap.admin-password:Admin@1234}")
+    private String adminPassword;
+
+    @Value("${app.bootstrap.admin-nom:Super}")
+    private String adminNom;
+
+    @Value("${app.bootstrap.admin-prenom:Admin}")
+    private String adminPrenom;
 
     @Override
     public void run(String... args) {
@@ -34,12 +41,39 @@ public class AdminBootstrap implements CommandLineRunner {
             return;
         }
         String normalized = adminEmail.trim().toLowerCase();
+
         userRepository.findByEmail(normalized).ifPresentOrElse(user -> {
-            if (user.getGlobalRoles() == null || !user.getGlobalRoles().contains(GlobalRole.ADMIN)) {
-                user.getGlobalRoles().add(GlobalRole.ADMIN);
-                userRepository.save(user);
-                log.info("[AdminBootstrap] Role ADMIN attribue a {}", normalized);
+            boolean changed = false;
+
+            if (!Boolean.TRUE.equals(user.getSuperAdmin())) {
+                user.setSuperAdmin(true);
+                changed = true;
             }
-        }, () -> log.warn("[AdminBootstrap] Aucun utilisateur avec l'email {} (admin non amorce)", normalized));
+            if (user.getGlobalRoles() == null || !user.getGlobalRoles().contains(GlobalRole.ADMIN)) {
+                if (user.getGlobalRoles() == null) user.setGlobalRoles(new HashSet<>());
+                user.getGlobalRoles().add(GlobalRole.ADMIN);
+                changed = true;
+            }
+            if (!Boolean.TRUE.equals(user.getEnabled())) {
+                user.setEnabled(true);
+                changed = true;
+            }
+
+            if (changed) {
+                userRepository.save(user);
+                log.info("[AdminBootstrap] Super Admin mis a jour: {}", normalized);
+            }
+        }, () -> {
+            User admin = new User();
+            admin.setEmail(normalized);
+            admin.setPassword(passwordEncoder.encode(adminPassword));
+            admin.setNom(adminNom);
+            admin.setPrenom(adminPrenom);
+            admin.setEnabled(true);
+            admin.setSuperAdmin(true);
+            admin.setGlobalRoles(new HashSet<>(Set.of(GlobalRole.ADMIN)));
+            userRepository.save(admin);
+            log.info("[AdminBootstrap] Super Admin cree: {} (mot de passe par defaut)", normalized);
+        });
     }
 }

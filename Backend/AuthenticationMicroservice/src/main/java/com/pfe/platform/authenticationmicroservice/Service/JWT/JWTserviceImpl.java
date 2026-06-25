@@ -14,8 +14,10 @@ import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -30,9 +32,14 @@ public class JWTserviceImpl implements JWTservice {
         User user = userRepository.findByEmail(userDetails.getUsername())
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
 
+        List<String> roles = user.getGlobalRoles() != null
+                ? user.getGlobalRoles().stream().map(Enum::name).collect(Collectors.toList())
+                : List.of();
+
         return Jwts.builder()
                 .subject(userDetails.getUsername())
                 .claim("userId", user.getId())
+                .claim("roles", roles)
                 .issuedAt(new Date(System.currentTimeMillis()))
                 .expiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60 * 10))
                 .signWith(getSigningKey())
@@ -43,10 +50,16 @@ public class JWTserviceImpl implements JWTservice {
     public String generateRefreshToken(Map<String, Object> claims, UserDetails userDetails) {
         User user = userRepository.findByEmail(userDetails.getUsername())
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+
+        List<String> roles = user.getGlobalRoles() != null
+                ? user.getGlobalRoles().stream().map(Enum::name).collect(Collectors.toList())
+                : List.of();
+
         return Jwts.builder()
                 .claims(claims)
                 .subject(userDetails.getUsername())
                 .claim("userId", user.getId())
+                .claim("roles", roles)
                 .issuedAt(new Date(System.currentTimeMillis()))
                 .expiration(new Date(System.currentTimeMillis() + 604800000L))
                 .signWith(getSigningKey())

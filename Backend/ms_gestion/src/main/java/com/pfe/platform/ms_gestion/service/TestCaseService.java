@@ -5,10 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pfe.platform.ms_gestion.dto.request.CreateTestCaseRequest;
 import com.pfe.platform.ms_gestion.dto.response.TestCaseResponse;
 import com.pfe.platform.ms_gestion.entity.Project;
-import com.pfe.platform.ms_gestion.entity.ProjectMember;
 import com.pfe.platform.ms_gestion.entity.TestCase;
 import com.pfe.platform.ms_gestion.entity.TestSuite;
-import com.pfe.platform.ms_gestion.repository.ProjectMemberRepository;
 import com.pfe.platform.ms_gestion.repository.TestCaseRepository;
 import com.pfe.platform.ms_gestion.repository.TestSuiteRepository;
 import com.pfe.platform.ms_gestion.security.SecurityUtils;
@@ -26,7 +24,7 @@ import java.util.stream.Collectors;
 public class TestCaseService {
     private final TestCaseRepository testCaseRepository;
     private final TestSuiteRepository testSuiteRepository;
-    private final ProjectMemberRepository projectMemberRepository;
+    private final ProjectAccessService projectAccessService;
 
     private final LlmService llmService;
     private final SkeletonExtractorService skeletonExtractorService;
@@ -35,7 +33,7 @@ public class TestCaseService {
     @Transactional
     public TestCaseResponse add(Long suiteId, CreateTestCaseRequest request) {
         TestSuite suite = getSuiteOrThrow(suiteId);
-        checkProjectRole(suite.getProject(), ProjectMember.Role.ADMIN, ProjectMember.Role.TESTER);
+        projectAccessService.checkMembership(suite.getProject());
 
         TestCase tc = new TestCase();
         tc.setSuite(suite);
@@ -155,21 +153,21 @@ public class TestCaseService {
 
     public List<TestCaseResponse> list(Long suiteId) {
         TestSuite suite = getSuiteOrThrow(suiteId);
-        checkMembership(suite.getProject());
+        projectAccessService.checkMembership(suite.getProject());
         return testCaseRepository.findBySuiteId(suiteId)
                 .stream().map(this::mapToResponse).collect(Collectors.toList());
     }
 
     public TestCaseResponse get(Long suiteId, Long caseId) {
         TestCase tc = getTestCaseOrThrow(caseId, suiteId);
-        checkMembership(tc.getSuite().getProject());
+        projectAccessService.checkMembership(tc.getSuite().getProject());
         return mapToResponse(tc);
     }
 
     @Transactional
     public TestCaseResponse update(Long suiteId, Long caseId, CreateTestCaseRequest request) {
         TestCase tc = getTestCaseOrThrow(caseId, suiteId);
-        checkProjectRole(tc.getSuite().getProject(), ProjectMember.Role.ADMIN, ProjectMember.Role.TESTER);
+        projectAccessService.checkMembership(tc.getSuite().getProject());
 
         boolean suiteForcesAi = tc.getSuite().getType() == TestSuite.TestType.UNIT
             || tc.getSuite().getType() == TestSuite.TestType.INTEGRATION;
@@ -246,7 +244,7 @@ public class TestCaseService {
     @Transactional
     public void delete(Long suiteId, Long caseId) {
         TestCase tc = getTestCaseOrThrow(caseId, suiteId);
-        checkProjectRole(tc.getSuite().getProject(), ProjectMember.Role.ADMIN);
+        projectAccessService.checkMembership(tc.getSuite().getProject());
         testCaseRepository.delete(tc);
     }
 
@@ -264,28 +262,6 @@ public class TestCaseService {
         return tc;
     }
 
-    private void checkMembership(Project project) {
-        Long userId = SecurityUtils.getCurrentUserId();
-        if (!projectMemberRepository.existsByProjectIdAndUserId(project.getId(), userId)) {
-            throw new RuntimeException("Vous n'êtes pas membre de ce projet");
-        }
-    }
-
-    private void checkProjectRole(Project project, ProjectMember.Role... allowedRoles) {
-        Long userId = SecurityUtils.getCurrentUserId();
-        ProjectMember member = projectMemberRepository
-                .findByProjectIdAndUserId(project.getId(), userId)
-                .orElseThrow(() -> new RuntimeException("Vous n'êtes pas membre de ce projet"));
-        boolean authorized = false;
-        for (ProjectMember.Role role : allowedRoles) {
-            if (member.getRole() == role || member.getRole() == ProjectMember.Role.ADMIN) {
-                authorized = true;
-                break;
-            }
-        }
-        if (!authorized) throw new RuntimeException("Action non autorisée");
-    }
-
     private String resolveSkeletonForSuite(TestSuite suite, String targetClassName) {
         if (targetClassName == null || targetClassName.isBlank()) return null;
         boolean isUnitOrIntegration = suite.getType() == TestSuite.TestType.UNIT
@@ -297,13 +273,9 @@ public class TestCaseService {
         String gitBranch = suite.getGitBranch();
         if (gitRepoUrl == null || gitRepoUrl.isBlank()) {
             // fallback: use first environment with a gitRepoUrl configured
-            com.pfe.platform.ms_gestion.entity.Environment env = projectMemberRepository
-                    .findByProjectIdAndUserId(suite.getProject().getId(),
-                            com.pfe.platform.ms_gestion.security.SecurityUtils.getCurrentUserId())
-                    .map(m -> m.getProject())
-                    .flatMap(p -> p.getEnvironments().stream()
-                            .filter(e -> e.getGitRepoUrl() != null && !e.getGitRepoUrl().isBlank())
-                            .findFirst())
+            com.pfe.platform.ms_gestion.entity.Environment env = suite.getProject().getEnvironments().stream()
+                    .filter(e -> e.getGitRepoUrl() != null && !e.getGitRepoUrl().isBlank())
+                    .findFirst()
                     .orElse(null);
             if (env != null) {
                 gitRepoUrl = env.getGitRepoUrl();

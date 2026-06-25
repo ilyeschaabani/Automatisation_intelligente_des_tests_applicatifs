@@ -19,6 +19,7 @@ import java.util.stream.Collectors;
 public class ProjectService {
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
+    private final ProjectAccessService projectAccessService;
 
     @Transactional
     public ProjectResponse create(CreateProjectRequest request) {
@@ -29,19 +30,23 @@ public class ProjectService {
         Project project = new Project();
         project.setName(request.getName());
         project.setDescription(request.getDescription());
+        project.setCreatedBy(userId);
         project = projectRepository.save(project);
 
-        // Ajouter le créateur comme ADMIN
         ProjectMember member = new ProjectMember();
         member.setProject(project);
         member.setUserId(userId);
-        member.setRole(ProjectMember.Role.ADMIN);
         projectMemberRepository.save(member);
 
         return mapToResponse(project);
     }
 
     public List<ProjectResponse> listMyProjects() {
+        if (SecurityUtils.isGlobalAdmin()) {
+            return projectRepository.findAll().stream()
+                    .map(this::mapToResponse)
+                    .collect(Collectors.toList());
+        }
         Long userId = SecurityUtils.getCurrentUserId();
         return projectMemberRepository.findByUserId(userId).stream()
                 .map(m -> mapToResponse(m.getProject()))
@@ -50,14 +55,14 @@ public class ProjectService {
 
     public ProjectResponse getProject(Long projectId) {
         Project project = getProjectOrThrow(projectId);
-        checkMembership(project);
+        projectAccessService.checkMembership(project);
         return mapToResponse(project);
     }
 
     @Transactional
     public ProjectResponse update(Long projectId, CreateProjectRequest request) {
         Project project = getProjectOrThrow(projectId);
-        checkRole(project, ProjectMember.Role.ADMIN);
+        projectAccessService.checkMembership(project);
         if (!project.getName().equals(request.getName()) &&
                 projectRepository.existsByName(request.getName())) {
             throw new RuntimeException("Ce nom est déjà utilisé par un autre projet");
@@ -70,14 +75,14 @@ public class ProjectService {
     @Transactional
     public void delete(Long projectId) {
         Project project = getProjectOrThrow(projectId);
-        checkRole(project, ProjectMember.Role.ADMIN);
+        projectAccessService.checkMembership(project);
         projectRepository.delete(project);
     }
 
     @Transactional
     public void archive(Long projectId) {
         Project project = getProjectOrThrow(projectId);
-        checkRole(project, ProjectMember.Role.ADMIN);
+        projectAccessService.checkMembership(project);
         project.setStatus(Project.Status.ARCHIVED);
         projectRepository.save(project);
     }
@@ -88,23 +93,6 @@ public class ProjectService {
                 .orElseThrow(() -> new RuntimeException("Projet non trouvé"));
     }
 
-    private void checkMembership(Project project) {
-        Long userId = SecurityUtils.getCurrentUserId();
-        if (!projectMemberRepository.existsByProjectIdAndUserId(project.getId(), userId)) {
-            throw new RuntimeException("Vous n'êtes pas membre de ce projet");
-        }
-    }
-
-    private void checkRole(Project project, ProjectMember.Role requiredRole) {
-        Long userId = SecurityUtils.getCurrentUserId();
-        ProjectMember member = projectMemberRepository
-                .findByProjectIdAndUserId(project.getId(), userId)
-                .orElseThrow(() -> new RuntimeException("Vous n'êtes pas membre de ce projet"));
-        if (member.getRole() != requiredRole && member.getRole() != ProjectMember.Role.ADMIN) {
-            throw new RuntimeException("Action non autorisée");
-        }
-    }
-
     private ProjectResponse mapToResponse(Project p) {
         return ProjectResponse.builder()
                 .id(p.getId())
@@ -113,6 +101,7 @@ public class ProjectService {
                 .gitRepoUrl(p.getGitRepoUrl())
                 .gitDefaultBranch(p.getGitDefaultBranch())
                 .status(p.getStatus().name())
+                .createdBy(p.getCreatedBy())
                 .createdAt(p.getCreatedAt())
                 .aiProject(p.getGitRepoUrl() == null || p.getGitRepoUrl().isBlank() || "ai-builtin".equals(p.getGitRepoUrl()))
                 .build();

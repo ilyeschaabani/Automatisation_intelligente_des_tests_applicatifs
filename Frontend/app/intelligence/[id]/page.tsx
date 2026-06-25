@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { ArrowLeft, ChevronDown, ChevronUp, Eye, Loader2, Play, RefreshCw, Square, ZoomIn, Radio, ListChecks } from 'lucide-react'
+import { ArrowLeft, ChevronDown, ChevronUp, Eye, Loader2, Play, RefreshCw, Square, ZoomIn, Radio, ListChecks, Users, Plus, Trash2 } from 'lucide-react'
 
 import { Header } from '@/components/header'
 import { Sidebar } from '@/components/sidebar'
@@ -23,6 +23,17 @@ import {
 } from '@/lib/api-client'
 import { useEvaluationStream } from '@/hooks/useEvaluationStream'
 import { EvaluationLiveView } from '@/components/EvaluationLiveView'
+import { userDirectoryService } from '@/services/users'
+import type { AuthUserSummary } from '@/types/auth'
+
+/* ─── Types for evaluation members ──────────────────────────────────────── */
+
+type EvaluationMember = {
+  id: number
+  userId: number
+  role: string
+  assignedAt: string
+}
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 
@@ -218,9 +229,16 @@ export default function EvaluationDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [rerunning, setRerunning] = useState(false)
   const [lightbox, setLightbox] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'live' | 'steps' | 'report'>('live')
+  const [activeTab, setActiveTab] = useState<'live' | 'steps' | 'report' | 'members'>('live')
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const stepsEndRef = useRef<HTMLDivElement>(null)
+
+  // ── Members state ───────────────────────────────────────────────
+  const [members, setMembers] = useState<EvaluationMember[]>([])
+  const [allUsers, setAllUsers] = useState<AuthUserSummary[]>([])
+  const [membersLoading, setMembersLoading] = useState(false)
+  const [addMemberUserId, setAddMemberUserId] = useState<string>('')
+  const [memberToast, setMemberToast] = useState<string | null>(null)
 
   // ── WebSocket stream ─────────────────────────────────────────────
   const { messages, liveScreenshot, connected, needsInput, currentBackend, sendAnswer, clearMessages } =
@@ -251,6 +269,72 @@ export default function EvaluationDetailPage() {
   }, [id])
 
   useEffect(() => { void load() }, [load])
+
+  const loadMembers = useCallback(async () => {
+    if (!Number.isFinite(id) || id <= 0) return
+    setMembersLoading(true)
+    try {
+      const res = await fetch(`/api/functional-evaluation/${id}/members`)
+      if (res.ok) setMembers(await res.json())
+    } catch { /* ignore */ } finally {
+      setMembersLoading(false)
+    }
+  }, [id])
+
+  const loadUsers = useCallback(async () => {
+    try {
+      const users = await userDirectoryService.getAll()
+      setAllUsers(users)
+    } catch { /* ignore */ }
+  }, [])
+
+  useEffect(() => {
+    if (activeTab === 'members') {
+      void loadMembers()
+      void loadUsers()
+    }
+  }, [activeTab, loadMembers, loadUsers])
+
+  const handleAddMember = async () => {
+    if (!addMemberUserId) return
+    try {
+      const res = await fetch(`/api/functional-evaluation/${id}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: Number(addMemberUserId) }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setMemberToast(data.message || 'Erreur')
+        setTimeout(() => setMemberToast(null), 3000)
+        return
+      }
+      setAddMemberUserId('')
+      await loadMembers()
+      setMemberToast('Membre ajouté')
+      setTimeout(() => setMemberToast(null), 3000)
+    } catch { setMemberToast('Erreur réseau') }
+  }
+
+  const handleRemoveMember = async (userId: number) => {
+    try {
+      await fetch(`/api/functional-evaluation/${id}/members/${userId}`, { method: 'DELETE' })
+      await loadMembers()
+    } catch { /* ignore */ }
+  }
+
+  const getUserName = (userId: number) => {
+    const u = allUsers.find(u => u.id === userId)
+    if (!u) return `Utilisateur #${userId}`
+    if (u.prenom && u.nom) return `${u.prenom} ${u.nom}`
+    return u.email
+  }
+
+  const getUserEmail = (userId: number) => {
+    return allUsers.find(u => u.id === userId)?.email ?? ''
+  }
+
+  const availableUsers = allUsers.filter(u => !members.some(m => m.userId === u.id))
 
   // ── Poll steps when RUNNING (fallback — only when WebSocket is NOT connected) ──
   // When WS is active, onCompleted/onFailed already calls load() — no need to poll.
@@ -478,6 +562,16 @@ export default function EvaluationDetailPage() {
                 <Eye className="h-3.5 w-3.5" />
                 Rapport UX
               </button>
+              <button
+                onClick={() => setActiveTab('members')}
+                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors
+                  ${activeTab === 'members'
+                    ? 'bg-background shadow-sm text-foreground'
+                    : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                <Users className="h-3.5 w-3.5" />
+                Membres ({members.length})
+              </button>
             </div>
 
             {/* ── Tab: Live ─────────────────────────────────────── */}
@@ -668,6 +762,103 @@ export default function EvaluationDetailPage() {
                   </Card>
                 )}
               </div>
+            )}
+
+            {/* ── Tab: Members ──────────────────────────────── */}
+            {activeTab === 'members' && (
+              <Card className="border-border/60 bg-card/90 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="h-5 w-5" />
+                    Membres de l'évaluation
+                  </CardTitle>
+                  <CardDescription>
+                    Seuls les membres assignés (et les admins globaux) peuvent accéder à cette évaluation.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Toast */}
+                  {memberToast && (
+                    <div className="rounded-lg bg-primary/10 border border-primary/20 px-4 py-2 text-sm text-primary">
+                      {memberToast}
+                    </div>
+                  )}
+
+                  {/* Add member form */}
+                  <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border/60 bg-muted/25 p-4">
+                    <div className="flex-1 min-w-[200px]">
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Utilisateur</label>
+                      <select
+                        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                        value={addMemberUserId}
+                        onChange={e => setAddMemberUserId(e.target.value)}
+                      >
+                        <option value="">Sélectionner un utilisateur…</option>
+                        {availableUsers.map(u => (
+                          <option key={u.id} value={u.id}>
+                            {u.prenom && u.nom ? `${u.prenom} ${u.nom}` : u.email} ({u.email})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <Button onClick={handleAddMember} disabled={!addMemberUserId} className="gap-2">
+                      <Plus className="h-4 w-4" />
+                      Ajouter
+                    </Button>
+                  </div>
+
+                  {/* Members list */}
+                  {membersLoading ? (
+                    <div className="text-sm text-muted-foreground py-4 text-center">Chargement…</div>
+                  ) : members.length === 0 ? (
+                    <div className="text-sm text-muted-foreground py-4 text-center">
+                      Aucun membre assigné. Seuls les admins globaux peuvent accéder à cette évaluation.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {members.map(m => (
+                        <div
+                          key={m.id}
+                          className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/25 px-4 py-3"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center flex-shrink-0">
+                              <span className="text-xs font-bold text-primary-foreground">
+                                {getUserName(m.userId).substring(0, 2).toUpperCase()}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium flex items-center gap-2">
+                                {getUserName(m.userId)}
+                                {m.role === 'OWNER' && (
+                                  <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-400">
+                                    Owner
+                                  </span>
+                                )}
+                              </p>
+                              <p className="text-xs text-muted-foreground">{getUserEmail(m.userId)}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs text-muted-foreground">
+                              {m.assignedAt ? new Date(m.assignedAt).toLocaleDateString('fr-FR') : ''}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:bg-destructive/10"
+                              onClick={() => handleRemoveMember(m.userId)}
+                              title="Retirer"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             )}
 
           </div>

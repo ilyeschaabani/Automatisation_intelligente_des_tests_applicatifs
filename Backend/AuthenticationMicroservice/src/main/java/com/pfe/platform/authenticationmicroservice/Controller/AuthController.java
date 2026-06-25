@@ -29,12 +29,6 @@ public class AuthController {
     @Value("${app.cookies.same-site:Lax}")
     private String cookieSameSite;
 
-    @PostMapping("/signup")
-    public ResponseEntity<User> signUp(@Valid @RequestBody SignUpRequest userCreateDTO){
-        User user = authenticationService.singUp(userCreateDTO);
-        return ResponseEntity.ok(user);
-    }
-
     @PostMapping("/signin")
     public ResponseEntity<JwtAuthenticationResponse> signIn(@Valid @RequestBody SignInRequest signInRequest,
                                                             HttpServletResponse response){

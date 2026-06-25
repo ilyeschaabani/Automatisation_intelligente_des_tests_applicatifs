@@ -6,6 +6,7 @@ import com.pfe.platform.ms_gestion.entity.SecurityVulnerability;
 import com.pfe.platform.ms_gestion.service.SecurityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -73,6 +74,7 @@ public class SecurityController {
     }
 
     @PatchMapping("/vulnerabilities/{id}/status")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER')")
     public ResponseEntity<SecurityVulnerability> updateVulnerabilityStatus(
             @PathVariable Long id, @RequestBody Map<String, String> body) {
         String status = body.get("status");
@@ -81,6 +83,7 @@ public class SecurityController {
     }
 
     @PatchMapping("/vulnerabilities/{id}/assign")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER')")
     public ResponseEntity<SecurityVulnerability> assignVulnerability(
             @PathVariable Long id, @RequestBody Map<String, String> body) {
         String assignee = body.get("assignedTo");
