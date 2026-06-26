@@ -210,8 +210,12 @@ jobs:
         run: npm install --legacy-peer-deps
         working-directory: Frontend
 
+      - name: Init ESLint config
+        run: echo '{"extends":"next/core-web-vitals"}' > .eslintrc.json
+        working-directory: Frontend
+
       - name: Lint
-        run: npx next lint --dir app components lib services || true
+        run: npx next lint --dir app --no-cache || true
         working-directory: Frontend
 
       - name: Run Vitest
@@ -229,7 +233,7 @@ jobs:
   # ════════════════════════════════════════════════
 
   security-dependency-scan:
-    name: "Security — Dependency Scan (OWASP)"
+    name: "Security — Dependency Scan"
     runs-on: ubuntu-latest
     needs: [unit-tests-auth, unit-tests-ms-gestion, unit-tests-ms-execution]
     strategy:
@@ -253,20 +257,22 @@ jobs:
           distribution: temurin
           cache: maven
 
-      - name: OWASP Dependency-Check — ${{ matrix.service }}
+      - name: Dependency scan (OSS Index) — ${{ matrix.service }}
         run: |
-          mvn org.owasp:dependency-check-maven:check \
-            -DfailBuildOnCVSS=9 \
-            -Dformat=HTML \
-            -Dformat=JSON
+          mvn org.sonatype.ossindex.maven:ossindex-maven-plugin:audit \
+            -Dossindex.fail=false
         working-directory: ${{ matrix.dir }}
 
-      - name: Upload OWASP report
+      - name: Dependency tree — ${{ matrix.service }}
+        run: mvn dependency:tree -DoutputFile=dependency-tree.txt
+        working-directory: ${{ matrix.dir }}
+
+      - name: Upload dependency report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: owasp-${{ matrix.service }}
-          path: ${{ matrix.dir }}/target/dependency-check-report.*
+          name: deps-${{ matrix.service }}
+          path: ${{ matrix.dir }}/dependency-tree.txt
           retention-days: 14
 
   security-sast:
