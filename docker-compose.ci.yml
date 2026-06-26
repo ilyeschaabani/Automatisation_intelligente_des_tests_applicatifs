@@ -1,0 +1,114 @@
+version: '3.8'
+
+services:
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: Test_platform_db
+      POSTGRES_USER: ilyes
+      POSTGRES_PASSWORD: mypassword
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ilyes"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  eureka:
+    build: Backend/EurekaServeur
+    ports:
+      - "8761:8761"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  auth:
+    build: Backend/AuthenticationMicroservice
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      eureka:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/Test_platform_db
+      SPRING_DATASOURCE_USERNAME: ilyes
+      SPRING_DATASOURCE_PASSWORD: mypassword
+      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://eureka:8761/eureka/
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  ms-gestion:
+    build: Backend/ms_gestion
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      eureka:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/Test_platform_db
+      SPRING_DATASOURCE_USERNAME: ilyes
+      SPRING_DATASOURCE_PASSWORD: mypassword
+      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://eureka:8761/eureka/
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  ms-execution:
+    build: Backend/ms-execution
+    ports:
+      - "8083:8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      eureka:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/Test_platform_db
+      SPRING_DATASOURCE_USERNAME: ilyes
+      SPRING_DATASOURCE_PASSWORD: mypassword
+      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://eureka:8761/eureka/
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8083/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  frontend:
+    build: Frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      auth:
+        condition: service_healthy
+      ms-gestion:
+        condition: service_healthy
+      ms-execution:
+        condition: service_healthy
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+      AUTH_SERVICE_URL: http://auth:8081
+      MS_GESTION_SERVICE_URL: http://ms-gestion:8082
+      MS_EXECUTION_SERVICE_URL: http://ms-execution:8083
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
