@@ -139,7 +139,7 @@ interface EvaluationLiveViewProps {
   messages: ChatMessage[]
   liveScreenshot: string | null
   connected: boolean
-  needsInput: { question: string; hint?: string | null } | null
+  needsInput: { question: string; hint?: string | null; fields?: string[] | null } | null
   isRunning: boolean
   isMobile?: boolean
   currentBackend?: string | null
@@ -157,7 +157,30 @@ export function EvaluationLiveView({
   onSendAnswer,
 }: EvaluationLiveViewProps) {
   const [answer, setAnswer] = useState('')
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({})
   const [sentAnswers, setSentAnswers] = useState<{ id: string; text: string }[]>([])
+
+  const isSecretField = (label: string) =>
+    /mot de passe|password|code|otp|pin|secret|cvv|cvc/i.test(label)
+
+  // Reset the form whenever a new NEEDS_INPUT (with fields) arrives.
+  useEffect(() => {
+    setFieldValues({})
+  }, [needsInput?.fields])
+
+  const handleSendForm = () => {
+    const fields = needsInput?.fields ?? []
+    const answerText = fields
+      .map(f => `${f}: ${(fieldValues[f] ?? '').trim()}`)
+      .join('\n')
+    setSentAnswers(prev => [...prev, {
+      id: String(Date.now()),
+      // Masque les valeurs secrètes dans le fil de discussion (mais l'agent reçoit la vraie valeur).
+      text: fields.map(f => `${f}: ${isSecretField(f) ? '••••••' : (fieldValues[f] ?? '').trim()}`).join('\n'),
+    }])
+    onSendAnswer(answerText)
+    setFieldValues({})
+  }
   const chatEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -322,24 +345,53 @@ export function EvaluationLiveView({
             {needsInput.hint && (
               <p className="text-xs text-muted-foreground italic">Exemple : {needsInput.hint}</p>
             )}
-            <div className="flex gap-2">
-              <Input
-                ref={inputRef}
-                value={answer}
-                onChange={e => setAnswer(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Votre réponse…"
-                className="flex-1 border-orange-500/40 focus-visible:ring-orange-500/50"
-              />
-              <Button
-                onClick={handleSend}
-                disabled={!answer.trim()}
-                size="sm"
-                className="shrink-0 bg-orange-500 hover:bg-orange-600 text-white"
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
+
+            {needsInput.fields && needsInput.fields.length > 0 ? (
+              /* ── Formulaire multi-champs (login, virement…) ── */
+              <div className="space-y-2">
+                {needsInput.fields.map((field) => (
+                  <div key={field} className="space-y-1">
+                    <label className="text-xs font-medium text-foreground">{field}</label>
+                    <Input
+                      type={isSecretField(field) ? 'password' : 'text'}
+                      value={fieldValues[field] ?? ''}
+                      onChange={e => setFieldValues(prev => ({ ...prev, [field]: e.target.value }))}
+                      placeholder={isSecretField(field) ? '••••••' : `Saisir ${field.toLowerCase()}…`}
+                      className="border-orange-500/40 focus-visible:ring-orange-500/50"
+                      autoComplete="off"
+                    />
+                  </div>
+                ))}
+                <Button
+                  onClick={handleSendForm}
+                  disabled={needsInput.fields.some(f => !(fieldValues[f] ?? '').trim())}
+                  size="sm"
+                  className="w-full bg-orange-500 hover:bg-orange-600 text-white gap-2"
+                >
+                  <Send className="h-4 w-4" />
+                  Transmettre à l'IA et continuer
+                </Button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Input
+                  ref={inputRef}
+                  value={answer}
+                  onChange={e => setAnswer(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Votre réponse…"
+                  className="flex-1 border-orange-500/40 focus-visible:ring-orange-500/50"
+                />
+                <Button
+                  onClick={handleSend}
+                  disabled={!answer.trim()}
+                  size="sm"
+                  className="shrink-0 bg-orange-500 hover:bg-orange-600 text-white"
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>

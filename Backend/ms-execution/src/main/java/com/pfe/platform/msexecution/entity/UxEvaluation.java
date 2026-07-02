@@ -42,6 +42,11 @@ public class UxEvaluation {
     @Column(name = "description", columnDefinition = "text")
     private String description;
 
+    /** Scénario imposé par le testeur (ex: "faire un virement"). Si présent → mode scénario
+     *  ciblé ; sinon l'agent fait une exploration libre de l'application. */
+    @Column(name = "scenario", columnDefinition = "text")
+    private String scenario;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private Status status;

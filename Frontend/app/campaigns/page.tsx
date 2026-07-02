@@ -29,17 +29,6 @@ type CampaignStats = {
   lastRun: string
 }
 
-const demoCampaignCard = {
-  name: 'Payment Gateway API Tests',
-  type: 'API' as const,
-  status: 'Running' as const,
-  progress: 65,
-  tests: 89,
-  passed: 87,
-  failed: 2,
-  lastRun: '5 mins ago',
-}
-
 function mapStatus(status: unknown): CardStatus {
   const value = String(status ?? '').toUpperCase()
   if (value === 'RUNNING') return 'Running'
@@ -189,9 +178,9 @@ export default function CampaignsPage() {
         <div className="p-6 max-w-7xl">
           {/* Page Header */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-foreground">Test Campaigns</h1>
+            <h1 className="text-3xl font-bold text-foreground">Campagnes de test</h1>
             <p className="text-muted-foreground mt-1">
-              Manage and monitor all your test campaigns
+              Gérez et suivez toutes vos campagnes de test
             </p>
           </div>
 
@@ -200,7 +189,7 @@ export default function CampaignsPage() {
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground size-5" />
               <Input
-                placeholder="Search campaigns..."
+                placeholder="Rechercher des campagnes…"
                 className="pl-10"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -212,12 +201,12 @@ export default function CampaignsPage() {
               disabled={projectsLoading || projects.length === 0}
             >
               <SelectTrigger className="w-full md:w-64">
-                <SelectValue placeholder={projectsLoading ? 'Loading projects…' : 'Select project'} />
+                <SelectValue placeholder={projectsLoading ? 'Chargement des projets…' : 'Sélectionner un projet'} />
               </SelectTrigger>
               <SelectContent>
                 {projects.length === 0 ? (
                   <SelectItem value="__none" disabled>
-                    No projects found
+                    Aucun projet trouvé
                   </SelectItem>
                 ) : (
                   projects
@@ -237,18 +226,15 @@ export default function CampaignsPage() {
             >
               <Link href="/campaigns/new">
                 <Plus size={20} />
-                New Campaign
+                Nouvelle campagne
               </Link>
             </Button>
           </div>
 
           {/* Campaigns Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Static demo card kept for UI testing */}
-            <CampaignCard {...demoCampaignCard} />
-
             {campaignsLoading ? (
-              <p className="text-sm text-muted-foreground">Loading campaigns…</p>
+              <p className="text-sm text-muted-foreground">Chargement des campagnes…</p>
             ) : (
               filtered.map((campaign) => (
                 (() => {
@@ -257,7 +243,7 @@ export default function CampaignsPage() {
                 <CampaignCard
                   key={campaign.id}
                   id={campaign.id}
-                  name={String(campaign.name ?? 'Untitled campaign')}
+                  name={String(campaign.name ?? 'Campagne sans titre')}
                   type={mapType(campaign)}
                   status={mapStatus(campaign.status)}
                   progress={0}

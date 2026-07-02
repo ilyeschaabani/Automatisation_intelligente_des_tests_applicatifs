@@ -310,9 +310,9 @@ export function GitHubIntegrationCard({
     <Card className={className}>
       <CardHeader className="flex flex-row items-start justify-between gap-4">
         <div>
-          <CardTitle>GitHub Account</CardTitle>
+          <CardTitle>Compte GitHub</CardTitle>
           <CardDescription>
-            Connect your GitHub account to enable repository access.
+            Connectez votre compte GitHub pour accéder à vos dépôts.
           </CardDescription>
         </div>
 
@@ -323,7 +323,7 @@ export function GitHubIntegrationCard({
               onClick={() => void disconnect()}
               disabled={disconnecting}
             >
-              {disconnecting ? 'Disconnecting…' : 'Disconnect'}
+              {disconnecting ? 'Déconnexion…' : 'Déconnecter'}
             </Button>
           ) : null}
           <Button
@@ -331,30 +331,30 @@ export function GitHubIntegrationCard({
             onClick={() => void fetchMe()}
             disabled={connection.kind === 'loading' || disconnecting}
           >
-            {connection.kind === 'loading' ? 'Loading…' : 'Refresh'}
+            {connection.kind === 'loading' ? 'Chargement…' : 'Actualiser'}
           </Button>
         </div>
       </CardHeader>
 
       <CardContent>
         {connection.kind === 'loading' ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <p className="text-sm text-muted-foreground">Chargement…</p>
         ) : connection.kind === 'unauthorized' ? (
           <p className="text-sm text-muted-foreground">
-            Please sign in to connect GitHub.
+            Connectez-vous pour relier GitHub.
           </p>
         ) : connection.kind === 'error' ? (
           <div className="space-y-2">
             <p className="text-sm text-destructive">{connection.message}</p>
             <p className="text-sm text-muted-foreground">
-              Make sure the backend is reachable and you are signed in.
+              Vérifiez que le backend est accessible et que vous êtes connecté.
             </p>
           </div>
         ) : connection.kind === 'notConnected' ? (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Connect your GitHub account to allow access to your repositories
-              (including private repos if permitted).
+              Connectez votre compte GitHub pour autoriser l'accès à vos dépôts
+              (y compris les dépôts privés si autorisé).
             </p>
             <div>
               <Button
@@ -364,11 +364,11 @@ export function GitHubIntegrationCard({
                 }}
                 disabled={!connectUrl}
               >
-                Connect GitHub Account
+                Connecter le compte GitHub
               </Button>
               {!connectUrl ? (
                 <p className="text-xs text-muted-foreground mt-2">
-                  Missing NEXT_PUBLIC_API_URL configuration.
+                  Configuration NEXT_PUBLIC_API_URL manquante.
                 </p>
               ) : null}
             </div>
@@ -390,11 +390,11 @@ export function GitHubIntegrationCard({
                     <p className="text-sm font-medium text-foreground truncate">
                       {connectedMeta?.githubUsername || 'GitHub'}
                     </p>
-                    <Badge variant="secondary">Connected</Badge>
+                    <Badge variant="secondary">Connecté</Badge>
                   </div>
                   {tokenCreatedLabel ? (
                     <p className="text-xs text-muted-foreground mt-1">
-                      Token created: {tokenCreatedLabel}
+                      Jeton créé le : {tokenCreatedLabel}
                     </p>
                   ) : null}
                 </div>
@@ -402,34 +402,35 @@ export function GitHubIntegrationCard({
             </div>
 
             <div>
-              <h3 className="text-sm font-semibold text-foreground">Repositories</h3>
+              <h3 className="text-sm font-semibold text-foreground">Dépôts</h3>
               <p className="text-sm text-muted-foreground mt-1">
-                Available repos linked to your GitHub connection.
+                Dépôts disponibles liés à votre connexion GitHub.
               </p>
 
               <div className="mt-4">
                 {repos.kind === 'idle' || repos.kind === 'loading' ? (
                   <p className="text-sm text-muted-foreground">
-                    {repos.kind === 'loading' ? 'Loading repos…' : 'Loading repos…'}
+                    Chargement des dépôts…
                   </p>
                 ) : repos.kind === 'unavailable' ? (
                   <p className="text-sm text-muted-foreground">
-                    Repo listing not available yet.
+                    Liste des dépôts pas encore disponible.
                   </p>
                 ) : repos.kind === 'error' ? (
                   <p className="text-sm text-muted-foreground">{repos.message}</p>
                 ) : repos.repos.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No repos found.</p>
+                  <p className="text-sm text-muted-foreground">Aucun dépôt trouvé.</p>
                 ) : (
-                  <Table>
+                  <div className="rounded-md border border-border overflow-x-auto">
+                  <Table className="min-w-[680px]">
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Name</TableHead>
+                        <TableHead>Nom</TableHead>
                         <TableHead>Branches</TableHead>
-                        <TableHead>Owner</TableHead>
-                        <TableHead>Privacy</TableHead>
+                        <TableHead>Propriétaire</TableHead>
+                        <TableHead>Visibilité</TableHead>
                         <TableHead>URL</TableHead>
-                        <TableHead>Updated</TableHead>
+                        <TableHead>Mis à jour</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -442,7 +443,7 @@ export function GitHubIntegrationCard({
                           <TableCell>{repo.owner}</TableCell>
                           <TableCell>
                             <Badge variant={repo.isPrivate ? 'outline' : 'secondary'}>
-                              {repo.isPrivate ? 'Private' : 'Public'}
+                              {repo.isPrivate ? 'Privé' : 'Public'}
                             </Badge>
                           </TableCell>
                           <TableCell className="max-w-[220px] truncate">
@@ -466,6 +467,7 @@ export function GitHubIntegrationCard({
                       ))}
                     </TableBody>
                   </Table>
+                  </div>
                 )}
               </div>
             </div>

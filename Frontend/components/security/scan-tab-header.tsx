@@ -40,11 +40,12 @@ interface ScanTabHeaderProps {
   accentColor: string
   onScansLoaded?: (scans: ScanRecord[]) => void
   onVulnsLoaded?: (scanId: number) => void
+  onProjectChange?: (projectId: string) => void
 }
 
 export function ScanTabHeader({
   scanType, icon, title, subtitle, accentColor,
-  onScansLoaded,
+  onScansLoaded, onProjectChange,
 }: ScanTabHeaderProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [environments, setEnvironments] = useState<Environment[]>([])
@@ -59,11 +60,12 @@ export function ScanTabHeader({
   }, [])
 
   useEffect(() => {
-    if (!selectedProject) { setEnvironments([]); setSelectedEnv(''); return }
+    if (!selectedProject) { setEnvironments([]); setSelectedEnv(''); onProjectChange?.(''); return }
+    onProjectChange?.(selectedProject)
     environmentService.getAll(Number(selectedProject))
       .then(setEnvironments)
       .catch(() => setEnvironments([]))
-  }, [selectedProject])
+  }, [selectedProject, onProjectChange])
 
   const loadScans = useCallback(async () => {
     if (!selectedProject) return

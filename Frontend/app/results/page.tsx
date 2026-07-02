@@ -135,7 +135,7 @@ export default function ResultsPage() {
 
       setCampaigns(campaignResults)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load test results')
+      setError(err instanceof Error ? err.message : 'Échec du chargement des résultats de tests')
     } finally {
       setLoading(false)
     }
@@ -157,9 +157,9 @@ export default function ResultsPage() {
         <div className="p-6 max-w-7xl space-y-8">
           {/* Page Header */}
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Test Results</h1>
+            <h1 className="text-3xl font-bold text-foreground">Résultats des tests</h1>
             <p className="text-muted-foreground mt-1">
-              View detailed results from all test executions
+              Consultez les résultats détaillés de toutes les exécutions de tests
             </p>
           </div>
 
@@ -180,7 +180,7 @@ export default function ResultsPage() {
                   <CheckCircle2 className="text-green-600 dark:text-green-400" size={24} />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Passed</p>
+                  <p className="text-sm text-muted-foreground">Total réussis</p>
                   <p className="text-2xl font-bold text-foreground">{loading ? '—' : totalPassed}</p>
                 </div>
               </div>
@@ -192,7 +192,7 @@ export default function ResultsPage() {
                   <AlertCircle className="text-red-600 dark:text-red-400" size={24} />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Failed</p>
+                  <p className="text-sm text-muted-foreground">Total échoués</p>
                   <p className="text-2xl font-bold text-foreground">{loading ? '—' : totalFailed}</p>
                 </div>
               </div>
@@ -204,7 +204,7 @@ export default function ResultsPage() {
                   <Clock className="text-blue-600 dark:text-blue-400" size={24} />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Success Rate</p>
+                  <p className="text-sm text-muted-foreground">Taux de réussite</p>
                   <p className="text-2xl font-bold text-foreground">{loading ? '—' : `${successRate}%`}</p>
                 </div>
               </div>
@@ -216,24 +216,24 @@ export default function ResultsPage() {
             <div className="overflow-x-auto">
               {loading ? (
                 <div className="p-8 text-center text-muted-foreground">
-                  Loading test results...
+                  Chargement des résultats…
                 </div>
               ) : campaigns.length === 0 ? (
                 <div className="p-8 text-center text-muted-foreground">
-                  No test campaigns found.
+                  Aucune campagne de test trouvée.
                 </div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow className="border-b border-border">
-                      <TableHead className="text-left">Campaign</TableHead>
-                      <TableHead className="text-center">Status</TableHead>
+                      <TableHead className="text-left">Campagne</TableHead>
+                      <TableHead className="text-center">Statut</TableHead>
                       <TableHead className="text-center">Tests</TableHead>
-                      <TableHead className="text-center">Passed</TableHead>
-                      <TableHead className="text-center">Failed</TableHead>
-                      <TableHead className="text-center">Skipped</TableHead>
-                      <TableHead className="text-center">Duration</TableHead>
-                      <TableHead className="text-center">Time</TableHead>
+                      <TableHead className="text-center">Réussis</TableHead>
+                      <TableHead className="text-center">Échoués</TableHead>
+                      <TableHead className="text-center">Ignorés</TableHead>
+                      <TableHead className="text-center">Durée</TableHead>
+                      <TableHead className="text-center">Heure</TableHead>
                       <TableHead className="text-center">Action</TableHead>
                     </TableRow>
                   </TableHeader>

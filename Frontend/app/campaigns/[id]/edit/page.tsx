@@ -20,9 +20,9 @@ export default function EditCampaignPage() {
 
         <div className="p-6 max-w-3xl">
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-foreground">Edit Campaign</h1>
+            <h1 className="text-3xl font-bold text-foreground">Modifier la campagne</h1>
             <p className="text-muted-foreground mt-1">
-              Update fields and attached test cases
+              Mettez à jour les champs et les cas de test attachés
             </p>
           </div>
 

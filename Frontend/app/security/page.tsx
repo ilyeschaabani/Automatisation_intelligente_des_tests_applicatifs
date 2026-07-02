@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Header } from '@/components/header'
 import { Sidebar } from '@/components/sidebar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -31,13 +32,22 @@ import { fetchExecutionScans, fetchScanVulnerabilities, mapToVulnerability } fro
 import type { Project } from '@/types/ms-gestion'
 import type { Vulnerability, SecurityScore } from '@/types/security'
 
-export default function SecurityPage() {
+function SecurityPageInner() {
+  const searchParams = useSearchParams()
+  const tabFromUrl = searchParams.get('tab')
+  const highlightFromUrl = searchParams.get('highlight')
+
+  const [activeTab, setActiveTab] = useState(tabFromUrl || 'overview')
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProject, setSelectedProject] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const [scans, setScans] = useState<any[]>([])
   const [vulns, setVulns] = useState<Vulnerability[]>([])
   const [rawVulns, setRawVulns] = useState<any[]>([])
+
+  useEffect(() => {
+    if (tabFromUrl) setActiveTab(tabFromUrl)
+  }, [tabFromUrl])
 
   useEffect(() => {
     projectService.getAll().then(setProjects).catch(() => {})
@@ -113,7 +123,7 @@ export default function SecurityPage() {
                   <Shield className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <h1 className="text-xl font-bold">Security Center</h1>
+                  <h1 className="text-xl font-bold">Centre de sécurité</h1>
                   <p className="text-xs text-muted-foreground">SAST, DAST, SCA — Analyse de securite applicative</p>
                 </div>
               </div>
@@ -137,7 +147,7 @@ export default function SecurityPage() {
               </div>
             </div>
 
-            <Tabs defaultValue="overview" className="space-y-6">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
               <TabsList className="flex-wrap h-auto gap-1 p-1.5 bg-muted/60 border">
                 <TabsTrigger value="overview" className="text-xs gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                   <LayoutDashboard className="h-3.5 w-3.5" />Overview
@@ -199,7 +209,7 @@ export default function SecurityPage() {
               </TabsContent>
 
               <TabsContent value="dast">
-                <DastCenter />
+                <DastCenter projectId={selectedProject} />
               </TabsContent>
 
               <TabsContent value="sca">
@@ -212,7 +222,7 @@ export default function SecurityPage() {
 
               <TabsContent value="vulns">
                 {!selectedProject ? <EmptyProjectState /> : (
-                  <VulnerabilityTable vulns={vulns} />
+                  <VulnerabilityTable vulns={vulns} projectId={selectedProject} highlightId={highlightFromUrl} />
                 )}
               </TabsContent>
 
@@ -244,6 +254,14 @@ export default function SecurityPage() {
         </main>
       </div>
     </div>
+  )
+}
+
+export default function SecurityPage() {
+  return (
+    <Suspense>
+      <SecurityPageInner />
+    </Suspense>
   )
 }
 

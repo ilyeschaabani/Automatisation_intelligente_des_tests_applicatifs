@@ -927,7 +927,7 @@ export default function ProjectDetailsPage() {
             </div>
 
             {projectState === 'loading' ? (
-              <Card className="p-6 text-sm text-muted-foreground">Loading project...</Card>
+              <Card className="p-6 text-sm text-muted-foreground">Chargement du projet…</Card>
             ) : null}
             {projectState === 'error' ? (
               <Card className="p-6 text-sm text-destructive">{projectError}</Card>
@@ -937,21 +937,21 @@ export default function ProjectDetailsPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Database size={18} />
-                  <h2 className="text-lg font-semibold">Environments</h2>
+                  <h2 className="text-lg font-semibold">Environnements</h2>
                 </div>
                 <Button size="sm" onClick={openEnvCreate} className="gap-2">
                   <Plus size={14} />
-                  Add environment
+                  Ajouter un environnement
                 </Button>
               </div>
 
               {envError ? <p className="text-sm text-destructive mt-4">{envError}</p> : null}
               {envState === 'loading' ? (
-                <p className="text-sm text-muted-foreground mt-4">Loading environments...</p>
+                <p className="text-sm text-muted-foreground mt-4">Chargement des environnements…</p>
               ) : null}
 
               {envState !== 'loading' && environments.length === 0 ? (
-                <p className="text-sm text-muted-foreground mt-4">No environments yet.</p>
+                <p className="text-sm text-muted-foreground mt-4">Aucun environnement pour l'instant.</p>
               ) : null}
 
               {envState !== 'loading' && environments.length > 0 ? (
@@ -959,10 +959,10 @@ export default function ProjectDetailsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Base URL (Web)</TableHead>
-                        <TableHead>Base URL (API)</TableHead>
-                        <TableHead>Created</TableHead>
+                        <TableHead>Nom</TableHead>
+                        <TableHead>URL de base (Web)</TableHead>
+                        <TableHead>URL de base (API)</TableHead>
+                        <TableHead>Créé le</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -977,11 +977,11 @@ export default function ProjectDetailsPage() {
                             <div className="flex justify-end gap-2">
                               <Button size="sm" variant="outline" onClick={() => openEnvEdit(env)}>
                                 <Settings size={14} />
-                                Edit
+                                Modifier
                               </Button>
                               <Button size="sm" variant="destructive" onClick={() => openEnvDelete(env)}>
                                 <Trash2 size={14} />
-                                Delete
+                                Supprimer
                               </Button>
                             </div>
                           </TableCell>
@@ -997,21 +997,21 @@ export default function ProjectDetailsPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Settings size={18} />
-                  <h2 className="text-lg font-semibold">Test suites</h2>
+                  <h2 className="text-lg font-semibold">Suites de test</h2>
                 </div>
                 <Button size="sm" onClick={openSuiteCreate} className="gap-2">
                   <Plus size={14} />
-                  Add suite
+                  Ajouter une suite
                 </Button>
               </div>
 
               {suiteError ? <p className="text-sm text-destructive mt-4">{suiteError}</p> : null}
               {suiteState === 'loading' ? (
-                <p className="text-sm text-muted-foreground mt-4">Loading suites...</p>
+                <p className="text-sm text-muted-foreground mt-4">Chargement des suites…</p>
               ) : null}
 
               {suiteState !== 'loading' && suites.length === 0 ? (
-                <p className="text-sm text-muted-foreground mt-4">No suites yet.</p>
+                <p className="text-sm text-muted-foreground mt-4">Aucune suite pour l'instant.</p>
               ) : null}
 
               {suiteState !== 'loading' && suites.length > 0 ? (
@@ -1019,9 +1019,9 @@ export default function ProjectDetailsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Name</TableHead>
+                        <TableHead>Nom</TableHead>
                         <TableHead>Description</TableHead>
-                        <TableHead>Created</TableHead>
+                        <TableHead>Créé le</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -1035,16 +1035,16 @@ export default function ProjectDetailsPage() {
                             <div className="flex justify-end gap-2">
                               <Button size="sm" variant="outline" asChild>
                                 <Link href={`/projects/${projectId}/suites/${suite.id}`}>
-                                  View cases
+                                  Voir les cas
                                 </Link>
                               </Button>
                               <Button size="sm" variant="outline" onClick={() => openSuiteEdit(suite)}>
                                 <Settings size={14} />
-                                Edit
+                                Modifier
                               </Button>
                               <Button size="sm" variant="destructive" onClick={() => openSuiteDelete(suite)}>
                                 <Trash2 size={14} />
-                                Delete
+                                Supprimer
                               </Button>
                             </div>
                           </TableCell>
@@ -1060,21 +1060,21 @@ export default function ProjectDetailsPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Users size={18} />
-                  <h2 className="text-lg font-semibold">Project members</h2>
+                  <h2 className="text-lg font-semibold">Membres du projet</h2>
                 </div>
                 <Button size="sm" onClick={openMemberAdd} className="gap-2">
                   <Plus size={14} />
-                  Add member
+                  Ajouter un membre
                 </Button>
               </div>
 
               {memberError ? <p className="text-sm text-destructive mt-4">{memberError}</p> : null}
               {memberState === 'loading' ? (
-                <p className="text-sm text-muted-foreground mt-4">Loading members...</p>
+                <p className="text-sm text-muted-foreground mt-4">Chargement des membres…</p>
               ) : null}
 
               {memberState !== 'loading' && members.length === 0 ? (
-                <p className="text-sm text-muted-foreground mt-4">No members yet.</p>
+                <p className="text-sm text-muted-foreground mt-4">Aucun membre pour l'instant.</p>
               ) : null}
 
               {memberState !== 'loading' && members.length > 0 ? (
@@ -1127,14 +1127,14 @@ export default function ProjectDetailsPage() {
       <FormDialog
         open={envCreateOpen}
         onOpenChange={setEnvCreateOpen}
-        title="Add environment"
-        description="Define URLs and variables for this environment."
-        submitLabel="Create environment"
+        title="Ajouter un environnement"
+        description="Définissez les URLs et variables de cet environnement."
+        submitLabel="Créer l'environnement"
         isSubmitting={isEnvSubmitting}
         onSubmit={submitEnvCreate}
       >
         <div className="space-y-2">
-          <Label htmlFor="env-name">Name</Label>
+          <Label htmlFor="env-name">Nom</Label>
           <Input
             id="env-name"
             value={envForm.name}
@@ -1166,7 +1166,7 @@ export default function ProjectDetailsPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="env-git-repo">Source code repository <span className="text-muted-foreground text-xs">(for UNIT / INTEGRATION tests)</span></Label>
+          <Label htmlFor="env-git-repo">Dépôt du code source <span className="text-muted-foreground text-xs">(pour les tests UNIT / INTEGRATION)</span></Label>
           <Select
             value={envForm.gitRepoUrl}
             onValueChange={(v) => setEnvForm((prev) => ({ ...prev, gitRepoUrl: v, gitBranch: '' }))}
@@ -1174,20 +1174,20 @@ export default function ProjectDetailsPage() {
           >
             <SelectTrigger id="env-git-repo">
               <SelectValue placeholder={
-                gitReposState === 'loading' ? 'Loading...' :
-                gitRepos.length > 0 ? 'Select repository' : 'No GitHub repos connected'
+                gitReposState === 'loading' ? 'Chargement…' :
+                gitRepos.length > 0 ? 'Sélectionner un dépôt' : 'Aucun dépôt GitHub connecté'
               } />
             </SelectTrigger>
             <SelectContent>
-              {gitReposState === 'loading' && <SelectItem value="__loading__" disabled>Loading...</SelectItem>}
-              {gitReposState === 'ready' && gitRepos.length === 0 && <SelectItem value="__none__" disabled>No connected GitHub repositories</SelectItem>}
+              {gitReposState === 'loading' && <SelectItem value="__loading__" disabled>Chargement…</SelectItem>}
+              {gitReposState === 'ready' && gitRepos.length === 0 && <SelectItem value="__none__" disabled>Aucun dépôt GitHub connecté</SelectItem>}
               {gitRepos.map((r) => <SelectItem key={r.key} value={r.url}>{r.label}</SelectItem>)}
             </SelectContent>
           </Select>
           {gitReposMessage && <p className="text-xs text-muted-foreground">{gitReposMessage}</p>}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="env-git-branch">Branch</Label>
+          <Label htmlFor="env-git-branch">Branche</Label>
           <Select
             value={envForm.gitBranch}
             onValueChange={(v) => setEnvForm((prev) => ({ ...prev, gitBranch: v }))}
@@ -1195,16 +1195,16 @@ export default function ProjectDetailsPage() {
           >
             <SelectTrigger id="env-git-branch">
               <SelectValue placeholder={
-                !envForm.gitRepoUrl.trim() ? 'Select repository first' :
-                envBranchState.kind === 'loading' ? 'Loading branches...' :
-                envBranchState.kind === 'available' && envBranchState.branches.length > 0 ? 'Select branch' : 'No branches'
+                !envForm.gitRepoUrl.trim() ? 'Sélectionnez d\'abord un dépôt' :
+                envBranchState.kind === 'loading' ? 'Chargement des branches…' :
+                envBranchState.kind === 'available' && envBranchState.branches.length > 0 ? 'Sélectionner une branche' : 'Aucune branche'
               } />
             </SelectTrigger>
             <SelectContent>
-              {envBranchState.kind === 'loading' && <SelectItem value="__loading__" disabled>Loading...</SelectItem>}
-              {envBranchState.kind === 'error' && <SelectItem value="__error__" disabled>Failed to load branches</SelectItem>}
+              {envBranchState.kind === 'loading' && <SelectItem value="__loading__" disabled>Chargement…</SelectItem>}
+              {envBranchState.kind === 'error' && <SelectItem value="__error__" disabled>Échec du chargement des branches</SelectItem>}
               {envBranchState.kind === 'available' && envForm.gitBranch.trim() && !envBranchState.branches.includes(envForm.gitBranch.trim()) && (
-                <SelectItem value={envForm.gitBranch.trim()}>{envForm.gitBranch.trim()} (current)</SelectItem>
+                <SelectItem value={envForm.gitBranch.trim()}>{envForm.gitBranch.trim()} (actuelle)</SelectItem>
               )}
               {envBranchState.kind === 'available' && envBranchState.branches.map((b) => (
                 <SelectItem key={b} value={b}>{b}</SelectItem>
@@ -1213,10 +1213,10 @@ export default function ProjectDetailsPage() {
           </Select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="env-db-type">Database type <span className="text-muted-foreground text-xs">(for INTEGRATION tests)</span></Label>
+          <Label htmlFor="env-db-type">Type de base de données <span className="text-muted-foreground text-xs">(pour les tests INTEGRATION)</span></Label>
           <Select value={envForm.databaseType} onValueChange={(v) => setEnvForm((prev) => ({ ...prev, databaseType: v }))}>
             <SelectTrigger id="env-db-type">
-              <SelectValue placeholder="Select database type" />
+              <SelectValue placeholder="Sélectionner un type de base de données" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="H2">H2 (in-memory)</SelectItem>
@@ -1232,14 +1232,14 @@ export default function ProjectDetailsPage() {
       <FormDialog
         open={envEditOpen}
         onOpenChange={setEnvEditOpen}
-        title="Edit environment"
-        description="Update environment configuration."
-        submitLabel="Save changes"
+        title="Modifier l'environnement"
+        description="Mettez à jour la configuration de l'environnement."
+        submitLabel="Enregistrer"
         isSubmitting={isEnvSubmitting}
         onSubmit={submitEnvEdit}
       >
         <div className="space-y-2">
-          <Label htmlFor="env-edit-name">Name</Label>
+          <Label htmlFor="env-edit-name">Nom</Label>
           <Input
             id="env-edit-name"
             value={envForm.name}
@@ -1268,7 +1268,7 @@ export default function ProjectDetailsPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="env-edit-git-repo">Source code repository <span className="text-muted-foreground text-xs">(for UNIT / INTEGRATION tests)</span></Label>
+          <Label htmlFor="env-edit-git-repo">Dépôt du code source <span className="text-muted-foreground text-xs">(pour les tests UNIT / INTEGRATION)</span></Label>
           <Select
             value={envForm.gitRepoUrl}
             onValueChange={(v) => setEnvForm((prev) => ({ ...prev, gitRepoUrl: v, gitBranch: '' }))}
@@ -1276,20 +1276,20 @@ export default function ProjectDetailsPage() {
           >
             <SelectTrigger id="env-edit-git-repo">
               <SelectValue placeholder={
-                gitReposState === 'loading' ? 'Loading...' :
-                gitRepos.length > 0 ? 'Select repository' : 'No GitHub repos connected'
+                gitReposState === 'loading' ? 'Chargement…' :
+                gitRepos.length > 0 ? 'Sélectionner un dépôt' : 'Aucun dépôt GitHub connecté'
               } />
             </SelectTrigger>
             <SelectContent>
-              {gitReposState === 'loading' && <SelectItem value="__loading__" disabled>Loading...</SelectItem>}
-              {gitReposState === 'ready' && gitRepos.length === 0 && <SelectItem value="__none__" disabled>No connected GitHub repositories</SelectItem>}
+              {gitReposState === 'loading' && <SelectItem value="__loading__" disabled>Chargement…</SelectItem>}
+              {gitReposState === 'ready' && gitRepos.length === 0 && <SelectItem value="__none__" disabled>Aucun dépôt GitHub connecté</SelectItem>}
               {gitRepos.map((r) => <SelectItem key={r.key} value={r.url}>{r.label}</SelectItem>)}
             </SelectContent>
           </Select>
           {gitReposMessage && <p className="text-xs text-muted-foreground">{gitReposMessage}</p>}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="env-edit-git-branch">Branch</Label>
+          <Label htmlFor="env-edit-git-branch">Branche</Label>
           <Select
             value={envForm.gitBranch}
             onValueChange={(v) => setEnvForm((prev) => ({ ...prev, gitBranch: v }))}
@@ -1297,16 +1297,16 @@ export default function ProjectDetailsPage() {
           >
             <SelectTrigger id="env-edit-git-branch">
               <SelectValue placeholder={
-                !envForm.gitRepoUrl.trim() ? 'Select repository first' :
-                envBranchState.kind === 'loading' ? 'Loading branches...' :
-                envBranchState.kind === 'available' && envBranchState.branches.length > 0 ? 'Select branch' : 'No branches'
+                !envForm.gitRepoUrl.trim() ? 'Sélectionnez d\'abord un dépôt' :
+                envBranchState.kind === 'loading' ? 'Chargement des branches…' :
+                envBranchState.kind === 'available' && envBranchState.branches.length > 0 ? 'Sélectionner une branche' : 'Aucune branche'
               } />
             </SelectTrigger>
             <SelectContent>
-              {envBranchState.kind === 'loading' && <SelectItem value="__loading__" disabled>Loading...</SelectItem>}
-              {envBranchState.kind === 'error' && <SelectItem value="__error__" disabled>Failed to load branches</SelectItem>}
+              {envBranchState.kind === 'loading' && <SelectItem value="__loading__" disabled>Chargement…</SelectItem>}
+              {envBranchState.kind === 'error' && <SelectItem value="__error__" disabled>Échec du chargement des branches</SelectItem>}
               {envBranchState.kind === 'available' && envForm.gitBranch.trim() && !envBranchState.branches.includes(envForm.gitBranch.trim()) && (
-                <SelectItem value={envForm.gitBranch.trim()}>{envForm.gitBranch.trim()} (current)</SelectItem>
+                <SelectItem value={envForm.gitBranch.trim()}>{envForm.gitBranch.trim()} (actuelle)</SelectItem>
               )}
               {envBranchState.kind === 'available' && envBranchState.branches.map((b) => (
                 <SelectItem key={b} value={b}>{b}</SelectItem>
@@ -1315,10 +1315,10 @@ export default function ProjectDetailsPage() {
           </Select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="env-edit-db-type">Database type <span className="text-muted-foreground text-xs">(for INTEGRATION tests)</span></Label>
+          <Label htmlFor="env-edit-db-type">Type de base de données <span className="text-muted-foreground text-xs">(pour les tests INTEGRATION)</span></Label>
           <Select value={envForm.databaseType} onValueChange={(v) => setEnvForm((prev) => ({ ...prev, databaseType: v }))}>
             <SelectTrigger id="env-edit-db-type">
-              <SelectValue placeholder="Select database type" />
+              <SelectValue placeholder="Sélectionner un type de base de données" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="H2">H2 (in-memory)</SelectItem>
@@ -1334,9 +1334,9 @@ export default function ProjectDetailsPage() {
       <ConfirmDialog
         open={envDeleteOpen}
         onOpenChange={setEnvDeleteOpen}
-        title="Delete environment"
-        description={envDeleting ? `Delete ${envDeleting.name}?` : 'Delete environment?'}
-        confirmLabel="Delete"
+        title="Supprimer l'environnement"
+        description={envDeleting ? `Supprimer « ${envDeleting.name} » ?` : 'Supprimer l\'environnement ?'}
+        confirmLabel="Supprimer"
         isConfirming={isEnvDeleting}
         onConfirm={confirmEnvDelete}
       />
@@ -1344,20 +1344,20 @@ export default function ProjectDetailsPage() {
       <FormDialog
         open={suiteCreateOpen}
         onOpenChange={setSuiteCreateOpen}
-        title="Add test suite"
-        description="Group test cases for this project."
-        submitLabel="Create suite"
+        title="Ajouter une suite de test"
+        description="Regroupez les cas de test de ce projet."
+        submitLabel="Créer la suite"
         isSubmitting={isSuiteSubmitting}
         onSubmit={submitSuiteCreate}
         disableSubmit={false}
       >
         <div className="space-y-2">
-          <Label htmlFor="suite-name">Name</Label>
+          <Label htmlFor="suite-name">Nom</Label>
           <Input
             id="suite-name"
             value={suiteForm.name}
             onChange={(event) => setSuiteForm((prev) => ({ ...prev, name: event.target.value }))}
-            placeholder="Regression Suite"
+            placeholder="Suite de régression"
             required
           />
         </div>
@@ -1369,7 +1369,7 @@ export default function ProjectDetailsPage() {
             onChange={(event) =>
               setSuiteForm((prev) => ({ ...prev, description: event.target.value }))
             }
-            placeholder="Optional description"
+            placeholder="Description (facultatif)"
           />
         </div>
         <div className="space-y-2">
@@ -1397,11 +1397,11 @@ export default function ProjectDetailsPage() {
             }}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Select type" />
+              <SelectValue placeholder="Sélectionner un type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="UNIT">Unit Test</SelectItem>
-              <SelectItem value="INTEGRATION">Integration Test</SelectItem>
+              <SelectItem value="UNIT">Test unitaire</SelectItem>
+              <SelectItem value="INTEGRATION">Test d'intégration</SelectItem>
               <SelectItem value="WEB">E2E</SelectItem>
             </SelectContent>
           </Select>
@@ -1431,15 +1431,15 @@ export default function ProjectDetailsPage() {
       <FormDialog
         open={suiteEditOpen}
         onOpenChange={setSuiteEditOpen}
-        title="Edit test suite"
-        description="Update suite metadata."
-        submitLabel="Save changes"
+        title="Modifier la suite de test"
+        description="Mettez à jour les métadonnées de la suite."
+        submitLabel="Enregistrer"
         isSubmitting={isSuiteSubmitting}
         onSubmit={submitSuiteEdit}
         disableSubmit={false}
       >
         <div className="space-y-2">
-          <Label htmlFor="suite-edit-name">Name</Label>
+          <Label htmlFor="suite-edit-name">Nom</Label>
           <Input
             id="suite-edit-name"
             value={suiteForm.name}
@@ -1481,11 +1481,11 @@ export default function ProjectDetailsPage() {
             }}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Select type" />
+              <SelectValue placeholder="Sélectionner un type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="UNIT">Unit Test</SelectItem>
-              <SelectItem value="INTEGRATION">Integration Test</SelectItem>
+              <SelectItem value="UNIT">Test unitaire</SelectItem>
+              <SelectItem value="INTEGRATION">Test d'intégration</SelectItem>
               <SelectItem value="WEB">E2E</SelectItem>
             </SelectContent>
           </Select>
@@ -1515,9 +1515,9 @@ export default function ProjectDetailsPage() {
       <ConfirmDialog
         open={suiteDeleteOpen}
         onOpenChange={setSuiteDeleteOpen}
-        title="Delete test suite"
-        description={suiteDeleting ? `Delete ${suiteDeleting.name}?` : 'Delete test suite?'}
-        confirmLabel="Delete"
+        title="Supprimer la suite de test"
+        description={suiteDeleting ? `Supprimer « ${suiteDeleting.name} » ?` : 'Supprimer la suite de test ?'}
+        confirmLabel="Supprimer"
         isConfirming={isSuiteDeleting}
         onConfirm={confirmSuiteDelete}
       />
@@ -1525,20 +1525,20 @@ export default function ProjectDetailsPage() {
       <FormDialog
         open={memberAddOpen}
         onOpenChange={setMemberAddOpen}
-        title="Add member"
-        description="Invite a teammate to the project."
-        submitLabel="Add member"
+        title="Ajouter un membre"
+        description="Invitez un coéquipier sur le projet."
+        submitLabel="Ajouter le membre"
         isSubmitting={isMemberSubmitting}
         onSubmit={submitMemberAdd}
       >
         <div className="space-y-2">
-          <Label>User</Label>
+          <Label>Utilisateur</Label>
           <Select
             value={memberForm.userId}
             onValueChange={(value) => setMemberForm((prev) => ({ ...prev, userId: value }))}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Select user" />
+              <SelectValue placeholder="Sélectionner un utilisateur" />
             </SelectTrigger>
             <SelectContent>
               {availableUsers.map((user) => (
@@ -1549,13 +1549,13 @@ export default function ProjectDetailsPage() {
             </SelectContent>
           </Select>
           {usersState === 'loading' ? (
-            <p className="text-xs text-muted-foreground">Loading users...</p>
+            <p className="text-xs text-muted-foreground">Chargement des utilisateurs…</p>
           ) : null}
           {usersState === 'error' ? (
             <p className="text-xs text-destructive">{usersError}</p>
           ) : null}
           {usersState === 'ready' && availableUsers.length === 0 ? (
-            <p className="text-xs text-muted-foreground">All users are already members.</p>
+            <p className="text-xs text-muted-foreground">Tous les utilisateurs sont déjà membres.</p>
           ) : null}
         </div>
         {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
@@ -1564,7 +1564,7 @@ export default function ProjectDetailsPage() {
       <ConfirmDialog
         open={memberDeleteOpen}
         onOpenChange={setMemberDeleteOpen}
-        title="Remove member"
+        title="Retirer le membre"
         description={
           memberDeleting
             ? `Retirer ${(() => {
@@ -1573,7 +1573,7 @@ export default function ProjectDetailsPage() {
               })()} du projet ?`
             : 'Retirer le membre ?'
         }
-        confirmLabel="Remove"
+        confirmLabel="Retirer"
         isConfirming={isMemberDeleting}
         onConfirm={confirmMemberDelete}
       />

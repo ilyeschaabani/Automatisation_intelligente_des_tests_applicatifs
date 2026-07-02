@@ -52,8 +52,13 @@ public class EvaluationStreamService {
     }
 
     public void sendNeedsInput(Long id, int step, String question, String hint) {
-        send(id, StreamEvent.needsInput(step, question, hint));
-        log.info("[WS {}] NEEDS_INPUT sent for step {}", id, step);
+        sendNeedsInput(id, step, question, hint, null);
+    }
+
+    public void sendNeedsInput(Long id, int step, String question, String hint, java.util.List<String> fields) {
+        send(id, StreamEvent.needsInput(step, question, hint, fields));
+        log.info("[WS {}] NEEDS_INPUT sent for step {} ({} field(s))",
+                id, step, fields != null ? fields.size() : 0);
     }
 
     public void sendResumed(Long id, String humanAnswer) {

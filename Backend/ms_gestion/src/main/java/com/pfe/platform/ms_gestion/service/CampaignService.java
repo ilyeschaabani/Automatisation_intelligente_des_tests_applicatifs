@@ -194,15 +194,6 @@ public class CampaignService {
                 .build();
     }
 
-    public Map<String, String> stopCampaign(Long campaignId) {
-        try {
-            String url = msExecutionUrl + "/api/execution/stop/" + campaignId;
-            restTemplate.put(url, null);
-            return Map.of("message", "Campaign stopped successfully");
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to stop campaign: " + e.getMessage(), e);
-        }
-    }
 
     /**
      * Returns test cases belonging to the project that are NOT yet in the campaign.

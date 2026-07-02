@@ -18,10 +18,14 @@ export interface Evolution {
 
 export interface KpiResponse {
   totalTestsRun: number
+  passedTests: number
   successRate: number
   failedTests: number
   activeCampaigns: number
   totalExecutionTime: string
+  flakyTests: number
+  averageDurationMs: number | null
+  averageDuration: string | null
   top5SlowestTests: TestMetric[]
   top5FailingTests: TestMetric[]
   evolution: Evolution

@@ -51,6 +51,9 @@ public class StreamEvent {
     /** Hint / example answer for the human (NEEDS_INPUT) */
     private String hint;
 
+    /** Labels of the fields the tester must fill (NEEDS_INPUT form, e.g. ["Identifiant","Mot de passe"]) */
+    private java.util.List<String> fields;
+
     /** Whether an action succeeded (ACTION_RESULT) */
     private Boolean success;
 
@@ -122,12 +125,17 @@ public class StreamEvent {
     }
 
     public static StreamEvent needsInput(int step, String question, String hint) {
+        return needsInput(step, question, hint, null);
+    }
+
+    public static StreamEvent needsInput(int step, String question, String hint, java.util.List<String> fields) {
         return StreamEvent.builder()
                 .type("NEEDS_INPUT")
                 .message("⏸ **Intervention humaine requise**\n" + question)
                 .step(step)
                 .question(question)
                 .hint(hint)
+                .fields(fields)
                 .build();
     }
 

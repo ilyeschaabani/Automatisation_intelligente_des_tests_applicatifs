@@ -18,6 +18,7 @@ export default function CreateEvaluationPage() {
   const router = useRouter()
   const [url, setUrl] = useState('')
   const [description, setDescription] = useState('')
+  const [scenario, setScenario] = useState('')
   const [platform, setPlatform] = useState<'WEB' | 'WEB_MOBILE' | 'MOBILE_APP'>('WEB')
   const [reviewMode, setReviewMode] = useState<'AUTO' | 'SUPERVISED'>('AUTO')
   const [apkFile, setApkFile] = useState<File | null>(null)
@@ -52,6 +53,7 @@ export default function CreateEvaluationPage() {
           platform: 'MOBILE_APP',
           url: apkFile!.name,
           description: description.trim() || undefined,
+          scenario: scenario.trim() || undefined,
           apkPath: path,
           reviewMode,
         })
@@ -62,6 +64,7 @@ export default function CreateEvaluationPage() {
           platform,
           url: url.trim(),
           description: description.trim() || undefined,
+          scenario: scenario.trim() || undefined,
           reviewMode,
         })
         await executeFunctionalEvaluation(created.id)
@@ -199,6 +202,23 @@ export default function CreateEvaluationPage() {
                     />
                   </div>
                 )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="scenario">
+                    Scénario à tester <span className="text-muted-foreground text-xs">(optionnel)</span>
+                  </Label>
+                  <Textarea
+                    id="scenario"
+                    rows={2}
+                    placeholder="Ex: Effectuer un virement vers un bénéficiaire — l'IA va vivre ce parcours et te dire s'il est facile."
+                    value={scenario}
+                    onChange={(e) => setScenario(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Si renseigné, l'IA suit ce scénario précis (au lieu d'explorer librement) et rend un verdict :
+                    réussi ou non, facilité, points de friction et son avis.
+                  </p>
+                </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="description">

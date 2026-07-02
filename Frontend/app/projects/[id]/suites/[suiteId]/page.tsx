@@ -520,7 +520,7 @@ export default function SuiteTestCasesPage() {
       return
     }
     if (forceAiForSuite && !aiState.descriptionAI.trim() && !scenarioResult) {
-      setFormError('AI description is required for UNIT/INTEGRATION/UX suites.')
+      setFormError('La description IA est requise pour les suites UNIT/INTEGRATION/UX.')
       return
     }
     setGenerating(true)
@@ -653,7 +653,7 @@ export default function SuiteTestCasesPage() {
       } else {
         const prompt = aiState.descriptionAI.trim()
         if (!prompt) {
-          setFormError('AI description is required for AI mode.')
+          setFormError('La description IA est requise en mode IA.')
           return null
         }
         payload.useAI = true
@@ -787,17 +787,17 @@ export default function SuiteTestCasesPage() {
               <div className="flex items-center gap-2">
                 <Button variant="outline" onClick={loadAll} className="gap-2">
                   <RefreshCw size={16} />
-                  Refresh
+                  Actualiser
                 </Button>
                 <Button onClick={openCreate} className="gap-2">
                   <Plus size={16} />
-                  Add test case
+                  Ajouter un cas de test
                 </Button>
               </div>
             </div>
 
             {suiteState === 'loading' ? (
-              <Card className="p-6 text-sm text-muted-foreground">Loading suite...</Card>
+              <Card className="p-6 text-sm text-muted-foreground">Chargement de la suite…</Card>
             ) : null}
             {suiteState === 'error' ? (
               <Card className="p-6 text-sm text-destructive">{suiteError}</Card>
@@ -806,27 +806,27 @@ export default function SuiteTestCasesPage() {
             <Card className="p-6">
               <div className="flex items-center gap-2 mb-4">
                 <Wand2 size={18} />
-                <h2 className="text-lg font-semibold">Test cases</h2>
+                <h2 className="text-lg font-semibold">Cas de test</h2>
               </div>
 
               {caseError ? <p className="text-sm text-destructive mb-4">{caseError}</p> : null}
               {caseState === 'loading' ? (
-                <p className="text-sm text-muted-foreground">Loading test cases...</p>
+                <p className="text-sm text-muted-foreground">Chargement des cas de test…</p>
               ) : null}
 
               {caseState !== 'loading' && cases.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No test cases yet.</p>
+                <p className="text-sm text-muted-foreground">Aucun cas de test pour l'instant.</p>
               ) : null}
 
               {caseState !== 'loading' && cases.length > 0 ? (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Title</TableHead>
+                      <TableHead>Titre</TableHead>
                       <TableHead>Type</TableHead>
-                      <TableHead>Priority</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Created</TableHead>
+                      <TableHead>Priorité</TableHead>
+                      <TableHead>Statut</TableHead>
+                      <TableHead>Créé le</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -858,20 +858,20 @@ export default function SuiteTestCasesPage() {
                         <TableCell>
                           <div className="flex flex-wrap gap-2">
                             <Badge variant={testCase.active ? 'default' : 'secondary'}>
-                              {testCase.active ? 'Active' : 'Inactive'}
+                              {testCase.active ? 'Actif' : 'Inactif'}
                             </Badge>
-                            {testCase.flaky ? <Badge variant="outline">Flaky</Badge> : null}
+                            {testCase.flaky ? <Badge variant="outline">Instable</Badge> : null}
                           </div>
                         </TableCell>
                         <TableCell>{formatDate(testCase.createdAt)}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                             <Button size="sm" variant="outline" onClick={() => openEdit(testCase)}>
-                              Edit
+                              Modifier
                             </Button>
                             <Button size="sm" variant="destructive" onClick={() => openDelete(testCase)}>
                               <Trash2 size={14} />
-                              Delete
+                              Supprimer
                             </Button>
                           </div>
                         </TableCell>
@@ -888,9 +888,9 @@ export default function SuiteTestCasesPage() {
       <FormDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
-        title="Add test case"
-        description="Define the test case details."
-        submitLabel="Create test case"
+        title="Ajouter un cas de test"
+        description="Définissez les détails du cas de test."
+        submitLabel="Créer le cas de test"
         isSubmitting={isSubmitting}
         disableSubmit={
           showAiSection && Boolean(aiState.generatedCode && aiState.generatedCode.trim()) && !aiState.codeValidated
@@ -899,12 +899,12 @@ export default function SuiteTestCasesPage() {
         onSubmit={submitCreate}
       >
         <div className="space-y-2">
-          <Label htmlFor="case-title">Title</Label>
+          <Label htmlFor="case-title">Titre</Label>
           <Input
             id="case-title"
             value={formState.title}
             onChange={(event) => setFormState((prev) => ({ ...prev, title: event.target.value }))}
-            placeholder="Login flow works"
+            placeholder="Le flux de connexion fonctionne"
             required
           />
         </div>
@@ -917,14 +917,14 @@ export default function SuiteTestCasesPage() {
               onChange={(event) =>
                 setFormState((prev) => ({ ...prev, description: event.target.value }))
               }
-              placeholder="Optional description"
+              placeholder="Description (facultatif)"
             />
           </div>
         ) : null}
         <div className="space-y-2">
           <Label>Mode</Label>
           {forceAiForSuite ? (
-            <Input value="Generate with AI" readOnly />
+            <Input value="Générer avec l'IA" readOnly />
           ) : (
             <Select
               value={formState.mode}
@@ -935,12 +935,12 @@ export default function SuiteTestCasesPage() {
               }}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select mode" />
+                <SelectValue placeholder="Sélectionner un mode" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="AI">Generate with AI</SelectItem>
-                <SelectItem value="MANUAL">Write manually</SelectItem>
-                <SelectItem value="REPO">Import from repo</SelectItem>
+                <SelectItem value="AI">Générer avec l'IA</SelectItem>
+                <SelectItem value="MANUAL">Écrire manuellement</SelectItem>
+                <SelectItem value="REPO">Importer depuis un dépôt</SelectItem>
               </SelectContent>
             </Select>
           )}
@@ -1020,7 +1020,7 @@ export default function SuiteTestCasesPage() {
                       onClick={() => setShowWizard(true)}
                     >
                       <Wand2 size={15} />
-                      Browse source class & describe test
+                      Parcourir la classe source & décrire le test
                     </Button>
                   )}
 
@@ -1028,22 +1028,22 @@ export default function SuiteTestCasesPage() {
                   {formState.targetClassName && (
                     <>
                       <div className="space-y-2">
-                        <Label htmlFor="case-description-ai">AI description <span className="text-destructive">*</span></Label>
+                        <Label htmlFor="case-description-ai">Description IA <span className="text-destructive">*</span></Label>
                         <Textarea
                           id="case-description-ai"
                           value={aiState.descriptionAI}
                           onChange={(e) => setAiState((prev) => ({ ...prev, descriptionAI: e.target.value }))}
-                          placeholder="Describe what the test should do"
+                          placeholder="Décrivez ce que le test doit faire"
                           required={showAiSection}
                         />
                       </div>
                       <div className="flex gap-2">
                         <Button type="button" variant="outline" onClick={() => generateScript()} disabled={generating}>
-                          {generating ? 'Generating…' : 'Generate script'}
+                          {generating ? 'Génération…' : 'Générer le script'}
                         </Button>
                         {aiState.generatedCode ? (
                           <Button type="button" onClick={() => setAiState((prev) => ({ ...prev, generatedCode: '', codeValidated: false }))} variant="ghost">
-                            Regenerate
+                            Régénérer
                           </Button>
                         ) : null}
                       </div>
@@ -1057,27 +1057,27 @@ export default function SuiteTestCasesPage() {
                 {isUnitOrIntegration && !sourceGitInfo && (
                   <div className="rounded-md border border-orange-200 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-800 px-3 py-2">
                     <p className="text-xs text-orange-800 dark:text-orange-300">
-                      No source repository configured on this project's environment. Add a Git repository in the Environment settings to enable smart class browsing.
+                      Aucun dépôt source configuré sur l'environnement de ce projet. Ajoutez un dépôt Git dans les paramètres de l'environnement pour activer la navigation intelligente des classes.
                     </p>
                   </div>
                 )}
                 <div className="space-y-2">
-                  <Label htmlFor="case-description-ai">AI description <span className="text-destructive">*</span></Label>
+                  <Label htmlFor="case-description-ai">Description IA <span className="text-destructive">*</span></Label>
                   <Textarea
                     id="case-description-ai"
                     value={aiState.descriptionAI}
                     onChange={(e) => setAiState((prev) => ({ ...prev, descriptionAI: e.target.value }))}
-                    placeholder="Describe what the test should do in natural language"
+                    placeholder="Décrivez en langage naturel ce que le test doit faire"
                     required={showAiSection}
                   />
                 </div>
                 <div className="flex gap-2">
                   <Button type="button" variant="outline" onClick={() => generateScript()} disabled={generating}>
-                    {generating ? 'Generating…' : 'Generate script'}
+                    {generating ? 'Génération…' : 'Générer le script'}
                   </Button>
                   {aiState.generatedCode ? (
                     <Button type="button" onClick={() => setAiState((prev) => ({ ...prev, generatedCode: '', codeValidated: false }))} variant="ghost">
-                      Regenerate
+                      Régénérer
                     </Button>
                   ) : null}
                 </div>
@@ -1089,8 +1089,8 @@ export default function SuiteTestCasesPage() {
         {aiState.generatedCode ? (
           <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-4">
             <div className="flex items-center justify-between">
-              <Label className="text-base font-semibold">Generated code (editable)</Label>
-              <span className="text-xs text-muted-foreground">Click to edit</span>
+              <Label className="text-base font-semibold">Code généré (modifiable)</Label>
+              <span className="text-xs text-muted-foreground">Cliquez pour modifier</span>
             </div>
             <Textarea
               className="font-mono text-sm bg-background resize-none focus:ring-2 focus:ring-primary/50"
@@ -1100,11 +1100,11 @@ export default function SuiteTestCasesPage() {
             />
             <div className="flex gap-2 pt-2">
               <Button type="button" onClick={validateScript} disabled={aiState.codeValidated}>
-                {aiState.codeValidated ? '✓ Validated' : 'Validate script'}
+                {aiState.codeValidated ? '✓ Validé' : 'Valider le script'}
               </Button>
               {aiState.codeValidated && (
                 <span className="text-xs text-green-600 flex items-center gap-1">
-                  ✓ Code validated and ready to save
+                  ✓ Code validé et prêt à enregistrer
                 </span>
               )}
             </div>
@@ -1112,13 +1112,13 @@ export default function SuiteTestCasesPage() {
         ) : null}
         <div className="grid grid-cols-3 gap-3">
           <div className="space-y-2">
-            <Label>Risk level</Label>
+            <Label>Niveau de risque</Label>
             <Select
               value={formState.riskLevel || 'UNSET'}
               onValueChange={(v) => setFormState((prev) => ({ ...prev, riskLevel: v === 'UNSET' ? '' : (v as RiskLevel) }))}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Risk" />
+                <SelectValue placeholder="Risque" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="UNSET">— None</SelectItem>
@@ -1130,7 +1130,7 @@ export default function SuiteTestCasesPage() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="case-priority">Priority <span className="text-muted-foreground text-xs">(1 = highest)</span></Label>
+            <Label htmlFor="case-priority">Priorité <span className="text-muted-foreground text-xs">(1 = la plus haute)</span></Label>
             <Input
               id="case-priority"
               type="number"
@@ -1194,7 +1194,7 @@ export default function SuiteTestCasesPage() {
               {gitHubConnection.kind === 'connected' ? (
                 <div className="space-y-2">
                   {gitHubRepos.kind === 'loading' ? (
-                    <p className="text-sm text-muted-foreground">Loading repositories...</p>
+                    <p className="text-sm text-muted-foreground">Chargement des dépôts…</p>
                   ) : null}
 
                   {gitHubRepos.kind === 'error' ? (
@@ -1207,7 +1207,7 @@ export default function SuiteTestCasesPage() {
                       onValueChange={(value) => setSelectedRepoKey(value)}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a repository" />
+                        <SelectValue placeholder="Sélectionner un dépôt" />
                       </SelectTrigger>
                       <SelectContent>
                         {gitHubRepos.repos.map((repo) => (
@@ -1219,13 +1219,13 @@ export default function SuiteTestCasesPage() {
                     </Select>
                   ) : null}
 
-                  <Input value={formState.gitRepoUrl} readOnly placeholder="Repository URL" />
+                  <Input value={formState.gitRepoUrl} readOnly placeholder="URL du dépôt" />
                 </div>
               ) : null}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="case-script">Script path to execute</Label>
+              <Label htmlFor="case-script">Chemin du script à exécuter</Label>
               <Input
                 id="case-script"
                 value={formState.scriptPath}
@@ -1256,9 +1256,9 @@ export default function SuiteTestCasesPage() {
       <FormDialog
         open={editOpen}
         onOpenChange={setEditOpen}
-        title="Edit test case"
-        description="Update the test case metadata."
-        submitLabel="Save changes"
+        title="Modifier le cas de test"
+        description="Mettez à jour les métadonnées du cas de test."
+        submitLabel="Enregistrer"
         isSubmitting={isSubmitting}
         disableSubmit={
           showAiSection && Boolean(aiState.generatedCode && aiState.generatedCode.trim()) && !aiState.codeValidated
@@ -1267,7 +1267,7 @@ export default function SuiteTestCasesPage() {
         onSubmit={submitEdit}
       >
         <div className="space-y-2">
-          <Label htmlFor="case-edit-title">Title</Label>
+          <Label htmlFor="case-edit-title">Titre</Label>
           <Input
             id="case-edit-title"
             value={formState.title}
@@ -1288,7 +1288,7 @@ export default function SuiteTestCasesPage() {
         <div className="space-y-2">
           <Label>Mode</Label>
           {forceAiForSuite ? (
-            <Input value="Generate with AI" readOnly />
+            <Input value="Générer avec l'IA" readOnly />
           ) : (
             <Select
               value={formState.mode}
@@ -1299,12 +1299,12 @@ export default function SuiteTestCasesPage() {
               }}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select mode" />
+                <SelectValue placeholder="Sélectionner un mode" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="AI">Generate with AI</SelectItem>
-                <SelectItem value="MANUAL">Write manually</SelectItem>
-                <SelectItem value="REPO">Import from repo</SelectItem>
+                <SelectItem value="AI">Générer avec l'IA</SelectItem>
+                <SelectItem value="MANUAL">Écrire manuellement</SelectItem>
+                <SelectItem value="REPO">Importer depuis un dépôt</SelectItem>
               </SelectContent>
             </Select>
           )}
@@ -1368,7 +1368,7 @@ export default function SuiteTestCasesPage() {
                       onClick={() => setEditShowWizard(true)}
                     >
                       <Wand2 size={15} />
-                      Browse source class & describe test
+                      Parcourir la classe source & décrire le test
                     </Button>
                   )}
                   {formState.targetClassName && (
@@ -1378,16 +1378,16 @@ export default function SuiteTestCasesPage() {
                         <Textarea
                           value={aiState.descriptionAI}
                           onChange={(e) => setAiState((prev) => ({ ...prev, descriptionAI: e.target.value }))}
-                          placeholder="Describe what the test should do"
+                          placeholder="Décrivez ce que le test doit faire"
                         />
                       </div>
                       <div className="flex gap-2">
                         <Button type="button" variant="outline" onClick={() => generateScript()} disabled={generating}>
-                          {generating ? 'Generating…' : 'Generate script'}
+                          {generating ? 'Génération…' : 'Générer le script'}
                         </Button>
                         {aiState.generatedCode && (
                           <Button type="button" variant="ghost" onClick={() => setAiState(prev => ({ ...prev, generatedCode: '', codeValidated: false }))}>
-                            Regenerate
+                            Régénérer
                           </Button>
                         )}
                       </div>
@@ -1409,17 +1409,17 @@ export default function SuiteTestCasesPage() {
                   <Textarea
                     value={aiState.descriptionAI}
                     onChange={(e) => setAiState((prev) => ({ ...prev, descriptionAI: e.target.value }))}
-                    placeholder="Describe what the test should do in natural language"
+                    placeholder="Décrivez en langage naturel ce que le test doit faire"
                     required={showAiSection}
                   />
                 </div>
                 <div className="flex gap-2">
                   <Button type="button" variant="outline" onClick={() => generateScript()} disabled={generating}>
-                    {generating ? 'Generating…' : 'Generate script'}
+                    {generating ? 'Génération…' : 'Générer le script'}
                   </Button>
                   {aiState.generatedCode && (
                     <Button type="button" variant="ghost" onClick={() => setAiState(prev => ({ ...prev, generatedCode: '', codeValidated: false }))}>
-                      Regenerate
+                      Régénérer
                     </Button>
                   )}
                 </div>
@@ -1431,8 +1431,8 @@ export default function SuiteTestCasesPage() {
         {aiState.generatedCode ? (
           <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-4">
             <div className="flex items-center justify-between">
-              <Label className="text-base font-semibold">Generated code (editable)</Label>
-              <span className="text-xs text-muted-foreground">Click to edit</span>
+              <Label className="text-base font-semibold">Code généré (modifiable)</Label>
+              <span className="text-xs text-muted-foreground">Cliquez pour modifier</span>
             </div>
             <Textarea
               className="font-mono text-sm bg-background resize-none focus:ring-2 focus:ring-primary/50"
@@ -1442,11 +1442,11 @@ export default function SuiteTestCasesPage() {
             />
             <div className="flex gap-2 pt-2">
               <Button type="button" onClick={validateScript} disabled={aiState.codeValidated}>
-                {aiState.codeValidated ? '✓ Validated' : 'Validate script'}
+                {aiState.codeValidated ? '✓ Validé' : 'Valider le script'}
               </Button>
               {aiState.codeValidated && (
                 <span className="text-xs text-green-600 flex items-center gap-1">
-                  ✓ Code validated and ready to save
+                  ✓ Code validé et prêt à enregistrer
                 </span>
               )}
             </div>
@@ -1454,13 +1454,13 @@ export default function SuiteTestCasesPage() {
         ) : null}
         <div className="grid grid-cols-3 gap-3">
           <div className="space-y-2">
-            <Label>Risk level</Label>
+            <Label>Niveau de risque</Label>
             <Select
               value={formState.riskLevel || 'UNSET'}
               onValueChange={(v) => setFormState((prev) => ({ ...prev, riskLevel: v === 'UNSET' ? '' : (v as RiskLevel) }))}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Risk" />
+                <SelectValue placeholder="Risque" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="UNSET">— None</SelectItem>
@@ -1472,7 +1472,7 @@ export default function SuiteTestCasesPage() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="case-edit-priority">Priority <span className="text-muted-foreground text-xs">(1 = highest)</span></Label>
+            <Label htmlFor="case-edit-priority">Priorité <span className="text-muted-foreground text-xs">(1 = la plus haute)</span></Label>
             <Input
               id="case-edit-priority"
               type="number"
@@ -1534,7 +1534,7 @@ export default function SuiteTestCasesPage() {
               {gitHubConnection.kind === 'connected' ? (
                 <div className="space-y-2">
                   {gitHubRepos.kind === 'loading' ? (
-                    <p className="text-sm text-muted-foreground">Loading repositories...</p>
+                    <p className="text-sm text-muted-foreground">Chargement des dépôts…</p>
                   ) : null}
 
                   {gitHubRepos.kind === 'error' ? (
@@ -1547,7 +1547,7 @@ export default function SuiteTestCasesPage() {
                       onValueChange={(value) => setSelectedRepoKey(value)}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a repository" />
+                        <SelectValue placeholder="Sélectionner un dépôt" />
                       </SelectTrigger>
                       <SelectContent>
                         {gitHubRepos.repos.map((repo) => (
@@ -1559,7 +1559,7 @@ export default function SuiteTestCasesPage() {
                     </Select>
                   ) : null}
 
-                  <Input value={formState.gitRepoUrl} readOnly placeholder="Repository URL" />
+                  <Input value={formState.gitRepoUrl} readOnly placeholder="URL du dépôt" />
                 </div>
               ) : null}
             </div>
@@ -1594,9 +1594,9 @@ export default function SuiteTestCasesPage() {
       <ConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        title="Delete test case"
-        description={deletingCase ? `Delete ${deletingCase.title}?` : 'Delete test case?'}
-        confirmLabel="Delete"
+        title="Supprimer le cas de test"
+        description={deletingCase ? `Supprimer « ${deletingCase.title} » ?` : 'Supprimer le cas de test ?'}
+        confirmLabel="Supprimer"
         isConfirming={isDeleting}
         onConfirm={confirmDelete}
       />

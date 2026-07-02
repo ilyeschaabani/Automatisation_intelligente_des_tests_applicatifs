@@ -33,8 +33,8 @@ export default function ReportsPage() {
           setReports([])
           setCampaignNames({})
           toast({
-            title: 'Failed to load reports',
-            description: e instanceof Error ? e.message : 'Unable to load reports from the backend.',
+            title: 'Échec du chargement des rapports',
+            description: e instanceof Error ? e.message : 'Impossible de charger les rapports depuis le backend.',
             variant: 'destructive',
           })
         }
@@ -66,9 +66,9 @@ export default function ReportsPage() {
       a.click()
       a.remove()
       window.URL.revokeObjectURL(url)
-      toast({ title: 'Report downloaded' })
+      toast({ title: 'Rapport téléchargé' })
     } catch (e) {
-      toast({ title: 'Error', description: (e as Error).message ?? String(e), variant: 'destructive' })
+      toast({ title: 'Erreur', description: (e as Error).message ?? String(e), variant: 'destructive' })
     }
   }
 
@@ -78,12 +78,12 @@ export default function ReportsPage() {
       <main className="flex-1 lg:ml-0 pt-16 lg:pt-0">
         <Header />
         <div className="p-6 max-w-7xl">
-          <h1 className="text-2xl font-bold mb-4">Reports</h1>
+          <h1 className="text-2xl font-bold mb-4">Rapports</h1>
 
           <Card>
             <CardHeader>
-              <CardTitle>Generated reports</CardTitle>
-              <CardDescription>All generated campaign reports (if available from the backend).</CardDescription>
+              <CardTitle>Rapports générés</CardTitle>
+              <CardDescription>Tous les rapports de campagne générés (si disponibles côté backend).</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="overflow-auto">
@@ -91,30 +91,30 @@ export default function ReportsPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>ID</TableHead>
-                      <TableHead>Campaign</TableHead>
-                      <TableHead>Filename</TableHead>
-                      <TableHead className="text-right">Generated</TableHead>
+                      <TableHead>Campagne</TableHead>
+                      <TableHead>Nom du fichier</TableHead>
+                      <TableHead className="text-right">Généré le</TableHead>
                       <TableHead className="text-right">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {loading ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="py-4 text-center text-muted-foreground">Loading reports…</TableCell>
+                        <TableCell colSpan={5} className="py-4 text-center text-muted-foreground">Chargement des rapports…</TableCell>
                       </TableRow>
                     ) : reports.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="py-4 text-center text-muted-foreground">No reports available</TableCell>
+                        <TableCell colSpan={5} className="py-4 text-center text-muted-foreground">Aucun rapport disponible</TableCell>
                       </TableRow>
                     ) : (
                       reports.map((r) => (
                         <TableRow key={r.id}>
                           <TableCell className="font-medium">{r.id}</TableCell>
-                          <TableCell>{campaignNames[r.campaignId] ?? `Campaign #${r.campaignId}`}</TableCell>
+                          <TableCell>{campaignNames[r.campaignId] ?? `Campagne #${r.campaignId}`}</TableCell>
                           <TableCell>{r.filename}</TableCell>
                           <TableCell className="text-right text-muted-foreground">{new Date(r.generatedAt).toLocaleString()}</TableCell>
                           <TableCell className="text-right">
-                            <Button size="sm" onClick={() => void downloadReport(r)}>Download</Button>
+                            <Button size="sm" onClick={() => void downloadReport(r)}>Télécharger</Button>
                           </TableCell>
                         </TableRow>
                       ))

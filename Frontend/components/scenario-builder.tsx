@@ -55,7 +55,7 @@ interface ScenarioBuilderProps {
 const SCENARIOS: { value: ScenarioType; label: string; description: string; color: string }[] = [
   {
     value: 'HAPPY_PATH',
-    label: '✅ Happy Path',
+    label: '✅ Cas nominal',
     description: 'La méthode s\'exécute normalement et retourne un résultat valide',
     color: 'bg-green-50 border-green-200 text-green-800',
   },
@@ -67,19 +67,19 @@ const SCENARIOS: { value: ScenarioType; label: string; description: string; colo
   },
   {
     value: 'NULL_INPUT',
-    label: '🔲 Null Input',
+    label: '🔲 Entrée nulle',
     description: 'Un paramètre obligatoire est null — exception attendue',
     color: 'bg-orange-50 border-orange-200 text-orange-800',
   },
   {
     value: 'WRONG_INPUT',
-    label: '⚠️ Wrong Input',
+    label: '⚠️ Mauvaise entrée',
     description: 'Valeur invalide (hors enum, format incorrect…)',
     color: 'bg-yellow-50 border-yellow-200 text-yellow-800',
   },
   {
     value: 'BOUNDARY',
-    label: '📏 Boundary',
+    label: '📏 Valeur limite',
     description: 'Valeurs aux limites minimales ou maximales autorisées',
     color: 'bg-blue-50 border-blue-200 text-blue-800',
   },

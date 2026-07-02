@@ -741,6 +741,12 @@ export default function EvaluationDetailPage() {
                       <span className="text-muted-foreground">Étapes</span>
                       <span>{steps.length}</span>
                     </div>
+                    {item.scenario && (
+                      <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5">
+                        <span className="text-primary block text-xs mb-1 font-medium">🎯 Scénario testé</span>
+                        <span>{item.scenario}</span>
+                      </div>
+                    )}
                     {item.description && (
                       <div className="rounded-xl border border-border/60 bg-muted/25 px-4 py-2.5">
                         <span className="text-muted-foreground block text-xs mb-1">Description</span>

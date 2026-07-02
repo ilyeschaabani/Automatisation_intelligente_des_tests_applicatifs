@@ -46,9 +46,9 @@ export default function LoginPage() {
             : null) ??
           record?.message ??
           (typeof payload === 'string' ? payload : null) ??
-          'Invalid credentials'
+          'Identifiants invalides'
 
-        setError(typeof message === 'string' ? message : 'Invalid credentials')
+        setError(typeof message === 'string' ? message : 'Identifiants invalides')
         return
       }
 
@@ -64,26 +64,26 @@ export default function LoginPage() {
     <div className="min-h-screen bg-background flex items-center justify-center p-6">
       <Card className="w-full max-w-md p-6">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-foreground">Sign in</h1>
+          <h1 className="text-2xl font-bold text-foreground">Connexion</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Use your credentials to access the platform.
+            Utilisez vos identifiants pour accéder à la plateforme.
           </p>
         </div>
 
         <form className="space-y-4" onSubmit={onSubmit}>
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">E-mail</Label>
             <Input id="email" name="email" type="email" placeholder="admin@bankingcorp.com" required />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">Mot de passe</Label>
             <Input id="password" name="password" type="password" placeholder="••••••••" required />
           </div>
 
           <Button className="w-full" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Signing in…' : 'Sign in'}
+            {isSubmitting ? 'Connexion…' : 'Se connecter'}
           </Button>
         </form>
 

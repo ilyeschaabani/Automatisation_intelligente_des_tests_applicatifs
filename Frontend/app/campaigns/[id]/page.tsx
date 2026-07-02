@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useParams, useSearchParams } from 'next/navigation'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 
 // Discovery/discovery UI removed — synced to backend campaign model
 import { Header } from '@/components/header'
@@ -58,15 +58,22 @@ import {
   CheckCircle2,
   Clock,
   AlertCircle,
+  Crown,
+  Loader2,
   Play,
   ShieldCheck,
   Square,
+  User,
+  UserPlus,
+  Users,
 } from 'lucide-react'
 
 import {
   createCampaignExecution,
   type CampaignExecution,
 } from '@/lib/campaign-executions'
+
+import { AssignDialog } from '@/components/security/assign-dialog'
 
 import {
   getCampaign,
@@ -78,6 +85,7 @@ import {
   continueCampaignRun,
   stopCampaign,
   getTestCasesForCampaign,
+  assignExecutionResult,
   listReportsForCampaign,
   downloadCampaignReport,
   downloadReportById,
@@ -128,6 +136,25 @@ type CampaignTest = {
   name: string
   area: string
   kind: 'UI' | 'API' | 'DB'
+}
+
+type ProjectMember = {
+  userId: number
+  nom: string | null
+  prenom: string | null
+  email: string | null
+  imageUrl: string | null
+}
+
+function memberDisplayName(m: ProjectMember): string {
+  const parts = [m.prenom, m.nom].filter(Boolean)
+  return parts.length > 0 ? parts.join(' ') : `User #${m.userId}`
+}
+
+function memberInitials(m: ProjectMember): string {
+  const first = (m.prenom ?? '')[0] ?? ''
+  const last = (m.nom ?? '')[0] ?? ''
+  return (first + last).toUpperCase() || 'U'
 }
 function mapExecutionDtoToCampaignExecution(
   execution: TestExecutionDto,
@@ -184,10 +211,10 @@ function mapBackendCampaign(dto: TestCampaignDto): Campaign {
 }
 
 const executionSteps = [
-  'Cloning repository',
-  'Preparing campaign context',
-  'Running Maven tests',
-  'Saving execution result',
+  'Clonage du dépôt',
+  'Préparation du contexte de la campagne',
+  'Exécution des tests Maven',
+  'Enregistrement des résultats',
 ] as const
 
 const perStep = Math.floor(100 / executionSteps.length)
@@ -673,22 +700,22 @@ export default function CampaignDetailsPage() {
     }
   }, [runSubmitting])
 
-  const passRate = useMemo(() => {
-    if (!backendExecutions.length) return 0
-    const passed = backendExecutions.filter((r) => r.status === 'FINISHED').length
-    const total = backendExecutions.length
-    return total ? (passed / total) * 100 : 0
-  }, [backendExecutions])
+  // Per-test-case results (SUCCESS / FAILURE / ERROR) — the source of truth for KPIs.
+  // Declared here (above the metrics memos) so they can be derived from it.
+  const [executionResults, setExecutionResults] = useState<ExecutionResultBackendDto[]>([])
 
   const executionMetrics = useMemo(() => {
-    const total = backendExecutions.length
-    const passed = backendExecutions.filter((r) => r.status === 'FINISHED').length
-    const failed = backendExecutions.filter((r) => r.status === 'ERROR').length
+    const total = executionResults.length
+    const passed = executionResults.filter((r) => r.status === 'SUCCESS').length
+    const failed = executionResults.filter((r) => r.status === 'FAILURE' || r.status === 'ERROR').length
+    const passRate = total ? (passed / total) * 100 : 0
     const failureRate = total ? (failed / total) * 100 : 0
     const riskScore = clampPercent(failureRate * 2)
-    
-    return { total, passed, failed, passRate: (passed / total) * 100 || 0, riskScore }
-  }, [backendExecutions])
+
+    return { total, passed, failed, passRate, riskScore }
+  }, [executionResults])
+
+  const passRate = executionMetrics.passRate
 
   const riskScore = useMemo(() => {
     if (!campaign) return 0
@@ -731,7 +758,6 @@ export default function CampaignDetailsPage() {
   }, [campaign, remoteCampaign])
 
   const [testCasesFromApi, setTestCasesFromApi] = useState<TestCaseWithStatusDto[]>([])
-  const [executionResults, setExecutionResults] = useState<ExecutionResultBackendDto[]>([])
   const [expandedResults, setExpandedResults] = useState<Set<number>>(new Set())
   const [reports, setReports] = useState<{
     id: number
@@ -753,7 +779,91 @@ export default function CampaignDetailsPage() {
   const [removingTestId, setRemovingTestId] = useState<number | null>(null)
   const [showRunDialog, setShowRunDialog] = useState(false)
   const [storedRuns, setStoredRuns] = useState<CampaignExecution[]>([])
+  const [assignTarget, setAssignTarget] = useState<number | null>(null)
+  const [assignedToMe, setAssignedToMe] = useState(false)
+  const [currentUserName, setCurrentUserName] = useState<string | null>(null)
+
+  // Project context (name, owner, members) — resolved from ms_gestion.
+  const [projectName, setProjectName] = useState<string | null>(null)
+  const [ownerId, setOwnerId] = useState<number | null>(null)
+  const [members, setMembers] = useState<ProjectMember[]>([])
+  const [membersLoading, setMembersLoading] = useState(false)
+
+  const ownerMember = useMemo(
+    () => (ownerId != null ? members.find((m) => m.userId === ownerId) ?? null : null),
+    [members, ownerId],
+  )
+  const ownerName = ownerMember ? memberDisplayName(ownerMember) : (ownerId != null ? `User #${ownerId}` : '—')
+  const highlightResultId = searchParams.get('highlight')
+  const highlightRef = useRef<HTMLDivElement>(null)
   
+  useEffect(() => {
+    fetch('/api/auth/profile', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data) {
+          const name = data.fullName || data.name || data.displayName || data.username || null
+          setCurrentUserName(name)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  // Resolve project name + owner + members once the project id is known.
+  useEffect(() => {
+    if (!resolvedProjectId) {
+      setProjectName(null)
+      setOwnerId(null)
+      setMembers([])
+      return
+    }
+
+    let cancelled = false
+
+    const loadProjectContext = async () => {
+      setMembersLoading(true)
+      try {
+        const [projects, membersRes] = await Promise.all([
+          getProjects().catch(() => [] as Project[]),
+          fetch(`/api/projects/${resolvedProjectId}/members`, { credentials: 'include' })
+            .then((r) => (r.ok ? r.json() : []))
+            .catch(() => []),
+        ])
+        if (cancelled) return
+
+        const project = Array.isArray(projects)
+          ? projects.find((p) => p.id === resolvedProjectId) ?? null
+          : null
+        setProjectName(project?.name ?? null)
+        setOwnerId((project as { createdBy?: number } | null)?.createdBy ?? null)
+        setMembers(Array.isArray(membersRes) ? membersRes : [])
+      } catch {
+        if (!cancelled) {
+          setProjectName(null)
+          setOwnerId(null)
+          setMembers([])
+        }
+      } finally {
+        if (!cancelled) setMembersLoading(false)
+      }
+    }
+
+    void loadProjectContext()
+    return () => {
+      cancelled = true
+    }
+  }, [resolvedProjectId])
+
+  useEffect(() => {
+    if (highlightResultId && executionResults.length > 0) {
+      const found = executionResults.find(r => r.id === Number(highlightResultId))
+      if (found) {
+        setExpandedResults(prev => new Set(prev).add(found.id))
+        setTimeout(() => highlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200)
+      }
+    }
+  }, [highlightResultId, executionResults])
+
   // Fetch detailed execution results (with testMethodResults, aiAnalysis, etc.)
   useEffect(() => {
     if (!campaignNumericId) { setExecutionResults([]); return }
@@ -1263,10 +1373,10 @@ export default function CampaignDetailsPage() {
   }
 
   const runButtonLabel = runSubmitting
-    ? 'Running...'
+    ? 'Exécution…'
     : latestExecution?.status === 'FINISHED' || latestExecution?.status === 'ERROR'
-    ? 'Rerun campaign'
-    : 'Run campaign'
+    ? 'Relancer la campagne'
+    : 'Lancer la campagne'
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -1286,7 +1396,7 @@ export default function CampaignDetailsPage() {
                 </BreadcrumbItem>
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
-                  <BreadcrumbPage>{campaign?.name ?? 'Campaign details'}</BreadcrumbPage>
+                  <BreadcrumbPage>{campaign?.name ?? 'Détails de la campagne'}</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
@@ -1294,19 +1404,19 @@ export default function CampaignDetailsPage() {
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <h1 className="text-3xl font-bold text-foreground truncate">
-                  {campaign?.name ?? 'Campaign not found'}
+                  {campaign?.name ?? 'Campagne introuvable'}
                 </h1>
                 <p className="text-muted-foreground mt-1">
                   {campaign
-                    ? 'Campaign overview, quality signals, and latest runs.'
-                    : 'This campaign id does not match any campaign in the UI seed.'}
+                    ? 'Vue d\'ensemble de la campagne, signaux qualité et dernières exécutions.'
+                    : 'Cet identifiant de campagne ne correspond à aucune campagne.'}
                 </p>
               </div>
 
               <Button asChild variant="outline" className="gap-2 shrink-0">
                 <Link href="/campaigns">
                   <ArrowLeft size={18} />
-                  Back
+                  Retour
                 </Link>
               </Button>
             </div>
@@ -1344,7 +1454,7 @@ export default function CampaignDetailsPage() {
                         </Badge>
                         {campaign.projectId ? (
                           <Badge variant="secondary" className="rounded-full">
-                            Project #{campaign.projectId}
+                            {projectName ?? `Project #${campaign.projectId}`}
                           </Badge>
                         ) : null}
                       </div>
@@ -1354,7 +1464,7 @@ export default function CampaignDetailsPage() {
                           {campaign.name}
                         </h1>
                         <p className="text-sm lg:text-base text-muted-foreground mt-2 max-w-3xl">
-                          Campaign overview, environment setup, and run activity from the new backend model.
+                          Vue d'ensemble de la campagne, configuration de l'environnement et activité d'exécution.
                         </p>
                       </div>
 
@@ -1377,41 +1487,72 @@ export default function CampaignDetailsPage() {
                             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                               <div>
                                 <p className="text-sm font-semibold text-foreground">
-                                  {isExecutionRunning ? 'ms-execution is running the campaign' : 'ms-execution finished the campaign'}
+                                  {isExecutionRunning ? 'ms-execution exécute la campagne' : 'ms-execution a terminé la campagne'}
                                 </p>
                                 <p className="text-sm text-muted-foreground">
                                   {isExecutionRunning
-                                    ? `${campaign.name} is being cloned, executed, and persisted in the backend.`
-                                    : `${campaign.name} finished successfully and the final progress is preserved.`}
+                                    ? `${campaign.name} est en cours de clonage, d'exécution et de persistance dans le backend.`
+                                    : `${campaign.name} s'est terminée avec succès et la progression finale est conservée.`}
                                 </p>
                               </div>
                               <Badge variant="secondary" className="w-fit rounded-full">
-                                {isExecutionRunning ? executionSteps[runStepIndex] : 'Completed'}
+                                {isExecutionRunning ? executionSteps[runStepIndex] : 'Terminé'}
                               </Badge>
                             </div>
 
                             <div className="space-y-2">
-                              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                <span>Loading progress</span>
-                                <span>{formatPercent(isExecutionRunning ? runProgressValue : 100)}</span>
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="font-medium text-muted-foreground">
+                                  {isExecutionRunning ? 'Progression' : 'Terminé'}
+                                </span>
+                                <span className="font-semibold tabular-nums text-foreground">
+                                  {formatPercent(isExecutionRunning ? runProgressValue : 100)}
+                                </span>
                               </div>
-                              <Progress value={isExecutionRunning ? runProgressValue : 100} className="h-2.5" />
+                              {/* Modern gradient progress bar with animated shimmer while running */}
+                              <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                                <div
+                                  className="h-full rounded-full bg-gradient-to-r from-primary via-cyan-500 to-emerald-500 transition-[width] duration-500 ease-out"
+                                  style={{ width: `${clampPercent(isExecutionRunning ? runProgressValue : 100)}%` }}
+                                >
+                                  {isExecutionRunning && (
+                                    <div className="h-full w-full animate-pulse bg-white/20" />
+                                  )}
+                                </div>
+                              </div>
                             </div>
 
-                            <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
-                              {executionSteps.map((step, index) => (
-                                <div
-                                  key={step}
-                                  className={
-                                    'rounded-lg border px-3 py-2 ' +
-                                    (index <= runStepIndex
-                                      ? 'border-primary/20 bg-background text-foreground'
-                                      : 'border-border bg-background/60')
-                                  }
-                                >
-                                  {index + 1}. {step}
-                                </div>
-                              ))}
+                            <div className="grid gap-2 text-sm sm:grid-cols-2">
+                              {executionSteps.map((step, index) => {
+                                const done = index < runStepIndex || (!isExecutionRunning && true)
+                                const current = isExecutionRunning && index === runStepIndex
+                                return (
+                                  <div
+                                    key={step}
+                                    className={
+                                      'flex items-center gap-2.5 rounded-lg border px-3 py-2 transition-colors ' +
+                                      (current
+                                        ? 'border-primary/40 bg-primary/5 text-foreground shadow-sm'
+                                        : done
+                                          ? 'border-emerald-500/30 bg-emerald-500/5 text-foreground'
+                                          : 'border-border bg-background/60 text-muted-foreground')
+                                    }
+                                  >
+                                    <span className="shrink-0">
+                                      {current ? (
+                                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                      ) : done ? (
+                                        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                      ) : (
+                                        <span className="flex h-4 w-4 items-center justify-center rounded-full border border-current text-[10px] font-semibold">
+                                          {index + 1}
+                                        </span>
+                                      )}
+                                    </span>
+                                    <span className="truncate">{step}</span>
+                                  </div>
+                                )
+                              })}
                             </div>
                           </div>
                         </div>
@@ -1420,15 +1561,15 @@ export default function CampaignDetailsPage() {
 
                     <div className="grid gap-3 sm:grid-cols-2 lg:w-[360px]">
                       <div className="rounded-2xl border border-border/70 bg-card/80 p-4 backdrop-blur">
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Last run</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Dernière exécution</p>
                         <p className="mt-2 text-sm font-medium text-foreground">{campaign.lastRun}</p>
                       </div>
                       <div className="rounded-2xl border border-border/70 bg-card/80 p-4 backdrop-blur">
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Branch</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Branche</p>
                         <p className="mt-2 text-sm font-medium text-foreground truncate">{campaign.branch}</p>
                       </div>
                       <div className="rounded-2xl border border-border/70 bg-card/80 p-4 backdrop-blur">
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Environment</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Environnement</p>
                         <p className="mt-2 text-sm font-medium text-foreground truncate">{campaign.environment}</p>
                       </div>
                       <div className="rounded-2xl border border-border/70 bg-card/80 p-4 backdrop-blur">
@@ -1436,9 +1577,9 @@ export default function CampaignDetailsPage() {
                         <p className="mt-2 text-sm font-medium text-foreground truncate">{campaign.appVersion}</p>
                       </div>
                       <div className="rounded-2xl border border-border/70 bg-white p-4">
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Report</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Rapport</p>
                         {reportsLoading ? (
-                          <p className="mt-2 text-sm text-muted-foreground">Loading reports…</p>
+                          <p className="mt-2 text-sm text-muted-foreground">Chargement des rapports…</p>
                         ) : reports.length > 0 ? (
                           <div className="mt-2 flex flex-col gap-2">
                             <Select
@@ -1485,7 +1626,7 @@ export default function CampaignDetailsPage() {
                           </div>
                         ) : (
                           <div className="mt-2 flex flex-col gap-2">
-                            <p className="text-sm text-muted-foreground">No stored reports. You can download the latest report.</p>
+                            <p className="text-sm text-muted-foreground">Aucun rapport enregistré. Vous pouvez télécharger le dernier rapport.</p>
                             <Button
                               size="sm"
                               onClick={async () => {
@@ -1519,7 +1660,7 @@ export default function CampaignDetailsPage() {
                     <Button asChild variant="outline" size="sm" className="gap-2">
                       <Link href={`/executions?campaignId=${campaign.id}`}>
                         <Clock className="h-4 w-4" />
-                        View executions
+                        Voir les exécutions
                       </Link>
                     </Button>
                     {isExecutionRunning || campaign.status === 'Running' ? (
@@ -1531,7 +1672,7 @@ export default function CampaignDetailsPage() {
                         onClick={() => void handleStopCampaign()}
                       >
                         <Square className="h-4 w-4" />
-                        Stop Campaign
+                        Arrêter la campagne
                       </Button>
                     ) : (
                       <Button
@@ -1550,19 +1691,19 @@ export default function CampaignDetailsPage() {
                   <Dialog open={runDialogOpen} onOpenChange={setRunDialogOpen}>
           <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Review run artifacts</DialogTitle>
+              <DialogTitle>Vérifier les artefacts d'exécution</DialogTitle>
               <DialogDescription>
-                Review the generated files, provide missing values, and continue the run.
+                Vérifiez les fichiers générés, fournissez les valeurs manquantes, puis continuez l'exécution.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4">
               {runMissingDb ? (
                 <div className="space-y-2">
-                  <Label>Database type</Label>
+                  <Label>Type de base de données</Label>
                   <Select value={runDbValue} onValueChange={setRunDbValue}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select database" />
+                      <SelectValue placeholder="Sélectionner une base de données" />
                     </SelectTrigger>
                     <SelectContent>
                       {runDbOptions.map((db) => (
@@ -1620,14 +1761,14 @@ export default function CampaignDetailsPage() {
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setRunDialogOpen(false)}>
-                Cancel
+                Annuler
               </Button>
               <Button
                 type="button"
                 onClick={() => void submitRunInputs()}
                 disabled={runSubmitting || (runMissingDb && String(runDbValue).trim().length === 0)}
               >
-                {runSubmitting ? 'Submitting…' : 'Start run'}
+                {runSubmitting ? 'Envoi…' : 'Démarrer l\'exécution'}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1642,30 +1783,30 @@ export default function CampaignDetailsPage() {
                 <div className="lg:col-span-2 space-y-6">
                   <Card>
                     <CardHeader>
-                      <CardTitle>Overview</CardTitle>
+                      <CardTitle>Vue d'ensemble</CardTitle>
                       <CardDescription>
-                        Key metrics and quick signals for this campaign.
+                        Indicateurs clés et signaux rapides de cette campagne.
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div className="rounded-lg border border-border bg-card p-4">
                           <div className="flex items-center justify-between">
-                            <p className="text-sm text-muted-foreground">Total tests</p>
+                            <p className="text-sm text-muted-foreground">Total des tests</p>
                             <Play className="h-4 w-4 text-muted-foreground" />
                           </div>
                           <p className="mt-2 text-2xl font-bold text-foreground">{executionMetrics.total || campaign.tests}</p>
                         </div>
                         <div className="rounded-lg border border-border bg-card p-4">
                           <div className="flex items-center justify-between">
-                            <p className="text-sm text-muted-foreground">Passed</p>
+                            <p className="text-sm text-muted-foreground">Réussis</p>
                             <CheckCircle2 className="h-4 w-4 text-green-600" />
                           </div>
                           <p className="mt-2 text-2xl font-bold text-foreground">{executionMetrics.passed || campaign.passed}</p>
                         </div>
                         <div className="rounded-lg border border-border bg-card p-4">
                           <div className="flex items-center justify-between">
-                            <p className="text-sm text-muted-foreground">Failed</p>
+                            <p className="text-sm text-muted-foreground">Échoués</p>
                             <AlertCircle className="h-4 w-4 text-red-600" />
                           </div>
                           <p className="mt-2 text-2xl font-bold text-foreground">{executionMetrics.failed || campaign.failed}</p>
@@ -1677,7 +1818,7 @@ export default function CampaignDetailsPage() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         <div>
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm text-muted-foreground">Pass rate</span>
+                            <span className="text-sm text-muted-foreground">Taux de réussite</span>
                             <span className="text-sm font-semibold text-foreground">{formatPercent(executionMetrics.passRate || seedPassRate)}</span>
                           </div>
                           <Progress value={executionMetrics.passRate || seedPassRate} className="h-2" />
@@ -1685,7 +1826,7 @@ export default function CampaignDetailsPage() {
 
                         <div>
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm text-muted-foreground">Risk signal</span>
+                            <span className="text-sm text-muted-foreground">Signal de risque</span>
                             <span className="text-sm font-semibold text-foreground">{formatPercent(executionMetrics.riskScore || riskScore)}</span>
                           </div>
                           <Progress value={executionMetrics.riskScore || riskScore} className="h-2" />
@@ -1696,18 +1837,18 @@ export default function CampaignDetailsPage() {
 
                   <Card>
                     <CardHeader>
-                      <CardTitle>Recent runs</CardTitle>
-                      <CardDescription>Latest backend executions and local run history for this campaign.</CardDescription>
+                      <CardTitle>Exécutions récentes</CardTitle>
+                      <CardDescription>Dernières exécutions backend et historique local de cette campagne.</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="rounded-md border border-border overflow-hidden">
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead>Run</TableHead>
-                              <TableHead>Status</TableHead>
-                              <TableHead>Duration</TableHead>
-                              <TableHead className="text-right">When</TableHead>
+                              <TableHead>Exécution</TableHead>
+                              <TableHead>Statut</TableHead>
+                              <TableHead>Durée</TableHead>
+                              <TableHead className="text-right">Quand</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -1742,13 +1883,30 @@ export default function CampaignDetailsPage() {
 
                   <Card>
                     <CardHeader>
-                      <CardTitle>Test Results</CardTitle>
-                      <CardDescription>Detailed results per test case with method-level breakdown.</CardDescription>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle>Résultats des tests</CardTitle>
+                          <CardDescription>Résultats détaillés par cas de test, avec décomposition par méthode.</CardDescription>
+                        </div>
+                        {executionResults.length > 0 && (
+                          <Button
+                            variant={assignedToMe ? 'default' : 'outline'}
+                            size="sm"
+                            className="text-xs gap-1.5"
+                            onClick={() => setAssignedToMe(prev => !prev)}
+                          >
+                            <User className="h-3.5 w-3.5" />
+                            Mes assignements
+                          </Button>
+                        )}
+                      </div>
                     </CardHeader>
                     <CardContent>
                       {executionResults.length > 0 ? (
                         <div className="space-y-3">
-                          {executionResults.map((result) => {
+                          {executionResults
+                            .filter(r => !assignedToMe || (currentUserName && r.assignedTo === currentUserName))
+                            .map((result) => {
                             const tc = testCasesFromApi.find((t) => t.id === result.testCaseId)
                             const isExpanded = expandedResults.has(result.id)
                             const statusColor =
@@ -1769,8 +1927,14 @@ export default function CampaignDetailsPage() {
                                 : `${(result.durationMs / 1000).toFixed(1)}s`
                               : '—'
 
+                            const isHighlighted = highlightResultId && result.id === Number(highlightResultId)
+
                             return (
-                              <div key={result.id} className="rounded-lg border border-border bg-card overflow-hidden">
+                              <div
+                                key={result.id}
+                                ref={isHighlighted ? highlightRef : undefined}
+                                className={`rounded-lg border bg-card overflow-hidden ${isHighlighted ? 'ring-2 ring-primary border-primary' : 'border-border'}`}
+                              >
                                 {/* Header row */}
                                 <div
                                   className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/40"
@@ -1797,6 +1961,21 @@ export default function CampaignDetailsPage() {
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-3 shrink-0 text-xs text-muted-foreground">
+                                    {result.assignedTo && (
+                                      <span className="flex items-center gap-1 text-foreground">
+                                        <UserPlus className="h-3 w-3" />{result.assignedTo}
+                                      </span>
+                                    )}
+                                    {(result.status === 'FAILURE' || result.status === 'ERROR') && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 px-2 text-xs"
+                                        onClick={(e) => { e.stopPropagation(); setAssignTarget(result.id) }}
+                                      >
+                                        <UserPlus className="h-3 w-3 mr-1" />Assigner
+                                      </Button>
+                                    )}
                                     {methods.length > 0 && (
                                       <span className="font-medium">
                                         {methods.filter(m => m.status === 'PASS').length}/{methods.length} passed
@@ -1818,15 +1997,15 @@ export default function CampaignDetailsPage() {
                                     {methods.length > 0 && (
                                       <div>
                                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                                          Methods ({methods.length})
+                                          Méthodes ({methods.length})
                                         </p>
                                         <div className="rounded-md border border-border overflow-hidden">
                                           <Table>
                                             <TableHeader>
                                               <TableRow>
-                                                <TableHead>Method</TableHead>
-                                                <TableHead className="w-20">Status</TableHead>
-                                                <TableHead className="w-24">Duration</TableHead>
+                                                <TableHead>Méthode</TableHead>
+                                                <TableHead className="w-20">Statut</TableHead>
+                                                <TableHead className="w-24">Durée</TableHead>
                                                 <TableHead>Message</TableHead>
                                               </TableRow>
                                             </TableHeader>
@@ -1866,7 +2045,7 @@ export default function CampaignDetailsPage() {
                                     {result.aiAnalysis && (
                                       <div>
                                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                                          AI Analysis
+                                          Analyse IA
                                         </p>
                                         <div className="rounded-md bg-card border border-border p-3 text-xs text-foreground whitespace-pre-wrap max-h-48 overflow-y-auto">
                                           {result.aiAnalysis}
@@ -1877,7 +2056,7 @@ export default function CampaignDetailsPage() {
                                     {/* Error + Logs */}
                                     {result.errorMessage && (
                                       <div>
-                                        <p className="text-xs font-semibold text-destructive uppercase tracking-wide mb-1">Error</p>
+                                        <p className="text-xs font-semibold text-destructive uppercase tracking-wide mb-1">Erreur</p>
                                         <p className="text-xs text-destructive">{result.errorMessage}</p>
                                       </div>
                                     )}
@@ -1888,7 +2067,7 @@ export default function CampaignDetailsPage() {
                           })}
                         </div>
                       ) : testCasesLoading ? (
-                        <p className="text-sm text-muted-foreground">Loading results...</p>
+                        <p className="text-sm text-muted-foreground">Chargement des résultats…</p>
                       ) : testCasesFromApi.length > 0 ? (
                         /* No execution results yet — show test cases with status */
                         <div className="rounded-md border border-border overflow-hidden">
@@ -1896,9 +2075,9 @@ export default function CampaignDetailsPage() {
                             <TableHeader>
                               <TableRow>
                                 <TableHead className="w-12"></TableHead>
-                                <TableHead>Test case</TableHead>
+                                <TableHead>Cas de test</TableHead>
                                 <TableHead className="w-32">Type</TableHead>
-                                <TableHead className="w-24">Status</TableHead>
+                                <TableHead className="w-24">Statut</TableHead>
                                 <TableHead className="w-20"></TableHead>
                               </TableRow>
                             </TableHeader>
@@ -1956,7 +2135,7 @@ export default function CampaignDetailsPage() {
                           </Table>
                         </div>
                       ) : (
-                        <p className="text-sm text-muted-foreground">No results yet. Run the campaign to see detailed results.</p>
+                        <p className="text-sm text-muted-foreground">Aucun résultat pour l'instant. Lancez la campagne pour voir les résultats détaillés.</p>
                       )}
 
                       {/* ── Add test cases section ── */}
@@ -1989,7 +2168,7 @@ export default function CampaignDetailsPage() {
                                   <TableHeader>
                                     <TableRow>
                                       <TableHead className="w-12"></TableHead>
-                                      <TableHead>Test case</TableHead>
+                                      <TableHead>Cas de test</TableHead>
                                       <TableHead className="w-32">Type</TableHead>
                                       <TableHead className="w-24">Suite</TableHead>
                                     </TableRow>
@@ -2048,56 +2227,69 @@ export default function CampaignDetailsPage() {
                 <div className="space-y-6">
                   <Card>
                     <CardHeader>
-                      <CardTitle>Details</CardTitle>
-                      <CardDescription>Backend campaign table data at a glance.</CardDescription>
+                      <CardTitle>Détails</CardTitle>
+                      <CardDescription>Données de la campagne en un coup d'œil.</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="rounded-2xl border border-border/70 overflow-hidden bg-card/60">
                         <Table>
                           <TableBody>
                             <TableRow>
-                              <TableCell className="text-muted-foreground">Campaign ID</TableCell>
-                              <TableCell className="text-right font-medium">{campaign.id}</TableCell>
+                              <TableCell className="text-muted-foreground">Projet</TableCell>
+                              <TableCell className="text-right font-medium">
+                                {projectName ?? (campaign.projectId ? `Projet #${campaign.projectId}` : '—')}
+                              </TableCell>
                             </TableRow>
                             <TableRow>
-                              <TableCell className="text-muted-foreground">Status</TableCell>
-                              <TableCell className="text-right font-medium">{campaign.status}</TableCell>
-                            </TableRow>
-                            <TableRow>
-                              <TableCell className="text-muted-foreground">Started at</TableCell>
-                              <TableCell className="text-right font-medium">{campaign.startedAt ? formatWhen(campaign.startedAt) : '—'}</TableCell>
-                            </TableRow>
-                            <TableRow>
-                              <TableCell className="text-muted-foreground">Finished at</TableCell>
-                              <TableCell className="text-right font-medium">{campaign.finishedAt ? formatWhen(campaign.finishedAt) : '—'}</TableCell>
-                            </TableRow>
-                            <TableRow>
-                              <TableCell className="text-muted-foreground">Environment ID</TableCell>
-                              <TableCell className="text-right font-medium">{campaign.environmentId ?? '—'}</TableCell>
-                            </TableRow>
-                            <TableRow>
-                              <TableCell className="text-muted-foreground">Project ID</TableCell>
-                              <TableCell className="text-right font-medium">{campaign.projectId ?? '—'}</TableCell>
-                            </TableRow>
-                            <TableRow>
-                              <TableCell className="text-muted-foreground">Environment</TableCell>
+                              <TableCell className="text-muted-foreground">Environnement</TableCell>
                               <TableCell className="text-right font-medium">{campaign.environment}</TableCell>
                             </TableRow>
                             <TableRow>
-                              <TableCell className="text-muted-foreground">App version</TableCell>
-                              <TableCell className="text-right font-medium">{campaign.appVersion}</TableCell>
+                              <TableCell className="text-muted-foreground">Propriétaire</TableCell>
+                              <TableCell className="text-right">
+                                <span className="inline-flex items-center justify-end gap-2">
+                                  {ownerMember?.imageUrl ? (
+                                    <img src={ownerMember.imageUrl} alt="" className="h-5 w-5 rounded-full object-cover" />
+                                  ) : ownerMember ? (
+                                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-[9px] font-bold text-primary-foreground">
+                                      {memberInitials(ownerMember)}
+                                    </span>
+                                  ) : null}
+                                  <span className="font-medium">{membersLoading ? '…' : ownerName}</span>
+                                </span>
+                              </TableCell>
                             </TableRow>
                             <TableRow>
-                              <TableCell className="text-muted-foreground">Trigger mode</TableCell>
-                              <TableCell className="text-right font-medium">{campaign.triggerMode}</TableCell>
+                              <TableCell className="text-muted-foreground">Statut</TableCell>
+                              <TableCell className="text-right">
+                                <Badge variant="outline" className={statusStyle[campaign.status]}>
+                                  {campaign.status}
+                                </Badge>
+                              </TableCell>
                             </TableRow>
                             <TableRow>
-                              <TableCell className="text-muted-foreground">Branch</TableCell>
+                              <TableCell className="text-muted-foreground">Branche</TableCell>
                               <TableCell className="text-right font-medium">{campaign.branch}</TableCell>
                             </TableRow>
                             <TableRow>
-                              <TableCell className="text-muted-foreground">Owner</TableCell>
-                              <TableCell className="text-right font-medium">{campaign.owner}</TableCell>
+                              <TableCell className="text-muted-foreground">Version de l'app</TableCell>
+                              <TableCell className="text-right font-medium">{campaign.appVersion}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell className="text-muted-foreground">Mode de déclenchement</TableCell>
+                              <TableCell className="text-right font-medium">{campaign.triggerMode}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell className="text-muted-foreground">Démarré le</TableCell>
+                              <TableCell className="text-right font-medium">{campaign.startedAt ? formatWhen(campaign.startedAt) : '—'}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell className="text-muted-foreground">Terminé le</TableCell>
+                              <TableCell className="text-right font-medium">{campaign.finishedAt ? formatWhen(campaign.finishedAt) : '—'}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell className="text-muted-foreground">ID campagne</TableCell>
+                              <TableCell className="text-right font-mono text-xs text-muted-foreground">#{campaign.id}</TableCell>
                             </TableRow>
                           </TableBody>
                         </Table>
@@ -2107,49 +2299,102 @@ export default function CampaignDetailsPage() {
 
                   <Card>
                     <CardHeader>
-                      <CardTitle>Latest execution result</CardTitle>
-                      <CardDescription>Result returned by the ms-execution backend.</CardDescription>
+                      <CardTitle className="flex items-center gap-2">
+                        <Users className="h-4 w-4" />
+                        Project members
+                      </CardTitle>
+                      <CardDescription>
+                        Only the project owner can create campaigns. Here is the project team.
+                      </CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-3">
-                      {latestExecution ? (
-                        <>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div className="rounded-lg border border-border bg-card p-3">
-                              <p className="text-xs uppercase tracking-wide text-muted-foreground">Execution ID</p>
-                              <p className="mt-1 text-sm font-medium text-foreground">#{latestExecution.id}</p>
-                            </div>
-                            <div className="rounded-lg border border-border bg-card p-3">
-                              <p className="text-xs uppercase tracking-wide text-muted-foreground">Status</p>
-                              <p className="mt-1 text-sm font-medium text-foreground">{latestExecution.status}</p>
-                            </div>
-                            <div className="rounded-lg border border-border bg-card p-3">
-                              <p className="text-xs uppercase tracking-wide text-muted-foreground">Execution type</p>
-                              <p className="mt-1 text-sm font-medium text-foreground">{latestExecution.executionType}</p>
-                            </div>
-                            <div className="rounded-lg border border-border bg-card p-3">
-                              <p className="text-xs uppercase tracking-wide text-muted-foreground">Campaign ID</p>
-                              <p className="mt-1 text-sm font-medium text-foreground">{latestExecution.campaignId}</p>
-                            </div>
-                          </div>
-
-                          <div className="rounded-lg border border-border bg-card p-3">
-                            <p className="text-xs uppercase tracking-wide text-muted-foreground">Execution date</p>
-                            <p className="mt-1 text-sm font-medium text-foreground">{formatWhen(latestExecution.executionDate)}</p>
-                            <p className="mt-2 text-xs text-muted-foreground">
-                              Execution number: {latestExecution.executionNumber ?? '—'}
-                            </p>
-                          </div>
-                        </>
+                    <CardContent>
+                      {membersLoading ? (
+                        <div className="flex items-center justify-center py-6">
+                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : members.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No members found for this project.</p>
                       ) : (
-                        <p className="text-sm text-muted-foreground">No backend execution result returned yet.</p>
+                        <div className="space-y-1.5">
+                          {[...members]
+                            .sort((a, b) => (a.userId === ownerId ? -1 : b.userId === ownerId ? 1 : 0))
+                            .map((m) => {
+                              const isOwner = m.userId === ownerId
+                              return (
+                                <div
+                                  key={m.userId}
+                                  className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted/50"
+                                >
+                                  {m.imageUrl ? (
+                                    <img src={m.imageUrl} alt="" className="h-8 w-8 rounded-full object-cover" />
+                                  ) : (
+                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent">
+                                      <span className="text-xs font-bold text-primary-foreground">{memberInitials(m)}</span>
+                                    </div>
+                                  )}
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate text-sm font-medium text-foreground">{memberDisplayName(m)}</p>
+                                    {m.email && <p className="truncate text-xs text-muted-foreground">{m.email}</p>}
+                                  </div>
+                                  {isOwner && (
+                                    <Badge variant="outline" className="gap-1 border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400">
+                                      <Crown className="h-3 w-3" />
+                                      Owner
+                                    </Badge>
+                                  )}
+                                </div>
+                              )
+                            })}
+                        </div>
                       )}
                     </CardContent>
                   </Card>
 
                   <Card>
                     <CardHeader>
-                      <CardTitle>Execution health</CardTitle>
-                      <CardDescription>Simple guardrails for visibility.</CardDescription>
+                      <CardTitle>Dernier résultat d'exécution</CardTitle>
+                      <CardDescription>Résultat renvoyé par le backend ms-execution.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {latestExecution ? (
+                        <>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="rounded-lg border border-border bg-card p-3">
+                              <p className="text-xs uppercase tracking-wide text-muted-foreground">ID exécution</p>
+                              <p className="mt-1 text-sm font-medium text-foreground">#{latestExecution.id}</p>
+                            </div>
+                            <div className="rounded-lg border border-border bg-card p-3">
+                              <p className="text-xs uppercase tracking-wide text-muted-foreground">Statut</p>
+                              <p className="mt-1 text-sm font-medium text-foreground">{latestExecution.status}</p>
+                            </div>
+                            <div className="rounded-lg border border-border bg-card p-3">
+                              <p className="text-xs uppercase tracking-wide text-muted-foreground">Type d'exécution</p>
+                              <p className="mt-1 text-sm font-medium text-foreground">{latestExecution.executionType}</p>
+                            </div>
+                            <div className="rounded-lg border border-border bg-card p-3">
+                              <p className="text-xs uppercase tracking-wide text-muted-foreground">ID campagne</p>
+                              <p className="mt-1 text-sm font-medium text-foreground">{latestExecution.campaignId}</p>
+                            </div>
+                          </div>
+
+                          <div className="rounded-lg border border-border bg-card p-3">
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">Date d'exécution</p>
+                            <p className="mt-1 text-sm font-medium text-foreground">{formatWhen(latestExecution.executionDate)}</p>
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              Numéro d'exécution : {latestExecution.executionNumber ?? '—'}
+                            </p>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">Aucun résultat d'exécution renvoyé pour l'instant.</p>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Santé de l'exécution</CardTitle>
+                      <CardDescription>Indicateurs de surveillance simples.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="flex items-start gap-3">
@@ -2157,14 +2402,14 @@ export default function CampaignDetailsPage() {
                           <ShieldCheck className="h-5 w-5" />
                         </div>
                         <div className="flex-1">
-                          <p className="text-sm font-medium text-foreground">Success threshold</p>
-                          <p className="text-sm text-muted-foreground">Target pass rate: 95%</p>
+                          <p className="text-sm font-medium text-foreground">Seuil de réussite</p>
+                          <p className="text-sm text-muted-foreground">Taux de réussite cible : 95 %</p>
                         </div>
                       </div>
 
                       <div>
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm text-muted-foreground">Current</span>
+                          <span className="text-sm text-muted-foreground">Actuel</span>
                           <span className="text-sm font-semibold text-foreground">{formatPercent(passRate)}</span>
                         </div>
                         <Progress value={passRate} className="h-2" />
@@ -2179,55 +2424,144 @@ export default function CampaignDetailsPage() {
 
         {/* Discovery dialog and schema viewer removed with endpoints feature */}
 
+        {/* ── Assign Dialog for test errors ── */}
+        {resolvedProjectId && (
+          <AssignDialog
+            open={assignTarget !== null}
+            onOpenChange={(open) => { if (!open) setAssignTarget(null) }}
+            projectId={String(resolvedProjectId)}
+            onAssign={async (member) => {
+              if (assignTarget === null) return
+              const ok = await assignExecutionResult(assignTarget, member)
+              if (ok) {
+                setExecutionResults(prev =>
+                  prev.map(r => r.id === assignTarget ? { ...r, assignedTo: member.name } : r)
+                )
+              }
+              setAssignTarget(null)
+            }}
+          />
+        )}
+
         {/* ── Run Mode Dialog ── */}
         <Dialog open={showRunDialog} onOpenChange={setShowRunDialog}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>Lancer la campagne</DialogTitle>
               <DialogDescription>
-                Choisissez quels tests exécuter.
+                Sélectionnez les tests à exécuter, ou lancez toute la campagne.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-2">
-              <p className="text-sm text-muted-foreground">
-                Cette campagne contient <strong>{testCasesFromApi.length}</strong> cas de test.
-                {selectedTestIds.length > 0 && (
-                  <span> Vous avez sélectionné <strong>{selectedTestIds.length}</strong> test(s).</span>
-                )}
-              </p>
-              <div className="grid gap-2">
-                <Button
-                  className="w-full justify-start gap-3"
-                  variant="outline"
-                  onClick={() => runCampaignWithMode('ALL')}
-                  disabled={runSubmitting}
-                >
-                  <Play size={16} />
-                  <div className="text-left">
-                    <div className="font-medium">Exécuter tous les tests</div>
-                    <div className="text-xs text-muted-foreground">Relance les {testCasesFromApi.length} cas de test</div>
-                  </div>
-                </Button>
-                <Button
-                  className="w-full justify-start gap-3"
-                  variant="outline"
-                  onClick={() => runCampaignWithMode('SELECTED')}
-                  disabled={runSubmitting || selectedTestIds.length === 0}
-                >
-                  <CheckCircle2 size={16} />
-                  <div className="text-left">
-                    <div className="font-medium">
-                      Exécuter la sélection ({selectedTestIds.length})
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {selectedTestIds.length === 0
-                        ? 'Cochez des tests dans le tableau pour activer cette option'
-                        : `Exécute uniquement les ${selectedTestIds.length} tests sélectionnés`}
-                    </div>
-                  </div>
-                </Button>
+
+            {testCasesFromApi.length === 0 ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">
+                Cette campagne ne contient aucun cas de test. Ajoutez-en depuis la section « Ajouter des tests ».
               </div>
-            </div>
+            ) : (
+              <div className="space-y-3 py-1">
+                {/* Toolbar : compteur + tout sélectionner */}
+                {(() => {
+                  const allIds = testCasesFromApi.map((tc) => String(tc.id))
+                  const allSelected = allIds.length > 0 && allIds.every((id) => selectedTestIds.includes(id))
+                  const someSelected = selectedTestIds.length > 0 && !allSelected
+                  return (
+                    <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2">
+                      <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+                        <Checkbox
+                          checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+                          onCheckedChange={(next) => setSelectedTestIds(next === true ? allIds : [])}
+                          aria-label="Tout sélectionner"
+                        />
+                        {allSelected ? 'Tout désélectionner' : 'Tout sélectionner'}
+                      </label>
+                      <span className="text-xs text-muted-foreground">
+                        <strong className="text-foreground">{selectedTestIds.length}</strong> / {testCasesFromApi.length} sélectionné(s)
+                      </span>
+                    </div>
+                  )
+                })()}
+
+                {/* Liste cochable des tests */}
+                <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
+                  {testCasesFromApi.map((tc) => {
+                    const idStr = String(tc.id)
+                    const checked = selectedTestIds.includes(idStr)
+                    const statusLabel = tc.executionStatus === 'FINISHED'
+                      ? 'Passed'
+                      : tc.executionStatus === 'ERROR'
+                        ? 'Failed'
+                        : tc.executionStatus ?? 'Not run'
+                    const statusClass = tc.executionStatus === 'FINISHED'
+                      ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400'
+                      : tc.executionStatus === 'ERROR'
+                        ? 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-400'
+                        : 'bg-muted text-muted-foreground'
+                    return (
+                      <label
+                        key={tc.id}
+                        className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 transition-colors ${
+                          checked ? 'border-primary/40 bg-primary/5' : 'border-border hover:bg-muted/40'
+                        }`}
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(next) =>
+                            setSelectedTestIds((prev) =>
+                              next === true ? [...prev, idStr] : prev.filter((x) => x !== idStr),
+                            )
+                          }
+                          aria-label={`Sélectionner ${tc.title}`}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate text-sm font-medium text-foreground">{tc.title}</span>
+                            {tc.flaky && (
+                              <Badge variant="outline" className="shrink-0 border-amber-300 bg-amber-50 px-1.5 py-0 text-[10px] text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400">
+                                flaky
+                              </Badge>
+                            )}
+                            {tc.active === false && (
+                              <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px] text-muted-foreground">
+                                inactif
+                              </Badge>
+                            )}
+                          </div>
+                          {tc.scriptPath && (
+                            <p className="truncate text-xs text-muted-foreground">{tc.scriptPath}</p>
+                          )}
+                        </div>
+                        <Badge variant="outline" className="shrink-0 font-mono text-[10px]">
+                          {tc.type ?? '—'}
+                        </Badge>
+                        <Badge variant="outline" className={`shrink-0 text-[10px] ${statusClass}`}>
+                          {statusLabel}
+                        </Badge>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => runCampaignWithMode('ALL')}
+                disabled={runSubmitting || testCasesFromApi.length === 0}
+              >
+                <Play size={16} />
+                Tout exécuter ({testCasesFromApi.length})
+              </Button>
+              <Button
+                className="gap-2"
+                onClick={() => runCampaignWithMode('SELECTED')}
+                disabled={runSubmitting || selectedTestIds.length === 0}
+              >
+                {runSubmitting ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                Exécuter la sélection ({selectedTestIds.length})
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </main>

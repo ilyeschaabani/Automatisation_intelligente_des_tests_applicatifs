@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertCircle, CheckCircle2, Clock, Plus, RefreshCw, TrendingUp } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Clock, Plus, RefreshCw, Repeat2, Timer, TrendingUp } from 'lucide-react'
 
 import { Header } from '@/components/header'
 import { Sidebar } from '@/components/sidebar'
@@ -39,6 +39,7 @@ export default function DashboardPage() {
   const [kpiLoading, setKpiLoading] = useState(false)
   const [campaignsLoading, setCampaignsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   useEffect(() => {
     void loadProjects()
@@ -110,6 +111,7 @@ export default function DashboardPage() {
       ])
       setKpi(kpiData)
       setTrend(trendData)
+      setLastUpdated(new Date())
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load KPI data')
       setKpi(null)
@@ -141,6 +143,19 @@ export default function DashboardPage() {
 
   const selectedProjectName = projects.find((project) => project.id === selectedProjectId)?.name
   const successRateDelta = kpi ? kpi.evolution.currentRate - kpi.evolution.previousRate : 0
+  // Only show the success-rate delta once there are at least two campaigns to compare.
+  const hasComparison = trend.length >= 2
+
+  const successTone: 'success' | 'warning' | 'danger' = !kpi
+    ? 'warning'
+    : kpi.successRate >= 90
+      ? 'success'
+      : kpi.successRate >= 70
+        ? 'warning'
+        : 'danger'
+
+  const maxFailingCount = Math.max(1, ...(kpi?.top5FailingTests ?? []).map((t) => t.failureCount ?? 0))
+  const maxSlowestMs = Math.max(1, ...(kpi?.top5SlowestTests ?? []).map((t) => t.averageDurationMs ?? 0))
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -152,9 +167,9 @@ export default function DashboardPage() {
         <div className="p-6 max-w-7xl space-y-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+              <h1 className="text-3xl font-bold text-foreground">Tableau de bord</h1>
               <p className="text-muted-foreground mt-1">
-                Live KPI data for your selected project.
+                Données KPI en direct pour le projet sélectionné.
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -165,7 +180,7 @@ export default function DashboardPage() {
                   disabled={projectsLoading || projects.length === 0}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a project" />
+                    <SelectValue placeholder="Sélectionner un projet" />
                   </SelectTrigger>
                   <SelectContent>
                     {projects.map((project) => (
@@ -185,12 +200,12 @@ export default function DashboardPage() {
                 }}
                 disabled={kpiLoading || selectedProjectId == null}
               >
-                <RefreshCw size={18} />
-                Refresh
+                <RefreshCw size={18} className={kpiLoading ? 'animate-spin' : undefined} />
+                Actualiser
               </Button>
               <Button className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
                 <Plus size={20} />
-                New Campaign
+                Nouvelle campagne
               </Button>
             </div>
           </div>
@@ -207,41 +222,86 @@ export default function DashboardPage() {
           {!projectsLoading && projects.length === 0 && !error && (
             <Card>
               <CardContent className="p-6 text-muted-foreground">
-                No projects available. KPI data is project-scoped, so create or import a project first.
+                Aucun projet disponible. Les KPI sont liés à un projet — créez ou importez d'abord un projet.
               </CardContent>
             </Card>
           )}
 
           {selectedProjectName && (
-            <div className="flex items-center gap-3 text-sm text-muted-foreground">
-              <span>Project:</span>
+            <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+              <span>Projet :</span>
               <Badge variant="secondary">{selectedProjectName}</Badge>
-              {kpiLoading && <span>Loading live KPI data...</span>}
+              {kpiLoading ? (
+                <span>Chargement des KPI en direct…</span>
+              ) : lastUpdated ? (
+                <span className="text-xs">
+                  Mis à jour à{' '}
+                  {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+              ) : null}
             </div>
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
             <StatCard
-              title="Total Tests Run"
+              title="Tests exécutés"
               value={kpi ? kpi.totalTestsRun.toLocaleString() : '—'}
+              subtitle={kpi ? `${kpi.passedTests.toLocaleString()} réussis · ${kpi.failedTests.toLocaleString()} échoués` : undefined}
+              tone="primary"
               icon={<CheckCircle2 size={24} />}
+              loading={kpiLoading}
             />
             <StatCard
-              title="Success Rate"
+              title="Taux de réussite"
               value={kpi ? `${kpi.successRate.toFixed(1)}%` : '—'}
-              change={kpi ? Number(successRateDelta.toFixed(1)) : undefined}
+              change={kpi && hasComparison ? Number(successRateDelta.toFixed(1)) : undefined}
               trend={successRateDelta >= 0 ? 'up' : 'down'}
+              tone={successTone}
               icon={<TrendingUp size={24} />}
+              loading={kpiLoading}
             />
             <StatCard
-              title="Failed Tests"
+              title="Tests échoués"
               value={kpi ? kpi.failedTests.toLocaleString() : '—'}
+              subtitle={kpi && kpi.totalTestsRun > 0 ? `${((kpi.failedTests / kpi.totalTestsRun) * 100).toFixed(1)}% des exécutions` : undefined}
+              tone={kpi && kpi.failedTests > 0 ? 'danger' : 'success'}
               icon={<AlertCircle size={24} />}
+              loading={kpiLoading}
             />
             <StatCard
-              title="Active Campaigns"
+              title="Campagnes actives"
               value={kpi ? kpi.activeCampaigns.toLocaleString() : '—'}
+              subtitle={kpi && kpi.activeCampaigns > 0 ? 'en cours' : 'au repos'}
+              tone={kpi && kpi.activeCampaigns > 0 ? 'warning' : 'neutral'}
               icon={<Clock size={24} />}
+              loading={kpiLoading}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <StatCard
+              title="Durée moyenne par test"
+              value={kpi ? (kpi.averageDuration ?? '0 ms') : '—'}
+              subtitle="sur toutes les exécutions chronométrées"
+              tone="neutral"
+              icon={<Timer size={24} />}
+              loading={kpiLoading}
+            />
+            <StatCard
+              title="Tests instables (flaky)"
+              value={kpi ? kpi.flakyTests.toLocaleString() : '—'}
+              subtitle="ont nécessité au moins une reprise"
+              tone={kpi && kpi.flakyTests > 0 ? 'warning' : 'success'}
+              icon={<Repeat2 size={24} />}
+              loading={kpiLoading}
+            />
+            <StatCard
+              title="Durée dernière campagne"
+              value={kpi ? kpi.totalExecutionTime : '—'}
+              subtitle="dernière campagne terminée"
+              tone="neutral"
+              icon={<Clock size={24} />}
+              loading={kpiLoading}
             />
           </div>
 
@@ -250,10 +310,10 @@ export default function DashboardPage() {
               <div className="flex items-start justify-between gap-4 mb-4">
                 <div>
                   <h2 className="text-lg font-bold text-foreground">
-                    Test Results Over Time
+                    Résultats des tests dans le temps
                   </h2>
                   <p className="text-sm text-muted-foreground">
-                    Passed, failed, and skipped executions from the latest campaigns.
+                    Exécutions réussies, échouées et ignorées des dernières campagnes.
                   </p>
                 </div>
               </div>
@@ -261,7 +321,7 @@ export default function DashboardPage() {
                 <TestResultsChart data={chartData} />
               ) : (
                 <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
-                  No trend data available for this project.
+                  Aucune donnée de tendance pour ce projet.
                 </div>
               )}
             </Card>
@@ -270,10 +330,10 @@ export default function DashboardPage() {
               <div className="flex items-start justify-between gap-4 mb-4">
                 <div>
                   <h2 className="text-lg font-bold text-foreground">
-                    Success Rate Trend
+                    Évolution du taux de réussite
                   </h2>
                   <p className="text-sm text-muted-foreground">
-                    Derived from the latest campaign executions.
+                    Calculée à partir des dernières exécutions de campagnes.
                   </p>
                 </div>
               </div>
@@ -281,7 +341,7 @@ export default function DashboardPage() {
                 <SuccessRateTrend data={trendData} />
               ) : (
                 <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
-                  No trend data available for this project.
+                  Aucune donnée de tendance pour ce projet.
                 </div>
               )}
             </Card>
@@ -290,16 +350,16 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <Card className="p-6">
               <CardHeader className="p-0 pb-4">
-                <CardTitle>Top 5 Slowest Tests</CardTitle>
-                <CardDescription>Average duration across all available executions.</CardDescription>
+                <CardTitle>Top 5 des tests les plus lents</CardTitle>
+                <CardDescription>Durée moyenne sur toutes les exécutions disponibles.</CardDescription>
               </CardHeader>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border">
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Test</th>
-                      <th className="px-3 py-2 text-right font-medium text-muted-foreground">Average</th>
-                      <th className="px-3 py-2 text-right font-medium text-muted-foreground">Duration</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground w-1/3">Relatif</th>
+                      <th className="px-3 py-2 text-right font-medium text-muted-foreground">Durée moy.</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -310,10 +370,15 @@ export default function DashboardPage() {
                             <div className="font-medium text-foreground">{test.testCaseLabel}</div>
                             <div className="text-xs text-muted-foreground">#{test.testCaseId ?? 'n/a'}</div>
                           </td>
-                          <td className="px-3 py-3 text-right text-muted-foreground">
-                            {test.averageDurationMs?.toFixed(0) ?? '0'} ms
+                          <td className="px-3 py-3">
+                            <div className="h-1.5 w-full rounded-full bg-muted">
+                              <div
+                                className="h-1.5 rounded-full bg-primary/70"
+                                style={{ width: `${Math.max(6, ((test.averageDurationMs ?? 0) / maxSlowestMs) * 100)}%` }}
+                              />
+                            </div>
                           </td>
-                          <td className="px-3 py-3 text-right font-medium text-foreground">
+                          <td className="px-3 py-3 text-right font-medium text-foreground whitespace-nowrap">
                             {test.averageDuration ?? '—'}
                           </td>
                         </tr>
@@ -321,7 +386,7 @@ export default function DashboardPage() {
                     ) : (
                       <tr>
                         <td className="px-3 py-6 text-muted-foreground" colSpan={3}>
-                          No slow-test data available.
+                          Aucune donnée sur les tests lents.
                         </td>
                       </tr>
                     )}
@@ -332,15 +397,15 @@ export default function DashboardPage() {
 
             <Card className="p-6">
               <CardHeader className="p-0 pb-4">
-                <CardTitle>Top 5 Failing Tests</CardTitle>
-                <CardDescription>Tests with the highest failure frequency in the latest campaigns.</CardDescription>
+                <CardTitle>Top 5 des tests en échec</CardTitle>
+                <CardDescription>Tests avec la plus forte fréquence d'échec dans les dernières campagnes.</CardDescription>
               </CardHeader>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border">
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Test</th>
-                      <th className="px-3 py-2 text-right font-medium text-muted-foreground">Failures</th>
+                      <th className="px-3 py-2 text-right font-medium text-muted-foreground">Échecs</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -351,15 +416,25 @@ export default function DashboardPage() {
                             <div className="font-medium text-foreground">{test.testCaseLabel}</div>
                             <div className="text-xs text-muted-foreground">#{test.testCaseId ?? 'n/a'}</div>
                           </td>
-                          <td className="px-3 py-3 text-right font-semibold text-red-600 dark:text-red-400">
-                            {test.failureCount ?? 0}
+                          <td className="px-3 py-3">
+                            <div className="flex items-center justify-end gap-2">
+                              <div className="h-1.5 w-24 rounded-full bg-muted">
+                                <div
+                                  className="h-1.5 rounded-full bg-red-500/70"
+                                  style={{ width: `${Math.max(6, ((test.failureCount ?? 0) / maxFailingCount) * 100)}%` }}
+                                />
+                              </div>
+                              <span className="font-semibold text-red-600 dark:text-red-400 tabular-nums w-6 text-right">
+                                {test.failureCount ?? 0}
+                              </span>
+                            </div>
                           </td>
                         </tr>
                       ))
                     ) : (
                       <tr>
                         <td className="px-3 py-6 text-muted-foreground" colSpan={2}>
-                          No failing-test data available.
+                          Aucune donnée sur les tests en échec.
                         </td>
                       </tr>
                     )}
@@ -371,21 +446,21 @@ export default function DashboardPage() {
 
           <div>
             <div className="mb-4">
-              <h2 className="text-lg font-bold text-foreground">Recent Campaigns</h2>
+              <h2 className="text-lg font-bold text-foreground">Campagnes récentes</h2>
               <p className="text-sm text-muted-foreground">
-                Test campaigns for the selected project.
+                Campagnes de test du projet sélectionné.
               </p>
             </div>
             {campaignsLoading ? (
               <Card>
                 <CardContent className="p-6 text-muted-foreground">
-                  Loading campaigns...
+                  Chargement des campagnes…
                 </CardContent>
               </Card>
             ) : campaigns.length === 0 ? (
               <Card>
                 <CardContent className="p-6 text-muted-foreground">
-                  No campaigns available for this project.
+                  Aucune campagne disponible pour ce projet.
                 </CardContent>
               </Card>
             ) : (

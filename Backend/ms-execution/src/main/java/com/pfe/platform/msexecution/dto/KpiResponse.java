@@ -16,10 +16,14 @@ public class KpiResponse implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private long totalTestsRun;
+    private long passedTests;
     private double successRate;
     private long failedTests;
     private long activeCampaigns;
     private String totalExecutionTime;
+    private long flakyTests;
+    private Double averageDurationMs;
+    private String averageDuration;
     private List<TestMetric> top5SlowestTests;
     private List<TestMetric> top5FailingTests;
     private Evolution evolution;

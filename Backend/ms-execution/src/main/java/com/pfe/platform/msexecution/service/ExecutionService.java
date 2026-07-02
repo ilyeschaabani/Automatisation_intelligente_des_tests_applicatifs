@@ -841,7 +841,12 @@ public class ExecutionService {
                 log.debug("[TESTCASE {}] Ensured directory exists: {}", tc.getId(), genDir);
 
                 Path testFile = genDir.resolve(extractedClassName + ".java");
-                Files.writeString(testFile, cleanCode);
+                String codeToWrite = cleanCode;
+                if (tc.getType() == TestCase.TestType.INTEGRATION) {
+                    codeToWrite = ensureSpringBootTestConfig(codeToWrite, workDir);
+                    codeToWrite = stripInlineTestPropertySource(codeToWrite);
+                }
+                Files.writeString(testFile, codeToWrite);
                 log.info("[TESTCASE {}] Generated test written to: {}", tc.getId(), testFile);
 
                 // Extract declared package from generated code
@@ -1019,6 +1024,15 @@ public class ExecutionService {
                     String currentScript = tc.getGeneratedCode();
                     String relevantErrors = llmAnalysisService.extractRelevantErrors(combinedOutput);
 
+                    // Phase 2: give the corrector the same grounding as the initial generation —
+                    // the real source class under test + the project's class tree (for correct imports).
+                    String projectFileTree = buildProjectFileTree(workDir);
+                    String sourceClassContent = findSourceClassUnderTest(tc.getGeneratedCode(), workDir);
+                    log.info("[TESTCASE {}] Retry context: fileTree={} chars, sourceClass={} chars",
+                            tc.getId(),
+                            projectFileTree != null ? projectFileTree.length() : 0,
+                            sourceClassContent != null ? sourceClassContent.length() : 0);
+
                     for (int retry = 1; retry <= maxRetries; retry++) {
                         log.info("[TESTCASE {}] AUTO-RETRY {}/{} — L'IA corrige le script...", tc.getId(), retry, maxRetries);
 
@@ -1031,8 +1045,25 @@ public class ExecutionService {
                         retryLogBuilder.append("=== Tentative ").append(retry).append("/").append(maxRetries).append(" ===\n");
                         retryLogBuilder.append("Erreur détectée: ").append(relevantErrors.substring(0, Math.min(500, relevantErrors.length()))).append("\n");
 
+                        // Pull the real source of classes named in the errors AND every class the test
+                        // instantiates (composite keys, entities built for setup…) so the corrector
+                        // stops guessing their constructors/types.
+                        String relatedClasses = collectRelevantSources(relevantErrors, currentScript, sourceClassContent, workDir);
+                        log.info("[TESTCASE {}] Retry {}: relatedClasses={} chars",
+                                tc.getId(), retry, relatedClasses != null ? relatedClasses.length() : 0);
+
+                        // For test (non-compile) failures the real cause (e.g. a business exception
+                        // thrown from the service) lives in the surefire report, not in the filtered
+                        // [ERROR] lines — feed it to the corrector so it can fix the missing DB/mock setup.
+                        String errorContext = relevantErrors;
+                        String surefireForRetry = readSurefireFailureDetails(workDir);
+                        if (surefireForRetry != null) {
+                            errorContext = relevantErrors + "\n\n== Détails surefire (vraie cause de l'échec) ==\n"
+                                    + firstLines(surefireForRetry, 60, 4000);
+                        }
+
                         String correctedScript = scriptRetryService.correctScript(
-                                currentScript, relevantErrors, tc.getGeneratedCode());
+                                currentScript, errorContext, sourceClassContent, relatedClasses, projectFileTree);
 
                         if (correctedScript == null || correctedScript.isBlank()) {
                             retryLogBuilder.append("Résultat: L'IA n'a pas pu corriger le script.\n\n");
@@ -1052,7 +1083,12 @@ public class ExecutionService {
                         }
                         String retryClassName = retryClassMatcher.group(1);
                         Path retryTestFile = workDir.resolve("src/test/java").resolve(subDir).resolve(retryClassName + ".java");
-                        Files.writeString(retryTestFile, correctedScript);
+                        String retryCodeToWrite = correctedScript;
+                        if (tc.getType() == TestCase.TestType.INTEGRATION) {
+                            retryCodeToWrite = ensureSpringBootTestConfig(retryCodeToWrite, workDir);
+                            retryCodeToWrite = stripInlineTestPropertySource(retryCodeToWrite);
+                        }
+                        Files.writeString(retryTestFile, retryCodeToWrite);
                         log.info("[TESTCASE {}] Retry {}: corrected script written to {}", tc.getId(), retry, retryTestFile);
 
                         // Relancer Maven
@@ -1072,6 +1108,9 @@ public class ExecutionService {
 
                         String retryCombinedOutput = combineProcessOutput(retryStdout, retryStderr);
                         int retryExitCode = retryFinished ? retryProcess.exitValue() : -1;
+                        boolean retryCompiles = !isCompilationError(retryCombinedOutput);
+                        log.info("[TESTCASE {}] Retry {}: Maven exitCode={}, compiles={}",
+                                tc.getId(), retry, retryExitCode, retryCompiles);
 
                         if (!retryFinished) {
                             retryProcess.destroyForcibly();
@@ -1103,12 +1142,27 @@ public class ExecutionService {
 
                             if (!isRetryableError(retryCombinedOutput)) {
                                 retryLogBuilder.append("L'erreur n'est plus corrigeable automatiquement. Arrêt du retry.\n");
+                                String surefireDetails = readSurefireFailureDetails(workDir);
+                                log.warn("[TESTCASE {}] Retry {}: error no longer auto-retryable "
+                                                + "(compiles={}). Stopping.\n-- Maven extract --\n{}\n-- Surefire details --\n{}",
+                                        tc.getId(), retry, retryCompiles,
+                                        firstLines(relevantErrors, 40, 3000),
+                                        surefireDetails != null ? firstLines(surefireDetails, 80, 6000)
+                                                : "(aucun fichier surefire-reports trouvé)");
                                 break;
                             }
                         }
                     }
                     result.setRetryCount(Math.min(maxRetries, retryLogBuilder.toString().split("=== Tentative").length - 1));
                     result.setRetryLog(retryLogBuilder.toString());
+
+                    // If retries didn't fix it, dump the final generated test so we can see exactly
+                    // what the model produced (the temp clone is wiped right after).
+                    if (result.getStatus() != ExecutionResult.ResultStatus.SUCCESS) {
+                        log.warn("[TESTCASE {}] Final generated test after {} retries (status={}):\n{}",
+                                tc.getId(), maxRetries, result.getStatus(),
+                                firstLines(currentScript, 250, 9000));
+                    }
                 }
             }
 
@@ -1962,6 +2016,292 @@ spring.jpa.hibernate.ddl-auto=create-drop
         return sb.toString();
     }
 
+    /**
+     * Builds a flat list of fully-qualified class names from the cloned project's main sources,
+     * so the corrector can resolve correct imports (fixes "cannot find symbol" / "package does not exist").
+     */
+    private String buildProjectFileTree(Path repoRoot) {
+        if (repoRoot == null) return null;
+        Path srcRoot = repoRoot.resolve("src/main/java");
+        if (!Files.isDirectory(srcRoot)) return null;
+        try (var stream = Files.walk(srcRoot)) {
+            java.util.List<String> fqns = stream
+                    .filter(p -> p.toString().endsWith(".java"))
+                    .map(p -> srcRoot.relativize(p).toString()
+                            .replace(java.io.File.separatorChar, '.')
+                            .replaceAll("\\.java$", ""))
+                    .sorted()
+                    .limit(400)
+                    .collect(java.util.stream.Collectors.toList());
+            if (fqns.isEmpty()) return null;
+            String tree = String.join("\n", fqns);
+            return tree.length() > 12_000 ? tree.substring(0, 12_000) : tree;
+        } catch (Exception e) {
+            log.warn("[buildProjectFileTree] Failed to scan {}: {}", srcRoot, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Locates the real source class under test (parsed from the generated test's @InjectMocks /
+     * @Autowired type) inside the cloned repo and returns its content (capped). Gives the corrector
+     * the actual setters/getters/method names instead of guessing.
+     */
+    private String findSourceClassUnderTest(String testCode, Path repoRoot) {
+        if (testCode == null || repoRoot == null) return null;
+        String className = null;
+        java.util.regex.Matcher inj = Pattern.compile("@InjectMocks\\s+(?:private\\s+)?(\\w+)\\s+\\w+")
+                .matcher(testCode);
+        if (inj.find()) {
+            className = inj.group(1);
+        } else {
+            java.util.regex.Matcher aut = Pattern.compile("@Autowired\\s+(?:private\\s+)?(\\w+Service)\\s+\\w+")
+                    .matcher(testCode);
+            if (aut.find()) className = aut.group(1);
+        }
+        if (className == null) return null;
+
+        Path srcRoot = repoRoot.resolve("src/main/java");
+        if (!Files.isDirectory(srcRoot)) return null;
+        final String target = className + ".java";
+        try (var stream = Files.walk(srcRoot)) {
+            Path found = stream
+                    .filter(p -> p.getFileName().toString().equals(target))
+                    .findFirst()
+                    .orElse(null);
+            if (found == null) return null;
+            String content = Files.readString(found);
+            return content.length() > 8_000 ? content.substring(0, 8_000) : content;
+        } catch (Exception e) {
+            log.warn("[findSourceClassUnderTest] Failed to read {}: {}", target, e.getMessage());
+            return null;
+        }
+    }
+
+    private boolean isFrameworkPkg(String fqn) {
+        return fqn.startsWith("java.") || fqn.startsWith("javax.")
+                || fqn.startsWith("org.springframework.") || fqn.startsWith("org.testng.")
+                || fqn.startsWith("org.mockito.") || fqn.startsWith("org.hibernate.")
+                || fqn.startsWith("jakarta.") || fqn.startsWith("lombok.");
+    }
+
+    /** Adds the simple names of project classes (present in the index) referenced anywhere in text. */
+    private void addIndexedRefs(String text, java.util.Map<String, Path> index, java.util.Set<String> out) {
+        if (text == null) return;
+        java.util.regex.Matcher m = Pattern.compile("\\b([A-Z][a-zA-Z0-9_]*)\\b").matcher(text);
+        while (m.find()) {
+            String n = m.group(1);
+            if (index.containsKey(n)) out.add(n);
+        }
+    }
+
+    /**
+     * Collects the real source of every project class the corrector needs to fix a test, following
+     * the dependency chain transitively (BFS, depth 2). Seeds come from the compile errors, the
+     * classes the test instantiates, AND the class under test. The transitive walk is what surfaces
+     * indirectly-needed entities — e.g. TestCaseService → ProjectAccessService → ProjectMemberRepository
+     * → ProjectMember — so the corrector can build the missing DB setup (insert a ProjectMember to pass
+     * checkMembership) instead of re-failing the same way each retry.
+     */
+    private String collectRelevantSources(String errors, String script, String sourceClass, Path repoRoot) {
+        if (repoRoot == null) return null;
+        Path srcRoot = repoRoot.resolve("src/main/java");
+        if (!Files.isDirectory(srcRoot)) return null;
+
+        // Index project classes: simpleName -> file (first match wins).
+        java.util.Map<String, Path> index = new java.util.HashMap<>();
+        try (var stream = Files.walk(srcRoot)) {
+            stream.filter(p -> p.toString().endsWith(".java")).forEach(p -> {
+                String fn = p.getFileName().toString();
+                index.putIfAbsent(fn.substring(0, fn.length() - 5), p);
+            });
+        } catch (Exception e) {
+            log.warn("[collectRelevantSources] Failed to index {}: {}", srcRoot, e.getMessage());
+            return null;
+        }
+        if (index.isEmpty()) return null;
+
+        // Seeds (depth 0).
+        java.util.LinkedHashSet<String> seeds = new java.util.LinkedHashSet<>();
+        if (errors != null) {
+            java.util.regex.Matcher m = Pattern
+                    .compile("\\b((?:[a-z][a-zA-Z0-9_]*\\.){2,}[A-Z][a-zA-Z0-9_]*)\\b").matcher(errors);
+            while (m.find()) {
+                String fqn = m.group(1);
+                if (isFrameworkPkg(fqn)) continue;
+                String simple = fqn.substring(fqn.lastIndexOf('.') + 1);
+                seeds.add(simple);
+                if (simple.endsWith("Id") && simple.length() > 2) {
+                    seeds.add(simple.substring(0, simple.length() - 2)); // ProjectMemberId -> ProjectMember
+                }
+            }
+        }
+        if (script != null) {
+            java.util.regex.Matcher mn = Pattern.compile("\\bnew\\s+([A-Z][a-zA-Z0-9_]*)\\s*\\(").matcher(script);
+            while (mn.find()) seeds.add(mn.group(1));
+        }
+        addIndexedRefs(sourceClass, index, seeds); // classes referenced by the service under test
+
+        if (seeds.isEmpty()) return null;
+
+        // BFS, depth 2 (3 levels), budget-capped.
+        StringBuilder sb = new StringBuilder();
+        java.util.Set<String> done = new java.util.HashSet<>();
+        java.util.Map<String, Integer> depth = new java.util.HashMap<>();
+        java.util.Deque<String> queue = new java.util.ArrayDeque<>();
+        for (String s : seeds) { queue.add(s); depth.put(s, 0); }
+
+        int budget = 18_000;
+        while (!queue.isEmpty() && sb.length() < budget) {
+            String name = queue.poll();
+            if (!done.add(name)) continue;
+            Path file = index.get(name);
+            if (file == null) continue;
+            String content;
+            try {
+                content = Files.readString(file);
+            } catch (Exception e) {
+                continue;
+            }
+            String capped = content.length() > 2_200 ? content.substring(0, 2_200) : content;
+            if (sb.length() + capped.length() > budget) break;
+            sb.append("// ===== ").append(name).append(" =====\n").append(capped).append("\n\n");
+
+            int d = depth.getOrDefault(name, 0);
+            if (d < 2) {
+                java.util.LinkedHashSet<String> refs = new java.util.LinkedHashSet<>();
+                addIndexedRefs(content, index, refs);
+                for (String r : refs) {
+                    if (!done.contains(r) && !depth.containsKey(r)) {
+                        queue.add(r);
+                        depth.put(r, d + 1);
+                    }
+                }
+            }
+        }
+        return sb.length() == 0 ? null : sb.toString();
+    }
+
+    /**
+     * Reads the surefire report/dump files after a forked-process failure. A Spring context
+     * startup failure ("Cannot instantiate class …") crashes the forked test JVM, so the real
+     * "Caused by:" lives in target/surefire-reports/*.txt|*.dumpstream — not in the Maven console.
+     */
+    private String readSurefireFailureDetails(Path workDir) {
+        if (workDir == null) return null;
+        Path reports = workDir.resolve("target/surefire-reports");
+        if (!Files.isDirectory(reports)) return null;
+        StringBuilder sb = new StringBuilder();
+        try (var stream = Files.list(reports)) {
+            java.util.List<Path> files = stream
+                    .filter(p -> {
+                        String n = p.getFileName().toString();
+                        return n.endsWith(".txt") || n.endsWith(".dumpstream") || n.endsWith(".dump");
+                    })
+                    .sorted()
+                    .collect(java.util.stream.Collectors.toList());
+            for (Path f : files) {
+                try {
+                    String content = Files.readString(f);
+                    if (content.isBlank()) continue;
+                    // The real root cause is in the "Caused by:" chain, often AFTER a huge verbose
+                    // WebMergedContextConfiguration dump. Prefer the last "Caused by:" so we surface
+                    // the actual bean/schema failure instead of the noisy config block.
+                    int causeIdx = content.lastIndexOf("Caused by:");
+                    String slice = (causeIdx >= 0)
+                            ? content.substring(causeIdx, Math.min(content.length(), causeIdx + 3_500))
+                            : (content.length() > 4_000 ? content.substring(0, 4_000) : content);
+                    sb.append("----- ").append(f.getFileName()).append(" -----\n");
+                    sb.append(slice).append("\n");
+                    if (sb.length() > 8_000) break;
+                } catch (Exception ignored) {
+                }
+            }
+        } catch (Exception e) {
+            return null;
+        }
+        return sb.length() == 0 ? null : sb.toString();
+    }
+
+    /** Returns [fqn, simpleName] of the project's @SpringBootApplication class, or null. */
+    private String[] findSpringBootApplicationClass(Path repoRoot) {
+        if (repoRoot == null) return null;
+        Path srcRoot = repoRoot.resolve("src/main/java");
+        if (!Files.isDirectory(srcRoot)) return null;
+        java.util.List<Path> files;
+        try (var stream = Files.walk(srcRoot)) {
+            files = stream.filter(x -> x.toString().endsWith(".java"))
+                    .collect(java.util.stream.Collectors.toList());
+        } catch (Exception e) {
+            return null;
+        }
+        for (Path p : files) {
+            try {
+                String content = Files.readString(p);
+                if (content.contains("@SpringBootApplication")) {
+                    String fqn = srcRoot.relativize(p).toString()
+                            .replace(java.io.File.separatorChar, '.')
+                            .replaceAll("\\.java$", "");
+                    String simple = fqn.substring(fqn.lastIndexOf('.') + 1);
+                    return new String[]{fqn, simple};
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Generated INTEGRATION tests live in package suites.integration, outside the app's package
+     * tree, so a bare @SpringBootTest can't find the @SpringBootApplication by walking parent
+     * packages ("Unable to find a @SpringBootConfiguration"). This deterministically injects
+     * @SpringBootTest(classes = XxxApplication.class) + the import, regardless of what the LLM wrote.
+     */
+    private String ensureSpringBootTestConfig(String code, Path repoRoot) {
+        if (code == null || !code.contains("@SpringBootTest")) return code;
+        // Already declares config classes — leave it.
+        if (Pattern.compile("@SpringBootTest\\s*\\([^)]*\\bclasses\\b").matcher(code).find()) return code;
+
+        String[] app = findSpringBootApplicationClass(repoRoot);
+        if (app == null) {
+            log.warn("[ensureSpringBootTestConfig] No @SpringBootApplication class found; leaving test as-is");
+            return code;
+        }
+        String fqn = app[0];
+        String simple = app[1];
+
+        if (Pattern.compile("@SpringBootTest\\s*\\(").matcher(code).find()) {
+            code = code.replaceFirst("@SpringBootTest\\s*\\(", "@SpringBootTest(classes = " + simple + ".class, ");
+        } else {
+            code = code.replaceFirst("@SpringBootTest", "@SpringBootTest(classes = " + simple + ".class)");
+        }
+
+        if (!code.contains("import " + fqn + ";")) {
+            int pkgEnd = code.indexOf(';');
+            if (pkgEnd > 0 && code.substring(0, pkgEnd).contains("package")) {
+                code = code.substring(0, pkgEnd + 1) + "\nimport " + fqn + ";\n" + code.substring(pkgEnd + 1);
+            }
+        }
+        log.info("[ensureSpringBootTestConfig] Forced @SpringBootTest(classes = {}.class)", simple);
+        return code;
+    }
+
+    /**
+     * Removes the inline @TestPropertySource from a generated INTEGRATION test so the runner's
+     * src/test/resources/application-test.properties governs the datasource instead. That file is
+     * written per databaseType (Testcontainers PostgreSQL for POSTGRESQL), which — unlike the H2 the
+     * LLM tends to hard-code — supports JSONB columns. The test keeps @ActiveProfiles("test").
+     */
+    private String stripInlineTestPropertySource(String code) {
+        if (code == null || !code.contains("@TestPropertySource")) return code;
+        String cleaned = code.replaceAll("@TestPropertySource\\s*\\([^)]*\\)\\s*", "");
+        if (!cleaned.equals(code)) {
+            log.info("[stripInlineTestPropertySource] Removed inline @TestPropertySource "
+                    + "(datasource now driven by application-test.properties)");
+        }
+        return cleaned;
+    }
+
     private String resolveBaseUrl(TestCase.TestType testType, Environment env) {
         if (env == null) return "";
         return switch (testType) {
@@ -1973,7 +2313,18 @@ spring.jpa.hibernate.ddl-auto=create-drop
 
     private boolean isRetryableError(String logs) {
         if (logs == null) return false;
+        // Spring context startup failures are config/infra, not the test's logic — we fix those
+        // deterministically (classes=, application-test.properties). Re-prompting won't help.
+        if (isContextLoadFailure(logs)) return false;
         return isCompilationError(logs) || isTestFailure(logs);
+    }
+
+    private boolean isContextLoadFailure(String logs) {
+        if (logs == null) return false;
+        return logs.contains("Failed to load ApplicationContext")
+                || logs.contains("Cannot instantiate class")
+                || logs.contains("Unable to find a @SpringBootConfiguration")
+                || logs.contains("ApplicationContext failure threshold");
     }
 
     private boolean isCompilationError(String logs) {
@@ -1995,7 +2346,11 @@ spring.jpa.hibernate.ddl-auto=create-drop
                 || logs.contains("NullPointerException")
                 || logs.contains("Unnecessary stubbings detected")
                 || logs.contains("but was:")
-                || logs.contains("expected [") && logs.contains("] but found [");
+                || (logs.contains("expected [") && logs.contains("] but found ["))
+                // Generic surefire failure marker — a test ran and failed (assertion OR thrown
+                // exception, e.g. a business RuntimeException from missing DB/moc setup). M3 can
+                // often fix the setup. Context-load failures are excluded in isRetryableError.
+                || logs.contains("<<< FAILURE!");
     }
 
     private void deleteDirectory(Path path) {

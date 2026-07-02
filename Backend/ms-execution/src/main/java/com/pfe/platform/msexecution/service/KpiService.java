@@ -53,24 +53,42 @@ public class KpiService {
                 .filter(result -> latestCampaignIds.contains(result.getCampaignId()))
                 .toList();
 
+        // All headline cards share the same scope (full project history) so the numbers
+        // reconcile: passed + failed (+ untracked) = totalTestsRun.
         long totalTestsRun = allResults.size();
-        long successfulTests = latestResults.stream().filter(this::isSuccess).count();
-        long latestResultCount = latestResults.size();
-        double successRate = latestResultCount == 0 ? 0.0 : percentage(successfulTests, latestResultCount);
-        long failedTests = latestResults.stream().filter(this::isFailure).count();
+        long passedTests = allResults.stream().filter(this::isSuccess).count();
+        long failedTests = allResults.stream().filter(this::isFailure).count();
+        double successRate = totalTestsRun == 0 ? 0.0 : percentage(passedTests, totalTestsRun);
         long activeCampaigns = campaignRepository.countByProjectIdAndStatus(projectId, Campaign.CampaignStatus.RUNNING);
+
+        // Flaky = a result that needed at least one retry (retryCount > 0).
+        long flakyTests = allResults.stream()
+                .filter(result -> result.getRetryCount() != null && result.getRetryCount() > 0)
+                .count();
+
+        // Average per-test duration across every timed execution in the project.
+        double averageDurationMs = allResults.stream()
+                .map(ExecutionResult::getDurationMs)
+                .filter(duration -> duration != null && duration > 0)
+                .mapToLong(Long::longValue)
+                .average()
+                .orElse(0.0);
 
         String totalExecutionTime = resolveLastFinishedCampaignDuration(projectId, campaigns, allResults);
         List<KpiResponse.TestMetric> top5SlowestTests = buildTopSlowestTests(allResults);
-        List<KpiResponse.TestMetric> top5FailingTests = buildTopFailingTests(latestResults);
+        List<KpiResponse.TestMetric> top5FailingTests = buildTopFailingTests(allResults);
         KpiResponse.Evolution evolution = buildEvolution(latestCampaigns, allResults);
 
         return KpiResponse.builder()
                 .totalTestsRun(totalTestsRun)
+                .passedTests(passedTests)
                 .successRate(successRate)
                 .failedTests(failedTests)
                 .activeCampaigns(activeCampaigns)
                 .totalExecutionTime(totalExecutionTime)
+                .flakyTests(flakyTests)
+                .averageDurationMs(averageDurationMs > 0 ? round(averageDurationMs) : 0.0)
+                .averageDuration(formatDuration(Math.round(averageDurationMs)))
                 .top5SlowestTests(top5SlowestTests)
                 .top5FailingTests(top5FailingTests)
                 .evolution(evolution)
@@ -114,10 +132,14 @@ public class KpiService {
     private KpiResponse emptyResponse() {
         return KpiResponse.builder()
                 .totalTestsRun(0L)
+                .passedTests(0L)
                 .successRate(0.0)
                 .failedTests(0L)
                 .activeCampaigns(0L)
                 .totalExecutionTime("0 ms")
+                .flakyTests(0L)
+                .averageDurationMs(0.0)
+                .averageDuration("0 ms")
                 .top5SlowestTests(Collections.emptyList())
                 .top5FailingTests(Collections.emptyList())
                 .evolution(KpiResponse.Evolution.builder()

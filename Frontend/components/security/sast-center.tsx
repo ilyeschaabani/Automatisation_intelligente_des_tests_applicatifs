@@ -6,10 +6,11 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Code, ChevronDown, ChevronUp, FileCode, Scan, GitBranch,
-  Clock, FileText, Download,
+  Clock, FileText, Download, UserPlus, CheckCircle2,
 } from 'lucide-react'
 import { ScanTabHeader, type ScanRecord, ScanStatusBadge } from './scan-tab-header'
-import { fetchScanVulnerabilities } from '@/lib/security-client'
+import { AssignDialog } from './assign-dialog'
+import { fetchScanVulnerabilities, updateVulnStatus, assignVuln } from '@/lib/security-client'
 
 interface VulnRecord {
   id: number
@@ -24,6 +25,7 @@ interface VulnRecord {
   recommendation: string | null
   fixExample: string | null
   status: string
+  assignedTo: string | null
 }
 
 function sevColor(s: string) {
@@ -46,7 +48,11 @@ function sevBorder(s: string) {
   }
 }
 
-function FindingCard({ v }: { v: VulnRecord }) {
+function FindingCard({ v, onResolve, onAssign }: {
+  v: VulnRecord
+  onResolve: (id: number) => void
+  onAssign: (id: number) => void
+}) {
   const [open, setOpen] = useState(false)
   return (
     <div className={`border rounded-lg p-4 border-l-4 transition-all hover:shadow-sm ${sevBorder(v.severity)}`}>
@@ -60,6 +66,9 @@ function FindingCard({ v }: { v: VulnRecord }) {
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
             {v.cweId && <span className="font-mono">{v.cweId}</span>}
             {v.owaspCategory && <span>OWASP {v.owaspCategory}</span>}
+            {v.assignedTo && (
+              <span className="flex items-center gap-1"><UserPlus className="h-3 w-3" />{v.assignedTo}</span>
+            )}
           </div>
           {v.file && (
             <div className="mt-2 text-xs font-mono bg-muted/50 rounded px-2 py-1 flex items-center gap-2">
@@ -92,6 +101,14 @@ function FindingCard({ v }: { v: VulnRecord }) {
               <div className="text-xs bg-green-500/5 border border-green-500/20 rounded p-2 leading-relaxed">{v.recommendation}</div>
             </div>
           )}
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => onAssign(v.id)}>
+              <UserPlus className="h-3 w-3 mr-1" />Assigner
+            </Button>
+            <Button variant="outline" size="sm" className="text-xs h-7" disabled={v.status === 'RESOLVED'} onClick={() => onResolve(v.id)}>
+              <CheckCircle2 className="h-3 w-3 mr-1" />{v.status === 'RESOLVED' ? 'Résolu ✓' : 'Marquer résolu'}
+            </Button>
+          </div>
         </div>
       )}
     </div>
@@ -101,6 +118,8 @@ function FindingCard({ v }: { v: VulnRecord }) {
 export function SastCenter() {
   const [scans, setScans] = useState<ScanRecord[]>([])
   const [vulns, setVulns] = useState<VulnRecord[]>([])
+  const [assignTarget, setAssignTarget] = useState<number | null>(null)
+  const [internalProjectId, setInternalProjectId] = useState<string>('')
 
   const handleScansLoaded = useCallback(async (loaded: ScanRecord[]) => {
     setScans(loaded)
@@ -119,6 +138,22 @@ export function SastCenter() {
   const medium = vulns.filter(v => v.severity === 'MEDIUM').length
   const low = vulns.filter(v => v.severity === 'LOW').length
 
+  const handleResolve = useCallback(async (id: number) => {
+    const ok = await updateVulnStatus(id, 'RESOLVED')
+    if (ok) setVulns(prev => prev.map(x => x.id === id ? { ...x, status: 'RESOLVED' } : x))
+  }, [])
+
+  const handleAssign = useCallback((id: number) => {
+    setAssignTarget(id)
+  }, [])
+
+  const handleAssignConfirm = useCallback(async (member: { userId: number; name: string; email: string }) => {
+    if (assignTarget === null) return
+    const ok = await assignVuln(assignTarget, member)
+    if (ok) setVulns(prev => prev.map(x => x.id === assignTarget ? { ...x, assignedTo: member.name } : x))
+    setAssignTarget(null)
+  }, [assignTarget])
+
   return (
     <div className="space-y-6">
       <ScanTabHeader
@@ -128,6 +163,7 @@ export function SastCenter() {
         subtitle="Analyse statique du code source via Semgrep (2500+ regles)"
         accentColor="bg-violet-600 hover:bg-violet-700 text-white"
         onScansLoaded={handleScansLoaded}
+        onProjectChange={setInternalProjectId}
       />
 
       {latest && (
@@ -197,7 +233,7 @@ export function SastCenter() {
               {vulns.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">Aucune vulnerabilite detectee</p>
               ) : (
-                vulns.map(v => <FindingCard key={v.id} v={v} />)
+                vulns.map(v => <FindingCard key={v.id} v={v} onResolve={handleResolve} onAssign={handleAssign} />)
               )}
             </CardContent>
           </Card>
@@ -242,6 +278,15 @@ export function SastCenter() {
           <p className="text-lg font-medium">Aucun scan SAST</p>
           <p className="text-sm mt-1">Selectionnez un projet et un environnement puis lancez votre premier scan</p>
         </div>
+      )}
+
+      {internalProjectId && (
+        <AssignDialog
+          open={assignTarget !== null}
+          onOpenChange={(open) => { if (!open) setAssignTarget(null) }}
+          projectId={internalProjectId}
+          onAssign={handleAssignConfirm}
+        />
       )}
     </div>
   )

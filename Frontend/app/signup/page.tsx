@@ -56,38 +56,38 @@ export default function SignupPage() {
     <div className="min-h-screen bg-background flex items-center justify-center p-6">
       <Card className="w-full max-w-md p-6">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-foreground">Create account</h1>
+          <h1 className="text-2xl font-bold text-foreground">Créer un compte</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Sign up to access the platform.
+            Inscrivez-vous pour accéder à la plateforme.
           </p>
         </div>
 
         <form className="space-y-4" onSubmit={onSubmit}>
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
           <div className="space-y-2">
-            <Label htmlFor="name">Full name</Label>
+            <Label htmlFor="name">Nom complet</Label>
             <Input id="name" name="name" placeholder="Ahmed Ben Ali" required />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" placeholder="you@company.com" required />
+            <Label htmlFor="email">E-mail</Label>
+            <Input id="email" name="email" type="email" placeholder="vous@entreprise.com" required />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">Mot de passe</Label>
             <Input id="password" name="password" type="password" placeholder="••••••••" required />
           </div>
 
           <Button className="w-full" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Creating…' : 'Create account'}
+            {isSubmitting ? 'Création…' : 'Créer un compte'}
           </Button>
         </form>
 
         <div className="mt-6 text-sm text-muted-foreground">
-          Already have an account?{' '}
+          Vous avez déjà un compte ?{' '}
           <Link href="/login" className="text-primary hover:underline">
-            Sign in
+            Se connecter
           </Link>
         </div>
       </Card>

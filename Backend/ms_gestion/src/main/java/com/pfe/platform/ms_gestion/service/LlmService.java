@@ -317,10 +317,18 @@ public class LlmService {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
 
+            // Low temperature → less hallucinated API; large num_ctx → no truncation of the
+            // skeleton + dependencies + exemplar prompt (Ollama Cloud supports a big context).
+            Map<String, Object> options = Map.of(
+                    "temperature", 0.15,
+                    "top_p", 0.9,
+                    "num_ctx", 32768
+            );
             Map<String, Object> body = Map.of(
                     "model", targetModel,
                     "prompt", prompt,
-                    "stream", false
+                    "stream", false,
+                    "options", options
             );
 
             log.info("[LlmService] Sending request to Ollama model={} url={} prompt_length={}", targetModel, ollamaUrl, prompt.length());
@@ -477,6 +485,26 @@ public class LlmService {
         }
 
         prompt.append("\n").append(buildTypeRules(normalizedType, databaseType));
+
+        // Few-shot: inject one fully compilable "gold" exemplar matching the test type + scenario.
+        // Ollama Cloud has a large context window, so we can afford a complete reference example.
+        String exemplar = TestExemplarLibrary.select(normalizedType, scenarioType);
+        if (exemplar != null && !exemplar.isBlank()) {
+            prompt.append("""
+
+                == EXEMPLE DE RÉFÉRENCE (imite la STRUCTURE, n'en copie PAS les noms) ==
+                Voici un test %s parfaitement structuré et compilable. Imite sa STRUCTURE :
+                annotations de classe, @BeforeMethod / @AfterMethod, organisation Given / When / Then,
+                gestion des mocks (UNIT) ou des données en base (INTEGRATION), et gestion de SecurityUtils.
+                MAIS adapte TOUT au CODE SOURCE réel fourni plus haut : noms de classes, méthodes,
+                champs, setters et packages réels.
+                ⚠ Les classes de cet exemple (ProductService, CreateProductRequest, Category…) sont
+                FICTIVES : ne les importe pas et ne les réutilise pas.
+
+                %s
+                """.formatted(normalizedType.isBlank() ? "UNIT" : normalizedType, exemplar));
+        }
+
         prompt.append("\nGénère maintenant le code Java complet.\n");
 
         return prompt.toString();
@@ -599,11 +627,16 @@ public class LlmService {
                 - Importe la classe source, ses DTOs, ses entités avec leur package COMPLET (consulte l'ARBORESCENCE).
 
                 == ANNOTATIONS DE LA CLASSE DE TEST ==
-                - @SpringBootTest (charge le contexte Spring complet)
+                - @SpringBootTest(classes = XxxApplication.class) — OBLIGATOIRE. Le test est dans le package
+                  suites.integration, HORS de l'arborescence de l'application, donc un @SpringBootTest seul
+                  échoue avec "Unable to find a @SpringBootConfiguration". Repère la classe annotée
+                  @SpringBootApplication dans l'ARBORESCENCE (elle se termine par "Application"), importe-la
+                  avec son package complet, et passe-la dans classes = ...class.
                 - @ActiveProfiles("test")
                 - @Transactional (rollback automatique après chaque test)
                 - @Rollback(true)
-                - @TestPropertySource → voir section DB ci-dessous
+                - N'ajoute PAS @TestPropertySource : la base de test est fournie automatiquement par le
+                  runner (fichier application-test.properties chargé via @ActiveProfiles("test")).
 
                 == INJECTION ==
                 - @Autowired pour le service testé (ex: @Autowired private EnvironmentService environmentService;)
@@ -648,17 +681,6 @@ public class LlmService {
 
                 %s
                 """.formatted(buildDbConfig(databaseType));
-
-            case "WEB" -> """
-                == RÈGLES WEB (E2E Selenium) ==
-                - Package du test : package suites.web;
-                - Framework : TestNG + Selenium + WebDriverManager.
-                - @BeforeMethod : ChromeDriver headless (--headless=new, --no-sandbox, --disable-gpu).
-                - @AfterMethod : driver.quit();
-                - URL de base : System.getProperty("BASE_URL", "http://localhost:3000")
-                - Sélecteurs : By.id > By.cssSelector > By.xpath (ordre de préférence).
-                - Capture un screenshot en cas d'échec (TakesScreenshot).
-                """;
 
             case "API" -> """
                 == RÈGLES API (tests REST) ==

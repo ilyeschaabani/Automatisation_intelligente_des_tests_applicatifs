@@ -6,10 +6,13 @@ import com.pfe.platform.ms_gestion.entity.SecurityVulnerability;
 import com.pfe.platform.ms_gestion.repository.ComplianceResultRepository;
 import com.pfe.platform.ms_gestion.repository.SecurityScanRepository;
 import com.pfe.platform.ms_gestion.repository.SecurityVulnerabilityRepository;
+import com.pfe.platform.ms_gestion.entity.Notification;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -22,6 +25,11 @@ public class SecurityService {
     private final SecurityScanRepository scanRepository;
     private final SecurityVulnerabilityRepository vulnRepository;
     private final ComplianceResultRepository complianceRepository;
+    private final NotificationService notificationService;
+    private final EmailService emailService;
+
+    @Value("${auth.service.url:http://localhost:8081}")
+    private String authServiceUrl;
 
     // ── SCANS ──────────────────────────────────────────────
 
@@ -74,13 +82,65 @@ public class SecurityService {
     public SecurityVulnerability updateVulnerabilityStatus(Long id, String status) {
         SecurityVulnerability vuln = vulnRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Vulnerability not found: " + id));
-        vuln.setStatus(SecurityVulnerability.VulnStatus.valueOf(status.toUpperCase()));
+        SecurityVulnerability.VulnStatus newStatus = SecurityVulnerability.VulnStatus.valueOf(status.toUpperCase());
+        vuln.setStatus(newStatus);
         vuln.setUpdatedAt(java.time.LocalDateTime.now());
-        return vulnRepository.save(vuln);
+        SecurityVulnerability saved = vulnRepository.save(vuln);
+
+        if (newStatus == SecurityVulnerability.VulnStatus.RESOLVED
+                || newStatus == SecurityVulnerability.VulnStatus.CLOSED) {
+            notifyProjectOwnerVulnResolved(vuln);
+        }
+
+        return saved;
+    }
+
+    private void notifyProjectOwnerVulnResolved(SecurityVulnerability vuln) {
+        if (vuln.getProject() == null || vuln.getProject().getCreatedBy() == null) return;
+        Long ownerId = vuln.getProject().getCreatedBy();
+        if (ownerId.equals(vuln.getAssignedToUserId())) return;
+
+        notificationService.create(
+                ownerId,
+                "Vulnérabilité résolue",
+                String.format("La vulnérabilité \"%s\" (%s) a été marquée comme résolue par %s.",
+                        vuln.getTitle(), vuln.getSeverity(),
+                        vuln.getAssignedTo() != null ? vuln.getAssignedTo() : "un membre"),
+                Notification.NotifType.VULN_RESOLVED,
+                "/my-assignments?highlight=vuln-" + vuln.getId()
+        );
     }
 
     @Transactional
-    public SecurityVulnerability assignVulnerability(Long id, String assignee) {
+    public SecurityVulnerability assignVulnerability(Long id, Long assigneeUserId, String assigneeName, String assigneeEmail) {
+        SecurityVulnerability vuln = vulnRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Vulnerability not found: " + id));
+        vuln.setAssignedTo(assigneeName);
+        vuln.setAssignedToUserId(assigneeUserId);
+        vuln.setUpdatedAt(java.time.LocalDateTime.now());
+        SecurityVulnerability saved = vulnRepository.save(vuln);
+
+        notificationService.create(
+                assigneeUserId,
+                "Vulnérabilité assignée",
+                String.format("La vulnérabilité \"%s\" (%s) vous a été assignée.",
+                        vuln.getTitle(), vuln.getSeverity()),
+                Notification.NotifType.VULN_ASSIGNED,
+                "/my-assignments?highlight=vuln-" + vuln.getId()
+        );
+
+        if (assigneeEmail != null && !assigneeEmail.isBlank()) {
+            emailService.sendAssignmentEmail(
+                    assigneeEmail, assigneeName,
+                    vuln.getTitle(), vuln.getSeverity().name(), vuln.getId()
+            );
+        }
+
+        return saved;
+    }
+
+    @Transactional
+    public SecurityVulnerability assignVulnerabilityLegacy(Long id, String assignee) {
         SecurityVulnerability vuln = vulnRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Vulnerability not found: " + id));
         vuln.setAssignedTo(assignee);

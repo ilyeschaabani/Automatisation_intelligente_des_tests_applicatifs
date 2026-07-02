@@ -90,6 +90,7 @@ export type ExecutionResultBackendDto = {
   screenshotUrl: string | null
   executedAt: string
   testMethodResults?: string | null // JSON array of SurefireMethodResult
+  assignedTo?: string | null
 }
 
 export type UxNavigationStepDto = {
@@ -115,6 +116,8 @@ export type UxEvaluationDto = {
   platform: 'WEB' | 'MOBILE' | 'WEB_DESKTOP' | 'WEB_MOBILE' | 'MOBILE_APP'
   url?: string | null
   description?: string | null
+  /** Scénario imposé par le testeur (mode ciblé) ; vide = exploration libre */
+  scenario?: string | null
   apkPath?: string | null
   /** AUTO (sans validation) ou SUPERVISED (le testeur valide les verdicts douteux) */
   reviewMode?: string | null
@@ -820,6 +823,22 @@ export async function listExecutionResults(params?: {
   }
 }
 
+export async function assignExecutionResult(
+  id: number,
+  member: { userId: number; name: string; email: string }
+): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/execution-results/${id}/assign`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(member),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 export async function listExecutions(params?: {
   campaignId?: number
 }): Promise<TestExecutionDto[]> {
@@ -1124,8 +1143,11 @@ export async function listAllReports(): Promise<ReportMetadata[]> {
 }
 
 export async function stopCampaign(projectId: number, campaignId: number): Promise<{ message: string }> {
+  // Call ms-execution directly (via the Next route that forwards the JWT) instead of
+  // proxying through ms_gestion, which dropped the token and got 401 from ms-execution.
+  void projectId
   const response = await fetch(
-    '/api/projects/' + encodeURIComponent(String(projectId)) + '/campaigns/' + encodeURIComponent(String(campaignId)) + '/stop',
+    '/api/campaigns/' + encodeURIComponent(String(campaignId)) + '/stop',
     {
       method: 'PUT',
       credentials: 'include',

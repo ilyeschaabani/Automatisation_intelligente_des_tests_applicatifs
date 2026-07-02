@@ -8,13 +8,13 @@ import {
   PlayCircle,
   BarChart3,
   FileText,
-  Settings,
   Users,
   LogOut,
   Menu,
   X,
   Brain,
   Shield,
+  ClipboardList,
 } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -27,22 +27,22 @@ export function Sidebar() {
 
   const menuItems = [
     {
-      label: 'Dashboard',
+      label: 'Tableau de bord',
       href: '/dashboard',
       icon: LayoutDashboard,
     },
     {
-      label: 'Projects',
+      label: 'Projets',
       href: '/projects',
       icon: Folder,
     },
     {
-      label: 'Test Campaigns',
+      label: 'Campagnes de test',
       href: '/campaigns',
       icon: PlayCircle,
     },
     {
-      label: 'Test Results',
+      label: 'Résultats des tests',
       href: '/results',
       icon: BarChart3,
     },
@@ -52,25 +52,25 @@ export function Sidebar() {
       icon: Brain,
     },
     {
-      label: 'Security',
+      label: 'Sécurité',
       href: '/security',
       icon: Shield,
     },
     {
-      label: 'Reports',
+      label: 'Mes assignements',
+      href: '/my-assignments',
+      icon: ClipboardList,
+    },
+    {
+      label: 'Rapports',
       href: '/reports',
       icon: FileText,
     },
     {
-      label: 'Users & Roles',
+      label: 'Utilisateurs & rôles',
       href: '/users',
       icon: Users,
       adminOnly: true,
-    },
-    {
-      label: 'Settings',
-      href: '/settings',
-      icon: Settings,
     },
   ]
 
@@ -101,7 +101,7 @@ export function Sidebar() {
             TestAuto
           </h1>
           <p className="text-xs text-sidebar-foreground/60 mt-1">
-            Banking Test Platform
+Plateforme de test bancaire
           </p>
         </div>
 
@@ -135,7 +135,7 @@ export function Sidebar() {
         <div className="border-t border-sidebar-border p-4 space-y-3">
           <button className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent transition-all">
             <LogOut size={18} />
-            <span className="text-sm font-medium">Sign Out</span>
+            <span className="text-sm font-medium">Déconnexion</span>
           </button>
           <div className="text-xs text-sidebar-foreground/50 px-4 py-2">
             v1.0.0 • © 2025

@@ -51,6 +51,19 @@ const typeColors = {
   Regression: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-950 dark:text-cyan-400',
 }
 
+// Libellés affichés (les clés restent en anglais pour le style/la logique)
+const statusLabels: Record<'Running' | 'Completed' | 'Failed' | 'Scheduled', string> = {
+  Running: 'En cours',
+  Completed: 'Terminée',
+  Failed: 'Échouée',
+  Scheduled: 'Planifiée',
+}
+const typeLabels: Record<'Functional' | 'API' | 'Regression', string> = {
+  Functional: 'Fonctionnel',
+  API: 'API',
+  Regression: 'Régression',
+}
+
 function slugify(value: string): string {
   return value
     .toLowerCase()
@@ -169,11 +182,11 @@ export function CampaignCard({
           <h3 className="font-semibold text-foreground">{name}</h3>
           <div className="flex items-center gap-2 mt-2">
             <Badge variant="outline" className={typeColor}>
-              {type}
+              {typeLabels[type] ?? type}
             </Badge>
             <Badge variant="outline" className={config.color}>
               {status === 'Running' && <span className="inline-block size-1.5 bg-current rounded-full mr-1 animate-pulse" />}
-              {status}
+              {statusLabels[status] ?? status}
             </Badge>
           </div>
         </div>
@@ -194,15 +207,15 @@ export function CampaignCard({
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuItem onClick={handleEdit} className="cursor-pointer">
               <Edit2 size={16} className="mr-2" />
-              <span>Edit Campaign</span>
+              <span>Modifier la campagne</span>
             </DropdownMenuItem>
-            <DropdownMenuItem 
+            <DropdownMenuItem
               onClick={requestDelete}
               disabled={isDeleting}
               className="cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600 focus:dark:text-red-400"
             >
               <Trash2 size={16} className="mr-2" />
-              <span>{isDeleting ? 'Deleting...' : 'Delete Campaign'}</span>
+              <span>{isDeleting ? 'Suppression…' : 'Supprimer la campagne'}</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -218,19 +231,19 @@ export function CampaignCard({
           }}
         >
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete campaign?</AlertDialogTitle>
+            <AlertDialogTitle>Supprimer la campagne ?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. The campaign "{name}" and its linked test cases will be removed.
+              Cette action est irréversible. La campagne « {name} » et ses cas de test liés seront supprimés.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>Annuler</AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => handleDelete(e as unknown as React.MouseEvent)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={isDeleting}
             >
-              {isDeleting ? 'Deleting…' : 'Delete'}
+              {isDeleting ? 'Suppression…' : 'Supprimer'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -239,7 +252,7 @@ export function CampaignCard({
       {/* Progress Bar */}
       <div className="mb-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-muted-foreground">Progress</span>
+          <span className="text-xs text-muted-foreground">Progression</span>
           <span className="text-xs font-semibold text-foreground">{progress}%</span>
         </div>
         <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
@@ -259,14 +272,14 @@ export function CampaignCard({
         <div className="flex items-center gap-1">
           <CheckCircle2 size={16} className="text-green-600" />
           <div>
-            <p className="text-xs text-muted-foreground">Passed</p>
+            <p className="text-xs text-muted-foreground">Réussis</p>
             <p className="font-bold text-foreground">{passed}</p>
           </div>
         </div>
         <div className="flex items-center gap-1">
           <AlertCircle size={16} className="text-red-600" />
           <div>
-            <p className="text-xs text-muted-foreground">Failed</p>
+            <p className="text-xs text-muted-foreground">Échoués</p>
             <p className="font-bold text-foreground">{failed}</p>
           </div>
         </div>
@@ -274,7 +287,7 @@ export function CampaignCard({
 
       {/* Last Run */}
       <div className="pt-4 border-t border-border">
-        <p className="text-xs text-muted-foreground">Last run: {lastRun}</p>
+        <p className="text-xs text-muted-foreground">Dernière exécution : {lastRun}</p>
       </div>
     </div>
   )

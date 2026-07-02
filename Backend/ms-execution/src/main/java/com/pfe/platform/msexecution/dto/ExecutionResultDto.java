@@ -20,6 +20,7 @@ public class ExecutionResultDto {
     private LocalDateTime executedAt;
     private Integer retryCount;
     private String retryLog;
+    private String assignedTo;
 
     public ExecutionResultDto() {
     }
@@ -137,6 +138,9 @@ public class ExecutionResultDto {
     public String getRetryLog() { return retryLog; }
     public void setRetryLog(String retryLog) { this.retryLog = retryLog; }
 
+    public String getAssignedTo() { return assignedTo; }
+    public void setAssignedTo(String assignedTo) { this.assignedTo = assignedTo; }
+
     public LocalDateTime getExecutedAt() {
         return executedAt;
     }
@@ -163,6 +167,7 @@ public class ExecutionResultDto {
         dto.setTestMethodResults(entity.getTestMethodResults());
         dto.setRetryCount(entity.getRetryCount());
         dto.setRetryLog(entity.getRetryLog());
+        dto.setAssignedTo(entity.getAssignedTo());
         return dto;
     }
 }

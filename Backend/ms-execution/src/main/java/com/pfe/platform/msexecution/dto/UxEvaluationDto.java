@@ -20,6 +20,7 @@ public class UxEvaluationDto {
     private UxEvaluation.Platform platform;
     private String url;
     private String description;
+    private String scenario;
     private UxEvaluation.Status status;
     private String testSummary;
     private String aiAnalysis;
@@ -47,6 +48,7 @@ public class UxEvaluationDto {
                 .platform(e.getPlatform())
                 .url(e.getUrl())
                 .description(e.getDescription())
+                .scenario(e.getScenario())
                 .status(e.getStatus())
                 .testSummary(e.getTestSummary())
                 .aiAnalysis(e.getAiAnalysis())

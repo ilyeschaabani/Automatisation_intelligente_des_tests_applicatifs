@@ -78,12 +78,6 @@ public class CampaignController {
         return ResponseEntity.noContent().build();
     }
 
-    @PutMapping("/{campaignId}/stop")
-    public ResponseEntity<?> stopCampaign(@PathVariable Long projectId,
-                                          @PathVariable Long campaignId) {
-        return ResponseEntity.ok(campaignService.stopCampaign(campaignId));
-    }
-
     @DeleteMapping("/{campaignId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER')")
     public ResponseEntity<?> delete(@PathVariable Long projectId,

@@ -9,6 +9,7 @@ import {
   Download, UserPlus, CheckCircle2, ExternalLink, Scan,
 } from 'lucide-react'
 import { ScanTabHeader, type ScanRecord, ScanStatusBadge } from './scan-tab-header'
+import { AssignDialog } from './assign-dialog'
 import { fetchScanVulnerabilities, updateVulnStatus, assignVuln } from '@/lib/security-client'
 
 interface VulnRecord {
@@ -124,9 +125,12 @@ function DastFindingCard({ v, onResolve, onAssign }: {
   )
 }
 
-export function DastCenter() {
+export function DastCenter({ projectId: externalProjectId }: { projectId?: string }) {
   const [scans, setScans] = useState<ScanRecord[]>([])
   const [vulns, setVulns] = useState<VulnRecord[]>([])
+  const [assignTarget, setAssignTarget] = useState<number | null>(null)
+  const [internalProjectId, setInternalProjectId] = useState<string>('')
+  const effectiveProjectId = internalProjectId || externalProjectId
 
   const handleScansLoaded = useCallback(async (loaded: ScanRecord[]) => {
     setScans(loaded)
@@ -150,12 +154,16 @@ export function DastCenter() {
     if (ok) setVulns(prev => prev.map(x => x.id === id ? { ...x, status: 'RESOLVED' } : x))
   }, [])
 
-  const handleAssign = useCallback(async (id: number) => {
-    const who = window.prompt('Assigner cette vulnérabilité à (nom) :')?.trim()
-    if (!who) return
-    const ok = await assignVuln(id, who)
-    if (ok) setVulns(prev => prev.map(x => x.id === id ? { ...x, assignedTo: who } : x))
+  const handleAssign = useCallback((id: number) => {
+    setAssignTarget(id)
   }, [])
+
+  const handleAssignConfirm = useCallback(async (member: { userId: number; name: string; email: string }) => {
+    if (assignTarget === null) return
+    const ok = await assignVuln(assignTarget, member)
+    if (ok) setVulns(prev => prev.map(x => x.id === assignTarget ? { ...x, assignedTo: member.name } : x))
+    setAssignTarget(null)
+  }, [assignTarget])
 
   return (
     <div className="space-y-6">
@@ -166,6 +174,7 @@ export function DastCenter() {
         subtitle="Analyse dynamique de l'application en cours d'execution via OWASP ZAP"
         accentColor="bg-red-600 hover:bg-red-700 text-white"
         onScansLoaded={handleScansLoaded}
+        onProjectChange={setInternalProjectId}
       />
 
       {latest && (
@@ -271,6 +280,15 @@ export function DastCenter() {
           <p className="text-lg font-medium">Aucun scan DAST</p>
           <p className="text-sm mt-1">Selectionnez un projet et un environnement puis lancez votre premier scan</p>
         </div>
+      )}
+
+      {effectiveProjectId && (
+        <AssignDialog
+          open={assignTarget !== null}
+          onOpenChange={(open) => { if (!open) setAssignTarget(null) }}
+          projectId={effectiveProjectId}
+          onAssign={handleAssignConfirm}
+        />
       )}
     </div>
   )

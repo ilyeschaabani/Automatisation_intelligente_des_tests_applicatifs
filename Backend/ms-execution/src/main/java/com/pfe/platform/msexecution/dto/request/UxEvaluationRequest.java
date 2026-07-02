@@ -5,6 +5,7 @@ public class UxEvaluationRequest {
     private String platform;
     private String url;
     private String description;
+    private String scenario;
     private String generatedScript;
     private String apkPath;
     private String reviewMode;
@@ -17,6 +18,8 @@ public class UxEvaluationRequest {
     public void setUrl(String url) { this.url = url; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+    public String getScenario() { return scenario; }
+    public void setScenario(String scenario) { this.scenario = scenario; }
     public String getGeneratedScript() { return generatedScript; }
     public void setGeneratedScript(String generatedScript) { this.generatedScript = generatedScript; }
     public String getApkPath() { return apkPath; }

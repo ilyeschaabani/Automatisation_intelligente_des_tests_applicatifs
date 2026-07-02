@@ -120,6 +120,11 @@ public class AgenticEvaluationService {
 
     public UxEvaluation createEvaluation(String url, String description, Long projectId, String platform,
                                          String apkPath, String reviewMode) {
+        return createEvaluation(url, description, projectId, platform, apkPath, reviewMode, null);
+    }
+
+    public UxEvaluation createEvaluation(String url, String description, Long projectId, String platform,
+                                         String apkPath, String reviewMode, String scenario) {
         UxEvaluation.Platform p;
         try {
             p = UxEvaluation.Platform.valueOf(platform.toUpperCase());
@@ -130,6 +135,7 @@ public class AgenticEvaluationService {
         UxEvaluation evaluation = UxEvaluation.builder()
                 .url(url)
                 .description(description)
+                .scenario(scenario != null && !scenario.isBlank() ? scenario.trim() : null)
                 .projectId(projectId)
                 .platform(p)
                 .apkPath(apkPath)
@@ -185,6 +191,11 @@ public class AgenticEvaluationService {
             // Selenium Manager (built into Selenium 4.11+) auto-resolves chromedriver
             // No WebDriverManager.setup() needed — avoids network timeouts
             ChromeOptions opts = new ChromeOptions();
+            // EAGER: driver.get() returns at DOMContentLoaded instead of waiting for full
+            // load. Heavy sites (trackers, ads) keep loading resources well past the usable
+            // DOM, which causes "Timed out receiving message from renderer" with the default
+            // 'normal' strategy.
+            opts.setPageLoadStrategy(PageLoadStrategy.EAGER);
 
             boolean mobileMode = evaluation.getPlatform() == UxEvaluation.Platform.WEB_MOBILE
                     || evaluation.getPlatform() == UxEvaluation.Platform.MOBILE
@@ -222,7 +233,19 @@ public class AgenticEvaluationService {
             // Chargement de la page initiale
             log.info("[UX-AGENT {}] Navigating to {}", evaluationId, evaluation.getUrl());
             streamService.sendInfo(evaluationId, "🌐 Ouverture de " + evaluation.getUrl() + "…");
-            driver.get(evaluation.getUrl());
+            try {
+                driver.get(evaluation.getUrl());
+            } catch (org.openqa.selenium.TimeoutException pageTimeout) {
+                // Page-load timeout: the DOM is usually already usable (EAGER strategy).
+                // Stop any further loading and continue with what we have rather than aborting.
+                log.warn("[UX-AGENT {}] Page load timed out, continuing with partial DOM: {}",
+                        evaluationId, pageTimeout.getMessage());
+                streamService.sendInfo(evaluationId,
+                        "⚠ Chargement lent — poursuite avec le contenu déjà disponible");
+                try {
+                    ((JavascriptExecutor) driver).executeScript("window.stop();");
+                } catch (Exception ignored) {}
+            }
             waitForPageLoad(driver);
 
             // ── Phase 0 : Découverte automatique du menu (texte → URL) ──
@@ -352,7 +375,8 @@ public class AgenticEvaluationService {
 
                 // Analyse IA du screenshot
                 String prompt = buildActionPrompt(currentUrl, pageTitle, history, i,
-                        evaluation.getDescription(), visitedUrls, menuSections, visitedSections, mobileMode);
+                        evaluation.getDescription(), visitedUrls, menuSections, visitedSections, mobileMode,
+                        evaluation.getScenario());
                 String geminiResponse = visionProvider.analyzeScreenshot(aiScreenshot, prompt);
 
                 // Info backend utilisé
@@ -427,7 +451,7 @@ public class AgenticEvaluationService {
                             currentUrl, pageTitle, rawScreenshot, geminiResponse,
                             "NEEDS_INPUT", null, null));
 
-                    streamService.sendNeedsInput(evaluationId, i, question, decision.hint);
+                    streamService.sendNeedsInput(evaluationId, i, question, decision.hint, decision.fields);
 
                     String humanAnswer = null;
                     try {
@@ -532,7 +556,8 @@ public class AgenticEvaluationService {
             log.info("[UX-AGENT {}] Generating final report ({} steps, {} functional tests)",
                     evaluationId, steps.size(), functionalResults.size());
             streamService.sendInfo(evaluationId, "📝 Génération du rapport en cours…");
-            String uxReport = buildFinalReport(evaluation.getUrl(), steps, evaluation.getDescription(), mobileMode);
+            String uxReport = buildFinalReport(evaluation.getUrl(), steps, evaluation.getDescription(), mobileMode,
+                    evaluation.getScenario());
             String functionalSummary = buildFunctionalSummary(functionalResults);
             String finalReport = functionalSummary.isEmpty()
                     ? uxReport
@@ -584,7 +609,8 @@ public class AgenticEvaluationService {
                                      List<String> history, int step,
                                      String userDescription, Set<String> visitedUrls,
                                      LinkedHashMap<String, String> menuSections, Set<String> visitedSections,
-                                     boolean mobileMode) {
+                                     boolean mobileMode, String scenario) {
+        boolean scenarioMode = scenario != null && !scenario.isBlank();
         String historyText = history.isEmpty() ? "Aucune (première visite)"
                 : String.join("\n", history.subList(Math.max(0, history.size() - 15), history.size()));
 
@@ -620,10 +646,33 @@ public class AgenticEvaluationService {
             - Images et mise en page responsive
             """ : "";
 
+        String missionIntro = scenarioMode
+                ? ("Tu es un testeur UX qui incarne un utilisateur réel ayant UN objectif précis à accomplir.\n"
+                   + "🎯 MISSION (scénario imposé par le testeur) : « " + scenario.trim() + " »\n"
+                   + "Tu ne fais QUE les actions qui te rapprochent de cet objectif — tu ignores le reste du site.\n"
+                   + "Tu vis l'expérience comme un vrai utilisateur et tu notes si c'est facile, fluide ou frustrant.")
+                : ("Tu es un testeur UX expert chargé de faire un TOUR COMPLET de cette application web.\n"
+                   + "Tu explores méthodiquement TOUTES les sections, tu testes les formulaires, et tu notes\n"
+                   + "chaque détail UX (positif ou négatif). Tu ne sais rien au départ — tu découvres tout.");
+
+        String priorityRules = scenarioMode
+                ? """
+                  1. Si un popup/modal bloque (cookies, promo, permission) → CLICK pour le fermer.
+                  2. Avance vers l'OBJECTIF : repère le menu/bouton/lien qui mène au scénario et NAVIGATE/CLICK dessus.
+                  3. Si un formulaire fait partie du scénario (login, montant, bénéficiaire…) → FILL avec des données plausibles, puis soumets.
+                  4. Si un login/formulaire exige des données du testeur (identifiants, OTP, n° de compte…) → NEEDS_INPUT avec "fields".
+                  5. Si tu es VRAIMENT bloqué (fonctionnalité absente, étape réellement impossible — PAS un simple login) → DONE en expliquant le blocage dans "reason".
+                  6. Dès que l'objectif du scénario est ATTEINT → DONE en le confirmant dans "reason"."""
+                : """
+                  1. Si un popup/modal bloque la navigation (cookies, promo…) → CLICK pour le fermer
+                  2. Si des sections ❌ ne sont pas encore visitées → NAVIGATE avec l'URL affichée à côté (après →)
+                  3. Si la page contient un formulaire non testé → FILL + soumission (d'abord vide pour voir les erreurs, puis avec des données)
+                  4. Si la page a du contenu non vu plus bas → SCROLL (1 seule fois par page, pas plus)
+                  5. Si tu es coincé (page PDF, iframe, page morte, pas de liens) → BACK pour revenir en arrière
+                  6. Si TOUTES les sections ✅ sont visitées et les formulaires testés → DONE""";
+
         return """
-            Tu es un testeur UX expert chargé de faire un TOUR COMPLET de cette application web.
-            Tu explores méthodiquement TOUTES les sections, tu testes les formulaires, et tu notes
-            chaque détail UX (positif ou négatif). Tu ne sais rien au départ — tu découvres tout.%s%s
+            %s%s%s
 
             === CONTEXTE ===
             URL actuelle : %s
@@ -647,16 +696,19 @@ public class AgenticEvaluationService {
               "value": "valeur à saisir si FILL, sinon null",
               "question": "question pour le testeur humain (UNIQUEMENT si NEEDS_INPUT)",
               "hint": "exemple de réponse (UNIQUEMENT si NEEDS_INPUT)",
+              "fields": ["Identifiant", "Mot de passe"],
               "reason": "Pourquoi tu fais cette action"
             }
 
+            === QUAND TU ES BLOQUÉ PAR UN LOGIN / FORMULAIRE QUI EXIGE DES DONNÉES DU TESTEUR ===
+            Au lieu d'abandonner, utilise action_type = "NEEDS_INPUT" et remplis "fields" avec la LISTE
+            des libellés à demander au testeur (ex: ["Identifiant", "Mot de passe"] pour un login,
+            ou ["Numéro de compte", "Montant", "Bénéficiaire"] pour un virement). Le testeur verra un
+            FORMULAIRE, le remplira, et tu pourras CONTINUER en saisissant ces valeurs (FILL).
+            Mets "fields" à null si tu n'as besoin que d'une simple réponse texte (utilise "question").
+
             === RÈGLES DE PRIORITÉ (ordre strict) ===
-            1. Si un popup/modal bloque la navigation (cookies, promo…) → CLICK pour le fermer
-            2. Si des sections ❌ ne sont pas encore visitées → NAVIGATE avec l'URL affichée à côté (après →)
-            3. Si la page contient un formulaire non testé → FILL + soumission (d'abord vide pour voir les erreurs, puis avec des données)
-            4. Si la page a du contenu non vu plus bas → SCROLL (1 seule fois par page, pas plus)
-            5. Si tu es coincé (page PDF, iframe, page morte, pas de liens) → BACK pour revenir en arrière
-            6. Si TOUTES les sections ✅ sont visitées et les formulaires testés → DONE
+            %s
 
             === RÈGLES SELECTOR ===
             - Boutons/liens : texte visible exact ("Accepter", "Connexion", "Envoyer")
@@ -664,15 +716,63 @@ public class AgenticEvaluationService {
             - Navigation directe : URL complète (https://...)
             - JAMAIS de :has-text() ou sélecteurs Playwright
             - Si un clic échoue 2 fois, essaie NAVIGATE avec l'URL du lien ou BACK
-            """.formatted(userContext, mobileBlock, url, pageTitle, step,
-                sectionChecklist, visitedText, historyText);
+            """.formatted(missionIntro, userContext, mobileBlock, url, pageTitle, step,
+                sectionChecklist, visitedText, historyText, priorityRules);
     }
 
-    private String buildFinalReport(String url, List<UxNavigationStep> steps, String description, boolean mobileMode) {
+    private String buildFinalReport(String url, List<UxNavigationStep> steps, String description, boolean mobileMode,
+                                    String scenario) {
         String parcours = steps.stream()
                 .map(s -> "Étape " + s.getStepNumber() + " (" + s.getPageUrl() + "): "
                         + s.getObservation() + " → " + s.getActionPerformed())
                 .collect(Collectors.joining("\n"));
+
+        // Mode scénario : verdict ciblé sur l'objectif imposé par le testeur.
+        if (scenario != null && !scenario.isBlank()) {
+            String scenarioPrompt = """
+                Tu es un expert UX senior. Le testeur t'a demandé d'accomplir UN scénario précis sur %s
+                et tu viens de le vivre comme un vrai utilisateur, en %d étapes%s.
+
+                🎯 SCÉNARIO DEMANDÉ : « %s »
+
+                Parcours réellement effectué :
+                %s
+
+                Rédige ton compte-rendu en français. Structure EXACTE (commence par le verdict) :
+
+                ## VERDICT : RÉUSSI | PARTIELLEMENT RÉUSSI | ÉCHOUÉ
+                En 1 phrase : as-tu pu accomplir le scénario, oui ou non, et jusqu'où ?
+
+                ## FACILITÉ : X/10
+                À quel point ce parcours a été simple/fluide (10 = évident, 1 = très frustrant).
+
+                ## 1. CE QUE J'AI ESSAYÉ DE FAIRE
+                Reformule le scénario avec tes mots.
+
+                ## 2. COMMENT JE M'Y SUIS PRIS
+                Les étapes clés que j'ai suivies pour tenter d'y arriver (le chemin réel).
+
+                ## 3. EST-CE QUE C'ÉTAIT FACILE ?
+                Nombre d'étapes nécessaires, clarté du chemin, hésitations, ce qui aurait dû être plus évident.
+
+                ## 4. POINTS DE FRICTION
+                Ce qui m'a bloqué, ralenti ou fait douter SUR CE PARCOURS précis (pas le reste du site).
+
+                ## 5. MON AVIS
+                Mon ressenti d'utilisateur sur ce scénario : agréable, stressant, rassurant, confus… et pourquoi.
+
+                ## 6. RECOMMANDATIONS
+                3-6 améliorations concrètes pour rendre CE parcours plus simple.
+
+                RÈGLES STRICTES :
+                - Commence par "## VERDICT :" — c'est la première ligne.
+                - Si tu n'as pas pu finir (mur de login, donnée manquante, fonctionnalité absente), dis-le clairement dans le VERDICT et explique où ça a coincé.
+                - Écris comme un vrai testeur humain. Base-toi UNIQUEMENT sur ce que tu as observé. Sois concret et concis.
+                """.formatted(url, steps.size(),
+                    mobileMode ? " sur mobile (iPhone 14)" : "",
+                    scenario.trim(), parcours);
+            return visionProvider.analyzeText(scenarioPrompt);
+        }
 
         String mobileSection = mobileMode ? """
 
@@ -1006,6 +1106,7 @@ public class AgenticEvaluationService {
             decision.reason = extractJsonField(json, "reason");
             decision.question = extractJsonField(json, "question");
             decision.hint = extractJsonField(json, "hint");
+            decision.fields = extractJsonStringArray(json, "fields");
 
             log.info("[PARSE] action_type={}, selector={}, reason={}",
                     decision.actionType, decision.selector, decision.reason);
@@ -1041,6 +1142,23 @@ public class AgenticEvaluationService {
         }
 
         return decision;
+    }
+
+    /** Extracts a JSON array of strings: "field": ["a", "b"] → ["a","b"] (null/empty if absent). */
+    private java.util.List<String> extractJsonStringArray(String json, String field) {
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("\"" + field + "\"\\s*:\\s*\\[(.*?)\\]", java.util.regex.Pattern.DOTALL)
+                .matcher(json);
+        if (!m.find()) return null;
+        String inner = m.group(1);
+        if (inner == null || inner.isBlank()) return null;
+        java.util.List<String> out = new java.util.ArrayList<>();
+        java.util.regex.Matcher sm = java.util.regex.Pattern.compile("\"((?:[^\"\\\\]|\\\\.)*)\"").matcher(inner);
+        while (sm.find()) {
+            String v = sm.group(1).replace("\\\"", "\"").trim();
+            if (!v.isBlank()) out.add(v);
+        }
+        return out.isEmpty() ? null : out;
     }
 
     private String extractJsonField(String json, String field) {
@@ -1213,6 +1331,7 @@ public class AgenticEvaluationService {
         String reason;
         String question;
         String hint;
+        java.util.List<String> fields; // libellés du formulaire à demander au testeur (NEEDS_INPUT)
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -1305,7 +1424,7 @@ public class AgenticEvaluationService {
                 if (i > 1) Thread.sleep(1_000);
 
                 String prompt = buildApkActionPrompt(currentActivity, history, i,
-                        evaluation.getDescription(), visitedScreens, uiElements);
+                        evaluation.getDescription(), visitedScreens, uiElements, evaluation.getScenario());
                 String aiResponse = visionProvider.analyzeScreenshot(aiScreenshot, prompt);
 
                 streamService.send(evaluationId,
@@ -1344,6 +1463,31 @@ public class AgenticEvaluationService {
                     break;
                 }
 
+                // ── Human-in-the-loop : login / formulaire qui exige des données du testeur ──
+                if ("NEEDS_INPUT".equals(actionType)) {
+                    String question = decision.question != null ? decision.question
+                            : "J'ai besoin d'informations pour continuer.";
+                    log.info("[UX-AGENT {}] (APK) NEEDS_INPUT at step {}: {}", evaluationId, i, question);
+                    steps.add(saveStep(evaluationId, i,
+                            "⏸ Intervention humaine requise : " + question,
+                            "En attente de la réponse du testeur",
+                            currentActivity, "Android App", hdScreenshot, aiResponse,
+                            "NEEDS_INPUT", null, null));
+                    streamService.sendNeedsInput(evaluationId, i, question, decision.hint, decision.fields);
+                    try {
+                        String humanAnswer = humanInputService.waitForInput(evaluationId, Duration.ofMinutes(10));
+                        streamService.sendResumed(evaluationId, humanAnswer);
+                        history.add("Step " + i + ": L'IA a demandé — \"" + question
+                                + "\" → Testeur a fourni : " + humanAnswer);
+                        i--; // rejoue l'étape avec la réponse dans l'historique
+                    } catch (TimeoutException e) {
+                        streamService.sendInfo(evaluationId,
+                                "⏱ Aucune réponse après 10 minutes — l'IA continue sans cette information");
+                        history.add("⚠ Intervention humaine non reçue (timeout) à l'étape " + i);
+                    }
+                    continue;
+                }
+
                 boolean success = executeApkAction(decision, uiElements);
 
                 streamService.sendActionResult(evaluationId, i, success,
@@ -1374,7 +1518,8 @@ public class AgenticEvaluationService {
             }
 
             streamService.sendInfo(evaluationId, "Redaction du rapport UX mobile...");
-            String finalReport = buildApkFinalReport(evaluation.getDescription(), steps, visitedScreens);
+            String finalReport = buildApkFinalReport(evaluation.getDescription(), steps, visitedScreens,
+                    evaluation.getScenario());
 
             evaluation.setAiAnalysis(finalReport);
             evaluation.setDurationMs(Duration.between(startedAt, Instant.now()).toMillis());
@@ -1502,7 +1647,8 @@ public class AgenticEvaluationService {
 
     private String buildApkActionPrompt(String currentActivity, List<String> history, int step,
                                          String userDescription, Set<String> visitedScreens,
-                                         List<AppiumDriverService.UiElement> uiElements) {
+                                         List<AppiumDriverService.UiElement> uiElements, String scenario) {
+        boolean scenarioMode = scenario != null && !scenario.isBlank();
         String historyText = history.isEmpty() ? "Aucune (première ouverture)"
                 : String.join("\n", history.subList(Math.max(0, history.size() - 15), history.size()));
 
@@ -1526,9 +1672,36 @@ public class AgenticEvaluationService {
             elementList.append("  (Aucun élément détecté — utilise TAP avec coordonnées estimées)\n");
         }
 
+        String missionIntro = scenarioMode
+                ? ("Tu es un testeur UX sur application mobile Android, et tu incarnes un utilisateur réel\n"
+                   + "ayant UN objectif précis.\n🎯 MISSION (scénario imposé par le testeur) : « " + scenario.trim() + " »\n"
+                   + "Tu ne fais QUE les actions qui te rapprochent de cet objectif. Tu vis l'expérience et\n"
+                   + "tu notes si c'est facile, fluide ou frustrant.")
+                : ("Tu es un testeur UX expert d'applications mobiles Android.\n"
+                   + "Tu explores cette application native de façon méthodique pour évaluer l'expérience utilisateur.");
+
+        String priorityRules = scenarioMode
+                ? """
+                  1. PRIORISE TAP_ELEMENT avec l'index [N] d'un élément de la liste.
+                  2. Si un popup/permission/dialog bloque → TAP_ELEMENT sur "Autoriser"/"OK"/"Accepter".
+                  3. Avance vers l'OBJECTIF : tape l'onglet/bouton qui mène au scénario (ignore le reste).
+                  4. Champ texte du scénario (montant, bénéficiaire…) → TYPE avec des données plausibles.
+                  5. SWIPE_UP si l'élément voulu est caché plus bas.
+                  6. Si un login/formulaire exige des données du testeur (identifiants, OTP, n° de compte…) → NEEDS_INPUT avec "fields".
+                  7. Si tu es VRAIMENT bloqué (fonctionnalité absente, étape impossible) → DONE en expliquant dans "reason".
+                  8. Dès que l'objectif du scénario est ATTEINT → DONE en le confirmant dans "reason"."""
+                : """
+                  1. PRIORISE TOUJOURS TAP_ELEMENT avec l'index [N] d'un élément de la liste ci-dessus
+                  2. Si un popup/permission/dialog bloque → TAP_ELEMENT sur "Autoriser"/"OK"/"Accepter"
+                  3. Explore tous les onglets, menus, boutons de la liste — un par un, sans répéter
+                  4. Pour un champ texte : TYPE avec selector = index du champ + value = données réalistes
+                  5. SWIPE_UP si du contenu est caché en bas (rien de nouveau dans la liste)
+                  6. BACK pour revenir si tu es dans un cul-de-sac
+                  7. DONE quand tu as exploré tous les écrans principaux
+                  8. N'utilise TAP (coordonnées) QUE si l'élément voulu n'est PAS dans la liste""";
+
         return """
-            Tu es un testeur UX expert d'applications mobiles Android.
-            Tu explores cette application native de façon méthodique pour évaluer l'expérience utilisateur.%s
+            %s%s
 
             === CONTEXTE ===
             Écran actuel (Activity) : %s
@@ -1545,29 +1718,33 @@ public class AgenticEvaluationService {
             Réponds en JSON STRICT uniquement (pas de texte avant/après, pas de ```json) :
             {
               "observation": "Ce que tu vois sur cet écran en 1-2 phrases",
-              "action_type": "TAP_ELEMENT | TAP | SWIPE_UP | SWIPE_DOWN | TYPE | BACK | DONE",
+              "action_type": "TAP_ELEMENT | TAP | SWIPE_UP | SWIPE_DOWN | TYPE | BACK | NEEDS_INPUT | DONE",
               "selector": "index de l'élément (ex: \\"2\\") pour TAP_ELEMENT ; OU x,y pour TAP ; null sinon",
               "value": "texte à saisir si TYPE, sinon null",
+              "question": "question pour le testeur (UNIQUEMENT si NEEDS_INPUT)",
+              "hint": "exemple de réponse (UNIQUEMENT si NEEDS_INPUT)",
+              "fields": ["Identifiant", "Mot de passe"],
               "reason": "Pourquoi tu fais cette action"
             }
 
+            === QUAND TU ES BLOQUÉ PAR UN LOGIN / FORMULAIRE QUI EXIGE DES DONNÉES DU TESTEUR ===
+            Au lieu d'abandonner, utilise action_type = "NEEDS_INPUT" et remplis "fields" avec la LISTE
+            des libellés à demander au testeur (ex: ["Identifiant", "Mot de passe"] ; ou
+            ["Numéro de compte", "Montant", "Bénéficiaire"]). Le testeur verra un FORMULAIRE, le remplira,
+            et tu pourras CONTINUER en saisissant ces valeurs (TYPE dans les champs).
+            Mets "fields" à null si tu n'as besoin que d'une simple réponse texte (utilise "question").
+
             === RÈGLES DE PRIORITÉ ===
-            1. PRIORISE TOUJOURS TAP_ELEMENT avec l'index [N] d'un élément de la liste ci-dessus
-            2. Si un popup/permission/dialog bloque → TAP_ELEMENT sur "Autoriser"/"OK"/"Accepter"
-            3. Explore tous les onglets, menus, boutons de la liste — un par un, sans répéter
-            4. Pour un champ texte : TYPE avec selector = index du champ + value = données réalistes
-            5. SWIPE_UP si du contenu est caché en bas (rien de nouveau dans la liste)
-            6. BACK pour revenir si tu es dans un cul-de-sac
-            7. DONE quand tu as exploré tous les écrans principaux
-            8. N'utilise TAP (coordonnées) QUE si l'élément voulu n'est PAS dans la liste
+            %s
 
             === COORDONNÉES (fallback uniquement) ===
             Si tu dois absolument utiliser TAP, estime (x,y) du CENTRE de l'élément sur le screenshot.
-            """.formatted(userContext, currentActivity, step, screensText, elementList, historyText);
+            """.formatted(missionIntro, userContext, currentActivity, step, screensText, elementList,
+                historyText, priorityRules);
     }
 
     private String buildApkFinalReport(String description, List<UxNavigationStep> steps,
-                                        Set<String> visitedScreens) {
+                                        Set<String> visitedScreens, String scenario) {
         String parcours = steps.stream()
                 .map(s -> "Étape " + s.getStepNumber() + " (" + s.getPageUrl() + "): "
                         + s.getObservation() + " → " + s.getActionPerformed())
@@ -1575,6 +1752,50 @@ public class AgenticEvaluationService {
 
         String userContext = (description != null && !description.isBlank())
                 ? "Contexte du testeur : " + description : "";
+
+        // Mode scénario : verdict ciblé sur l'objectif imposé (app mobile).
+        if (scenario != null && !scenario.isBlank()) {
+            return visionProvider.analyzeText("""
+                Tu es un expert UX mobile senior. Le testeur t'a demandé d'accomplir UN scénario précis
+                sur une application Android, et tu viens de le vivre en %d étapes comme un vrai utilisateur.
+
+                🎯 SCÉNARIO DEMANDÉ : « %s »
+                Écrans visités : %s
+
+                Parcours réellement effectué :
+                %s
+
+                Rédige ton compte-rendu en français. Structure EXACTE (commence par le verdict) :
+
+                ## VERDICT : RÉUSSI | PARTIELLEMENT RÉUSSI | ÉCHOUÉ
+                En 1 phrase : as-tu pu accomplir le scénario, et jusqu'où ?
+
+                ## FACILITÉ : X/10
+                À quel point ce parcours a été simple/fluide (10 = évident, 1 = très frustrant).
+
+                ## 1. CE QUE J'AI ESSAYÉ DE FAIRE
+                Reformule le scénario avec tes mots.
+
+                ## 2. COMMENT JE M'Y SUIS PRIS
+                Les écrans/actions clés suivis pour tenter d'y arriver.
+
+                ## 3. EST-CE QUE C'ÉTAIT FACILE ?
+                Nombre d'étapes, clarté du chemin sur mobile, taille des zones tactiles, hésitations.
+
+                ## 4. POINTS DE FRICTION
+                Ce qui m'a bloqué ou ralenti SUR CE PARCOURS précis.
+
+                ## 5. MON AVIS
+                Mon ressenti d'utilisateur sur ce scénario (rassurant pour un virement ? stressant ? confus ?).
+
+                ## 6. RECOMMANDATIONS
+                3-6 améliorations concrètes pour rendre CE parcours plus simple.
+
+                RÈGLES : Commence par "## VERDICT :". Si tu n'as pas pu finir (login réel, OTP, donnée manquante),
+                dis-le clairement et explique où ça a coincé. Base-toi UNIQUEMENT sur ce que tu as observé.
+                """.formatted(steps.size(), scenario.trim(),
+                    String.join(", ", visitedScreens), parcours));
+        }
 
         return visionProvider.analyzeText("""
             Tu es un expert UX mobile senior avec 10 ans d'expérience.

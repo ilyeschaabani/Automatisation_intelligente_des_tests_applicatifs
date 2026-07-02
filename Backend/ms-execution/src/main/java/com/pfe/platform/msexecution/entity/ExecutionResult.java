@@ -46,6 +46,12 @@ public class ExecutionResult {
     @Column(name = "retry_log", columnDefinition = "TEXT")
     private String retryLog;
 
+    @Column(name = "assigned_to")
+    private String assignedTo;
+
+    @Column(name = "assigned_to_user_id")
+    private Long assignedToUserId;
+
     public enum ResultStatus { SUCCESS, FAILURE, ERROR }
 
     public ExecutionResult() {
@@ -170,4 +176,10 @@ public class ExecutionResult {
 
     public String getRetryLog() { return retryLog; }
     public void setRetryLog(String retryLog) { this.retryLog = retryLog; }
+
+    public String getAssignedTo() { return assignedTo; }
+    public void setAssignedTo(String assignedTo) { this.assignedTo = assignedTo; }
+
+    public Long getAssignedToUserId() { return assignedToUserId; }
+    public void setAssignedToUserId(Long assignedToUserId) { this.assignedToUserId = assignedToUserId; }
 }

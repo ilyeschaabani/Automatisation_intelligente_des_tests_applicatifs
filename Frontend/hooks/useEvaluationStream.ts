@@ -35,6 +35,7 @@ export interface StreamEvent {
   backend?: string | null
   question?: string | null
   hint?: string | null
+  fields?: string[] | null
   success?: boolean | null
   currentUrl?: string | null
   pageTitle?: string | null
@@ -67,7 +68,7 @@ export function useEvaluationStream({
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [liveScreenshot, setLiveScreenshot] = useState<string | null>(null)
   const [connected, setConnected] = useState(false)
-  const [needsInput, setNeedsInput] = useState<{ question: string; hint?: string | null } | null>(null)
+  const [needsInput, setNeedsInput] = useState<{ question: string; hint?: string | null; fields?: string[] | null } | null>(null)
   const [isCompleted, setIsCompleted] = useState(false)
   const [currentBackend, setCurrentBackend] = useState<string | null>(null)
 
@@ -133,6 +134,7 @@ export function useEvaluationStream({
         setNeedsInput({
           question: event.question ?? 'L\'IA a besoin d\'informations',
           hint: event.hint,
+          fields: event.fields ?? null,
         })
         addMessage(event)
         break

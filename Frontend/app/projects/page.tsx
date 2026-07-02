@@ -57,6 +57,12 @@ const statusVariant: Record<
   ARCHIVED: 'outline',
 }
 
+const statusLabels: Record<string, string> = {
+  ACTIVE: 'Actif',
+  PAUSED: 'En pause',
+  ARCHIVED: 'Archivé',
+}
+
 const formatDate = (value?: string) => {
   if (!value) return '—'
   const date = new Date(value)
@@ -96,7 +102,7 @@ export default function ProjectsPage() {
     } catch (err) {
       setProjects([])
       setStatus('error')
-      setError(err instanceof Error ? err.message : 'Failed to load projects')
+      setError(err instanceof Error ? err.message : 'Échec du chargement des projets')
     }
   }
 
@@ -164,7 +170,7 @@ export default function ProjectsPage() {
       resetForm()
       await loadProjects()
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Failed to create project')
+      setFormError(err instanceof Error ? err.message : 'Échec de la création du projet')
     } finally {
       setIsSubmitting(false)
     }
@@ -188,7 +194,7 @@ export default function ProjectsPage() {
       setEditingProject(null)
       await loadProjects()
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Failed to update project')
+      setFormError(err instanceof Error ? err.message : 'Échec de la mise à jour du projet')
     } finally {
       setIsSubmitting(false)
     }
@@ -203,7 +209,7 @@ export default function ProjectsPage() {
       setDeletingProject(null)
       await loadProjects()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete project')
+      setError(err instanceof Error ? err.message : 'Échec de la suppression du projet')
     } finally {
       setIsDeleting(false)
     }
@@ -218,7 +224,7 @@ export default function ProjectsPage() {
       setArchivingProject(null)
       await loadProjects()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to archive project')
+      setError(err instanceof Error ? err.message : 'Échec de l\'archivage du projet')
     } finally {
       setIsArchiving(false)
     }
@@ -234,19 +240,19 @@ export default function ProjectsPage() {
           <div className="p-6 max-w-7xl">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
-                <h1 className="text-3xl font-bold text-foreground">Projects</h1>
+                <h1 className="text-3xl font-bold text-foreground">Projets</h1>
                 <p className="text-muted-foreground mt-1">
-                  Manage projects, environments, and test suites for ms_gestion.
+                  Gérez les projets, environnements et suites de test.
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <Button variant="outline" onClick={loadProjects} className="gap-2">
                   <RefreshCw size={16} />
-                  Refresh
+                  Actualiser
                 </Button>
                 <Button className="gap-2" onClick={openCreate}>
                   <Plus size={18} />
-                  New project
+                  Nouveau projet
                 </Button>
               </div>
             </div>
@@ -255,7 +261,7 @@ export default function ProjectsPage() {
               <Input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search by name or repo URL"
+                placeholder="Rechercher par nom ou URL de dépôt"
                 className="max-w-md"
               />
               {error ? (
@@ -265,13 +271,13 @@ export default function ProjectsPage() {
 
             <Card className="mt-6">
               {status === 'loading' ? (
-                <div className="p-6 text-sm text-muted-foreground">Loading projects...</div>
+                <div className="p-6 text-sm text-muted-foreground">Chargement des projets…</div>
               ) : null}
 
               {status !== 'loading' && filteredProjects.length === 0 ? (
                 <div className="p-6 text-sm text-muted-foreground flex items-center gap-2">
                   <Folder size={16} />
-                  No projects found.
+                  Aucun projet trouvé.
                 </div>
               ) : null}
 
@@ -279,11 +285,11 @@ export default function ProjectsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Repository</TableHead>
-                      <TableHead>Default branch</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Created</TableHead>
+                      <TableHead>Nom</TableHead>
+                      <TableHead>Dépôt</TableHead>
+                      <TableHead>Branche par défaut</TableHead>
+                      <TableHead>Statut</TableHead>
+                      <TableHead>Créé le</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -309,7 +315,7 @@ export default function ProjectsPage() {
                         <TableCell>{project.gitDefaultBranch || 'main'}</TableCell>
                         <TableCell>
                           <Badge variant={statusVariant[project.status]}>
-                            {project.status}
+                            {statusLabels[project.status] ?? project.status}
                           </Badge>
                         </TableCell>
                         <TableCell>{formatDate(project.createdAt)}</TableCell>
@@ -321,17 +327,17 @@ export default function ProjectsPage() {
                               onClick={() => openEdit(project)}
                             >
                               <Pencil size={14} />
-                              Edit
+                              Modifier
                             </Button>
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => openArchive(project)}
                               disabled={project.status === 'ARCHIVED'}
-                              title={project.status === 'ARCHIVED' ? 'Already archived' : 'Archive project'}
+                              title={project.status === 'ARCHIVED' ? 'Déjà archivé' : 'Archiver le projet'}
                             >
                               <Archive size={14} />
-                              Archive
+                              Archiver
                             </Button>
                             <Button
                               variant="destructive"
@@ -339,7 +345,7 @@ export default function ProjectsPage() {
                               onClick={() => openDelete(project)}
                             >
                               <Trash2 size={14} />
-                              Delete
+                              Supprimer
                             </Button>
                           </div>
                         </TableCell>
@@ -356,21 +362,21 @@ export default function ProjectsPage() {
       <FormDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
-        title="Create project"
-        description="Define the project details for ms_gestion."
-        submitLabel="Create project"
+        title="Créer un projet"
+        description="Définissez les détails du projet."
+        submitLabel="Créer le projet"
         isSubmitting={isSubmitting}
         onSubmit={onCreateSubmit}
       >
         <div className="space-y-2">
-          <Label htmlFor="project-name">Name</Label>
+          <Label htmlFor="project-name">Nom</Label>
           <Input
             id="project-name"
             value={formState.name}
             onChange={(event) =>
               setFormState((prev) => ({ ...prev, name: event.target.value }))
             }
-            placeholder="Digital Banking Platform"
+            placeholder="Plateforme bancaire digitale"
             required
           />
         </div>
@@ -382,7 +388,7 @@ export default function ProjectsPage() {
             onChange={(event) =>
               setFormState((prev) => ({ ...prev, description: event.target.value }))
             }
-            placeholder="Optional description"
+            placeholder="Description (facultatif)"
           />
         </div>
 
@@ -394,14 +400,14 @@ export default function ProjectsPage() {
       <FormDialog
         open={editOpen}
         onOpenChange={setEditOpen}
-        title="Update project"
-        description="Keep project details in sync with ms_gestion."
-        submitLabel="Save changes"
+        title="Modifier le projet"
+        description="Mettez à jour les détails du projet."
+        submitLabel="Enregistrer"
         isSubmitting={isSubmitting}
         onSubmit={onEditSubmit}
       >
         <div className="space-y-2">
-          <Label htmlFor="edit-project-name">Name</Label>
+          <Label htmlFor="edit-project-name">Nom</Label>
           <Input
             id="edit-project-name"
             value={formState.name}
@@ -431,13 +437,13 @@ export default function ProjectsPage() {
       <ConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        title="Delete project"
+        title="Supprimer le projet"
         description={
           deletingProject
-            ? `Permanently delete "${deletingProject.name}"? All test suites, test cases and campaigns will be lost. This cannot be undone.`
-            : 'Delete this project?'
+            ? `Supprimer définitivement « ${deletingProject.name} » ? Toutes les suites, cas de test et campagnes seront perdus. Cette action est irréversible.`
+            : 'Supprimer ce projet ?'
         }
-        confirmLabel="Delete permanently"
+        confirmLabel="Supprimer définitivement"
         isConfirming={isDeleting}
         onConfirm={onDeleteConfirm}
       />
@@ -445,13 +451,13 @@ export default function ProjectsPage() {
       <ConfirmDialog
         open={archiveOpen}
         onOpenChange={setArchiveOpen}
-        title="Archive project"
+        title="Archiver le projet"
         description={
           archivingProject
-            ? `Archive "${archivingProject.name}"? The project will be read-only. You can restore it later.`
-            : 'Archive this project?'
+            ? `Archiver « ${archivingProject.name} » ? Le projet passera en lecture seule. Vous pourrez le restaurer plus tard.`
+            : 'Archiver ce projet ?'
         }
-        confirmLabel="Archive"
+        confirmLabel="Archiver"
         isConfirming={isArchiving}
         onConfirm={onArchiveConfirm}
       />

@@ -125,12 +125,15 @@ export async function updateVulnStatus(id: number, status: string): Promise<bool
   }
 }
 
-export async function assignVuln(id: number, assignedTo: string): Promise<boolean> {
+export async function assignVuln(
+  id: number,
+  member: { userId: number; name: string; email: string }
+): Promise<boolean> {
   try {
     const res = await fetch(`/api/security/vulnerabilities/${id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ assignedTo }),
+      body: JSON.stringify(member),
     })
     return res.ok
   } catch {

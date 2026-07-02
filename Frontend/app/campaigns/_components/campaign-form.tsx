@@ -319,11 +319,11 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{mode === 'create' ? 'Create Campaign' : 'Edit Campaign'}</CardTitle>
+        <CardTitle>{mode === 'create' ? 'Créer une campagne' : 'Modifier la campagne'}</CardTitle>
         <CardDescription>
           {mode === 'create'
-            ? 'Select a project, fill campaign fields, then attach test cases.'
-            : 'Update campaign fields and its attached test cases.'}
+            ? 'Sélectionnez un projet, remplissez les champs de la campagne, puis attachez des cas de test.'
+            : 'Mettez à jour les champs de la campagne et ses cas de test attachés.'}
         </CardDescription>
       </CardHeader>
 
@@ -339,19 +339,19 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
         <form className="space-y-8" onSubmit={onSubmit}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Project *</Label>
+              <Label>Projet *</Label>
               <Select
                 value={projectId ? String(projectId) : ''}
                 onValueChange={(v) => setProjectId(Number(v))}
                 disabled={projectsLoading || mode === 'edit'}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder={projectsLoading ? 'Loading…' : 'Select project'} />
+                  <SelectValue placeholder={projectsLoading ? 'Chargement…' : 'Sélectionner un projet'} />
                 </SelectTrigger>
                 <SelectContent>
                   {projects.length === 0 ? (
                     <SelectItem value="__none" disabled>
-                      No projects found
+                      Aucun projet trouvé
                     </SelectItem>
                   ) : (
                     projects
@@ -369,12 +369,12 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
                 <p className="text-xs text-destructive">{projectsError}</p>
               ) : null}
               {mode === 'edit' && campaign ? (
-                <p className="text-xs text-muted-foreground">Project is locked for editing.</p>
+                <p className="text-xs text-muted-foreground">Le projet est verrouillé en modification.</p>
               ) : null}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="campaignName">Name *</Label>
+              <Label htmlFor="campaignName">Nom *</Label>
               <Input
                 id="campaignName"
                 value={name}
@@ -385,7 +385,7 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="campaignVersion">App version</Label>
+              <Label htmlFor="campaignVersion">Version de l'app</Label>
               <Input
                 id="campaignVersion"
                 value={appVersion}
@@ -395,7 +395,7 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="environment">Environment *</Label>
+              <Label htmlFor="environment">Environnement *</Label>
               <Select
                 value={environmentId ? String(environmentId) : ''}
                 onValueChange={(value) => setEnvironmentId(Number(value))}
@@ -404,14 +404,14 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
                 <SelectTrigger id="environment">
                   <SelectValue
                     placeholder={
-                      environmentsLoading ? 'Loading environments…' : 'Select environment'
+                      environmentsLoading ? 'Chargement des environnements…' : 'Sélectionner un environnement'
                     }
                   />
                 </SelectTrigger>
                 <SelectContent>
                   {environments.length === 0 ? (
                     <SelectItem value="__none" disabled>
-                      No environments found — add one in the project settings
+                      Aucun environnement — ajoutez-en un dans les paramètres du projet
                     </SelectItem>
                   ) : (
                     environments.map((env) => (
@@ -434,7 +434,7 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
                 if (!selectedEnv) return null
                 return (
                   <div className="rounded-md border border-border bg-muted/30 px-3 py-2 space-y-1">
-                    <p className="text-xs font-medium text-foreground">Environment configuration</p>
+                    <p className="text-xs font-medium text-foreground">Configuration de l'environnement</p>
                     {selectedEnv.baseUrlApi && (
                       <p className="text-xs text-muted-foreground">
                         <span className="font-mono text-foreground">API:</span> {selectedEnv.baseUrlApi}
@@ -457,7 +457,7 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
                       </p>
                     )}
                     {!selectedEnv.gitRepoUrl && !selectedEnv.baseUrlApi && !selectedEnv.baseUrlWeb && (
-                      <p className="text-xs text-orange-600">No configuration set — add repo URL or base URLs in environment settings.</p>
+                      <p className="text-xs text-orange-600">Aucune configuration — ajoutez l'URL du dépôt ou les URLs de base dans l'environnement.</p>
                     )}
                   </div>
                 )
@@ -466,10 +466,10 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
 
 
             <div className="space-y-2">
-              <Label htmlFor="triggerType">Trigger mode</Label>
+              <Label htmlFor="triggerType">Mode de déclenchement</Label>
               <Select value={triggerMode} onValueChange={setTriggerMode}>
                 <SelectTrigger id="triggerType">
-                  <SelectValue placeholder="Select trigger mode" />
+                  <SelectValue placeholder="Sélectionner un mode" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="MANUAL">MANUAL</SelectItem>
@@ -483,12 +483,12 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <h3 className="text-sm font-semibold text-foreground">Test cases</h3>
+                <h3 className="text-sm font-semibold text-foreground">Cas de test</h3>
                 <p className="text-xs text-muted-foreground">
-                  Select test cases for this campaign.
+                  Sélectionnez les cas de test pour cette campagne.
                   {testCases.filter((tc) => !(tc as any).active && (tc as any).active !== undefined).length > 0 && (
                     <span className="ml-1 text-orange-500">
-                      ({testCases.filter((tc) => !(tc as any).active && (tc as any).active !== undefined).length} inactive — will be skipped at execution)
+                      ({testCases.filter((tc) => !(tc as any).active && (tc as any).active !== undefined).length} inactif(s) — ignoré(s) à l'exécution)
                     </span>
                   )}
                 </p>
@@ -501,7 +501,7 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
                   onClick={selectAll}
                   disabled={testCasesLoading || filteredTestCases.length === 0}
                 >
-                  Select all
+                  Tout sélectionner
                 </Button>
                 <Button
                   variant="outline"
@@ -509,7 +509,7 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
                   onClick={clearAll}
                   disabled={testCasesLoading || selectedIds.size === 0}
                 >
-                  Clear
+                  Effacer
                 </Button>
               </div>
             </div>
@@ -518,20 +518,20 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by title, suite, type, priority, risk, id…"
+                placeholder="Rechercher par titre, suite, type, priorité, risque, id…"
                 disabled={testCasesLoading}
               />
               <div className="text-xs text-muted-foreground whitespace-nowrap">
-                {selectedIds.size} selected
+                {selectedIds.size} sélectionné(s)
               </div>
             </div>
 
             {testCasesLoading ? (
-              <p className="text-sm text-muted-foreground">Loading test cases…</p>
+              <p className="text-sm text-muted-foreground">Chargement des cas de test…</p>
             ) : testCasesError ? (
               <p className="text-sm text-destructive">{testCasesError}</p>
             ) : filteredTestCases.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No test cases found.</p>
+              <p className="text-sm text-muted-foreground">Aucun cas de test trouvé.</p>
             ) : (
               <div className="rounded-lg border border-border overflow-hidden">
                 <Table>
@@ -544,14 +544,14 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
                             if (checked) selectAll()
                             else clearAll()
                           }}
-                          aria-label="Select all visible test cases"
+                          aria-label="Tout sélectionner"
                         />
                       </TableHead>
-                      <TableHead>Name</TableHead>
+                      <TableHead>Nom</TableHead>
                       <TableHead className="w-40">Suite</TableHead>
                       <TableHead className="w-32">Type</TableHead>
-                      <TableHead className="w-32">Priority</TableHead>
-                      <TableHead className="w-40">Risk</TableHead>
+                      <TableHead className="w-32">Priorité</TableHead>
+                      <TableHead className="w-40">Risque</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -609,16 +609,16 @@ export function CampaignForm({ mode, campaignId }: CampaignFormProps) {
               onClick={() => router.push('/campaigns')}
               disabled={submitting}
             >
-              Cancel
+              Annuler
             </Button>
             <Button type="submit" disabled={!canSubmit}>
               {submitting
                 ? mode === 'create'
-                  ? 'Creating…'
-                  : 'Saving…'
+                  ? 'Création…'
+                  : 'Enregistrement…'
                 : mode === 'create'
-                  ? 'Create campaign'
-                  : 'Save changes'}
+                  ? 'Créer la campagne'
+                  : 'Enregistrer'}
             </Button>
           </div>
         </form>

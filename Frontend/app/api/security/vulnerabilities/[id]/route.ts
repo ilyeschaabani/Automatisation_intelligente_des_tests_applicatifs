@@ -9,7 +9,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const cookieStore = await cookies()
   const body = await request.json()
 
-  const action = body.status ? 'status' : body.assignedTo ? 'assign' : null
+  const action = body.status ? 'status' : (body.userId || body.assignedTo) ? 'assign' : null
   if (!action) return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
 
   const upstream = await fetch(`${MS_GESTION}/api/security/vulnerabilities/${id}/${action}`, {

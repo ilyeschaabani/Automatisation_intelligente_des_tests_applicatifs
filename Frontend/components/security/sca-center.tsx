@@ -6,10 +6,11 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Package, ChevronDown, ChevronUp, Clock, Download,
-  ExternalLink, Scan, GitBranch,
+  ExternalLink, Scan, GitBranch, UserPlus, CheckCircle2,
 } from 'lucide-react'
 import { ScanTabHeader, type ScanRecord, ScanStatusBadge } from './scan-tab-header'
-import { fetchScanVulnerabilities } from '@/lib/security-client'
+import { AssignDialog } from './assign-dialog'
+import { fetchScanVulnerabilities, updateVulnStatus, assignVuln } from '@/lib/security-client'
 
 interface VulnRecord {
   id: number
@@ -22,6 +23,7 @@ interface VulnRecord {
   evidence: string | null
   file: string | null
   status: string
+  assignedTo: string | null
 }
 
 function sevColor(s: string) {
@@ -44,7 +46,11 @@ function sevBorder(s: string) {
   }
 }
 
-function DepFindingCard({ v }: { v: VulnRecord }) {
+function DepFindingCard({ v, onResolve, onAssign }: {
+  v: VulnRecord
+  onResolve: (id: number) => void
+  onAssign: (id: number) => void
+}) {
   const [open, setOpen] = useState(false)
   return (
     <div className={`border rounded-lg p-4 border-l-4 transition-all hover:shadow-sm ${sevBorder(v.severity)}`}>
@@ -59,6 +65,9 @@ function DepFindingCard({ v }: { v: VulnRecord }) {
             {v.cweId && <span className="font-mono">{v.cweId}</span>}
             {v.owaspCategory && <span>OWASP {v.owaspCategory}</span>}
             {v.file && <span className="font-mono truncate max-w-[300px]">{v.file}</span>}
+            {v.assignedTo && (
+              <span className="flex items-center gap-1"><UserPlus className="h-3 w-3" />{v.assignedTo}</span>
+            )}
           </div>
         </div>
         <Button variant="ghost" size="sm" onClick={() => setOpen(!open)}>
@@ -101,6 +110,12 @@ function DepFindingCard({ v }: { v: VulnRecord }) {
                 </a>
               )
             })()}
+            <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => onAssign(v.id)}>
+              <UserPlus className="h-3 w-3 mr-1" />Assigner
+            </Button>
+            <Button variant="outline" size="sm" className="text-xs h-7" disabled={v.status === 'RESOLVED'} onClick={() => onResolve(v.id)}>
+              <CheckCircle2 className="h-3 w-3 mr-1" />{v.status === 'RESOLVED' ? 'Résolu ✓' : 'Marquer résolu'}
+            </Button>
           </div>
         </div>
       )}
@@ -111,6 +126,8 @@ function DepFindingCard({ v }: { v: VulnRecord }) {
 export function ScaCenter() {
   const [scans, setScans] = useState<ScanRecord[]>([])
   const [vulns, setVulns] = useState<VulnRecord[]>([])
+  const [assignTarget, setAssignTarget] = useState<number | null>(null)
+  const [internalProjectId, setInternalProjectId] = useState<string>('')
 
   const handleScansLoaded = useCallback(async (loaded: ScanRecord[]) => {
     setScans(loaded)
@@ -129,6 +146,22 @@ export function ScaCenter() {
   const medium = vulns.filter(v => v.severity === 'MEDIUM').length
   const low = vulns.filter(v => v.severity === 'LOW').length
 
+  const handleResolve = useCallback(async (id: number) => {
+    const ok = await updateVulnStatus(id, 'RESOLVED')
+    if (ok) setVulns(prev => prev.map(x => x.id === id ? { ...x, status: 'RESOLVED' } : x))
+  }, [])
+
+  const handleAssign = useCallback((id: number) => {
+    setAssignTarget(id)
+  }, [])
+
+  const handleAssignConfirm = useCallback(async (member: { userId: number; name: string; email: string }) => {
+    if (assignTarget === null) return
+    const ok = await assignVuln(assignTarget, member)
+    if (ok) setVulns(prev => prev.map(x => x.id === assignTarget ? { ...x, assignedTo: member.name } : x))
+    setAssignTarget(null)
+  }, [assignTarget])
+
   return (
     <div className="space-y-6">
       <ScanTabHeader
@@ -138,6 +171,7 @@ export function ScaCenter() {
         subtitle="Analyse des dependances Maven via OWASP Dependency-Check (base NVD)"
         accentColor="bg-amber-600 hover:bg-amber-700 text-white"
         onScansLoaded={handleScansLoaded}
+        onProjectChange={setInternalProjectId}
       />
 
       {latest && (
@@ -197,7 +231,7 @@ export function ScaCenter() {
               {vulns.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">Aucune CVE detectee dans les dependances</p>
               ) : (
-                vulns.map(v => <DepFindingCard key={v.id} v={v} />)
+                vulns.map(v => <DepFindingCard key={v.id} v={v} onResolve={handleResolve} onAssign={handleAssign} />)
               )}
             </CardContent>
           </Card>
@@ -241,6 +275,15 @@ export function ScaCenter() {
           <p className="text-lg font-medium">Aucun scan SCA</p>
           <p className="text-sm mt-1">Selectionnez un projet et un environnement puis lancez votre premier scan</p>
         </div>
+      )}
+
+      {internalProjectId && (
+        <AssignDialog
+          open={assignTarget !== null}
+          onOpenChange={(open) => { if (!open) setAssignTarget(null) }}
+          projectId={internalProjectId}
+          onAssign={handleAssignConfirm}
+        />
       )}
     </div>
   )

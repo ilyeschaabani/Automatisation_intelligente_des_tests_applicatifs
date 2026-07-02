@@ -44,7 +44,8 @@ public class UxEvaluationController {
     public ResponseEntity<UxEvaluationDto> create(@Valid @RequestBody UxEvaluationRequest req) {
         String platform = req.getPlatform() != null ? req.getPlatform() : "WEB";
         UxEvaluation created = agenticService.createEvaluation(
-                req.getUrl(), req.getDescription(), req.getProjectId(), platform, req.getApkPath(), req.getReviewMode());
+                req.getUrl(), req.getDescription(), req.getProjectId(), platform, req.getApkPath(),
+                req.getReviewMode(), req.getScenario());
         evaluationMemberRepository.save(
                 new EvaluationMember(created.getId(), SecurityUtils.getCurrentUserId(), EvaluationMember.Role.OWNER));
         return ResponseEntity.ok(UxEvaluationDto.fromEntity(created));

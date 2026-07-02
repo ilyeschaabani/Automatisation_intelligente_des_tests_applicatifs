@@ -26,7 +26,17 @@ public class ScriptRetryService {
     private final RestTemplate restTemplate = new RestTemplate();
 
     public String correctScript(String originalScript, String compilationErrors, String sourceClass) {
-        String prompt = buildCorrectionPrompt(originalScript, compilationErrors, sourceClass);
+        return correctScript(originalScript, compilationErrors, sourceClass, null, null);
+    }
+
+    public String correctScript(String originalScript, String compilationErrors,
+                                String sourceClass, String fileTree) {
+        return correctScript(originalScript, compilationErrors, sourceClass, null, fileTree);
+    }
+
+    public String correctScript(String originalScript, String compilationErrors,
+                                String sourceClass, String relatedClasses, String fileTree) {
+        String prompt = buildCorrectionPrompt(originalScript, compilationErrors, sourceClass, relatedClasses, fileTree);
 
         String result = callOllama(model, prompt);
         if (result == null) {
@@ -36,7 +46,8 @@ public class ScriptRetryService {
         return result;
     }
 
-    private String buildCorrectionPrompt(String script, String errors, String sourceClass) {
+    private String buildCorrectionPrompt(String script, String errors, String sourceClass,
+                                         String relatedClasses, String fileTree) {
         StringBuilder prompt = new StringBuilder();
         prompt.append("""
             Tu es un expert en correction de tests Java (TestNG + Mockito).
@@ -72,6 +83,19 @@ public class ScriptRetryService {
             %s
             """.formatted(script, errors));
 
+        if (fileTree != null && !fileTree.isBlank()) {
+            prompt.append("""
+
+            == ARBORESCENCE DES CLASSES JAVA DU PROJET ==
+            %s
+
+            RÈGLE POUR LES IMPORTS :
+            - Pour corriger un "cannot find symbol" ou "package does not exist", utilise cette
+              arborescence pour trouver le package EXACT de chaque classe.
+            - N'INVENTE JAMAIS un package. Si une classe n'est pas dans cette liste, ne l'utilise pas.
+            """.formatted(fileTree));
+        }
+
         if (sourceClass != null && !sourceClass.isBlank()) {
             prompt.append("""
 
@@ -80,9 +104,24 @@ public class ScriptRetryService {
 
             Utilise ce code pour :
             - Vérifier les vrais types des champs (enum vs String)
-            - Identifier les méthodes réellement appelées
+            - Identifier les méthodes réellement appelées (y compris les méthodes privées)
             - Trouver les bons noms de setters/getters
+            - Identifier TOUS les appels repository/service à mocker (UNIT) ou à préparer en DB (INTEGRATION)
             """.formatted(sourceClass));
+        }
+
+        if (relatedClasses != null && !relatedClasses.isBlank()) {
+            prompt.append("""
+
+            == CODE SOURCE DES CLASSES CITÉES DANS LES ERREURS ==
+            %s
+
+            Ces classes apparaissent dans les erreurs de compilation ci-dessus. Utilise leur VRAI code pour :
+            - Construire correctement leurs instances (regarde le constructeur RÉEL ou le constructeur par défaut + setters).
+            - Gérer les clés composites : si une entité a un @EmbeddedId / @IdClass (ex: une classe XxxId),
+              NE passe PAS l'id composite là où un Long est attendu. Utilise les setters réels des champs.
+            - Respecter les types exacts des champs et des paramètres.
+            """.formatted(relatedClasses));
         }
 
         prompt.append("\nGénère maintenant le code Java corrigé complet.\n");
@@ -94,10 +133,16 @@ public class ScriptRetryService {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
 
+            Map<String, Object> options = Map.of(
+                    "temperature", 0.15,
+                    "top_p", 0.9,
+                    "num_ctx", 32768
+            );
             Map<String, Object> body = Map.of(
                     "model", targetModel,
                     "prompt", prompt,
-                    "stream", false
+                    "stream", false,
+                    "options", options
             );
 
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);

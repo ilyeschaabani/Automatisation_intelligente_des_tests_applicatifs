@@ -1,6 +1,6 @@
 'use client'
 
-import { Bell, Search, Settings, ChevronDown, LogOut, User } from 'lucide-react'
+import { Search, ChevronDown, LogOut, User } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import {
   DropdownMenu,
@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { NotificationBell } from '@/components/notification-bell'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -105,7 +106,7 @@ export function Header() {
         <div className="hidden lg:flex flex-1 max-w-md relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground size-5" />
           <Input
-            placeholder="Search tests, campaigns..."
+            placeholder="Rechercher des tests, des campagnes…"
             className="pl-10 bg-secondary"
           />
         </div>
@@ -113,10 +114,7 @@ export function Header() {
         {/* Right Actions */}
         <div className="flex items-center gap-4 ml-auto">
           {/* Notifications */}
-          <button className="relative p-2 hover:bg-secondary rounded-lg transition-colors">
-            <Bell size={20} className="text-foreground" />
-            <span className="absolute top-1 right-1 size-2 bg-red-500 rounded-full" />
-          </button>
+          <NotificationBell userId={profile ? Number((profile as any).id ?? 0) : null} />
 
           <ThemeToggle />
 
@@ -137,11 +135,7 @@ export function Header() {
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuItem onClick={() => router.push('/profile')}>
                 <User className="mr-2 h-4 w-4" />
-                Profile
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => router.push('/settings')}>
-                <Settings className="mr-2 h-4 w-4" />
-                Settings
+                Profil
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -152,7 +146,7 @@ export function Header() {
                 }}
               >
                 <LogOut className="mr-2 h-4 w-4" />
-                Sign out
+                Déconnexion
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
