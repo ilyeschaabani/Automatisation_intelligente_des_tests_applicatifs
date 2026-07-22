@@ -15,7 +15,7 @@ import java.util.*;
 /**
  * Client vision basé sur Ollama Cloud.
  * Utilise l'endpoint natif /api/generate avec le champ "images" (base64) pour
- * les modèles multimodaux cloud (ex. qwen3.5:cloud, gemma4:cloud, minimax-m3:cloud).
+ * les modèles multimodaux cloud (ex. nemotron-3-ultra:cloud, gemma4:cloud, minimax-m3:cloud).
  *
  * Avantages vs OpenRouter free :
  *  - Pas de clé API séparée (réutilise le compte Ollama Cloud déjà configuré)
@@ -32,7 +32,7 @@ public class OllamaVisionClient {
     @Value("${ollama.vision.model:minimax-m3:cloud}")
     private String visionModel;
 
-    @Value("${ollama.vision.text-model:${ollama.model:qwen3-coder-next:cloud}}")
+    @Value("${ollama.vision.text-model:${ollama.model:nemotron-3-ultra:cloud}}")
     private String textModel;
 
     @Value("${ollama.vision.enabled:true}")

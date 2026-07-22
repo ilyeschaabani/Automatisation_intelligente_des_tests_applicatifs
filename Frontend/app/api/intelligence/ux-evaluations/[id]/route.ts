@@ -60,3 +60,30 @@ export async function GET(
   forwardSetCookie(upstream, response)
   return response
 }
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const cookieStore = await cookies()
+  const { id } = await params
+
+  if (!id || id === 'undefined') {
+    return NextResponse.json({ error: 'Invalid evaluation id' }, { status: 400 })
+  }
+
+  const upstream = await fetch(`${MS_EXECUTION_SERVICE_URL}/api/functional-evaluation/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: buildHeaders(request, cookieStore.toString()),
+  })
+
+  const response = new NextResponse(upstream.body, {
+    status: upstream.status,
+    headers: {
+      'content-type': upstream.headers.get('content-type') ?? 'application/json',
+    },
+  })
+
+  forwardSetCookie(upstream, response)
+  return response
+}

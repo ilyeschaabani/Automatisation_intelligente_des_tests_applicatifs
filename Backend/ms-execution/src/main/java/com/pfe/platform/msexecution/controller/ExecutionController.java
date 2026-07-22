@@ -32,7 +32,7 @@ public class ExecutionController {
 
 
     @PostMapping("/run/{campaignId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'QA_ENGINEER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')")
     public ResponseEntity<CampaignRunResponseDto> runCampaign(
             @PathVariable Long campaignId,
             @RequestBody(required = false) Map<String, Object> body) {
@@ -115,7 +115,7 @@ public class ExecutionController {
     }
 
     @PutMapping("/stop/{campaignId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'QA_ENGINEER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')")
     public ResponseEntity<?> stopCampaign(@PathVariable Long campaignId) {
         try {
             Campaign campaign = campaignRepository.findById(campaignId)

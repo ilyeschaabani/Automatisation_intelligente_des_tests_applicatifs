@@ -28,7 +28,6 @@ interface CampaignCardProps {
   id?: number | string
   projectId?: number
   name: string
-  type: 'Functional' | 'API' | 'Regression'
   status: 'Running' | 'Completed' | 'Failed' | 'Scheduled'
   progress: number
   tests: number
@@ -45,23 +44,11 @@ const statusConfig = {
   Scheduled: { color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-400' },
 }
 
-const typeColors = {
-  Functional: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-400',
-  API: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-400',
-  Regression: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-950 dark:text-cyan-400',
-}
-
-// Libellés affichés (les clés restent en anglais pour le style/la logique)
 const statusLabels: Record<'Running' | 'Completed' | 'Failed' | 'Scheduled', string> = {
   Running: 'En cours',
   Completed: 'Terminée',
   Failed: 'Échouée',
   Scheduled: 'Planifiée',
-}
-const typeLabels: Record<'Functional' | 'API' | 'Regression', string> = {
-  Functional: 'Fonctionnel',
-  API: 'API',
-  Regression: 'Régression',
 }
 
 function slugify(value: string): string {
@@ -76,7 +63,6 @@ export function CampaignCard({
   id,
   projectId,
   name,
-  type,
   status,
   progress,
   tests,
@@ -89,7 +75,6 @@ export function CampaignCard({
   const [isDeleting, setIsDeleting] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const config = statusConfig[status]
-  const typeColor = typeColors[type]
   const baseHref = id !== undefined && id !== null && String(id).trim()
     ? `/campaigns/${encodeURIComponent(String(id))}`
     : `/campaigns/${slugify(name)}`
@@ -181,9 +166,6 @@ export function CampaignCard({
         <div className="flex-1">
           <h3 className="font-semibold text-foreground">{name}</h3>
           <div className="flex items-center gap-2 mt-2">
-            <Badge variant="outline" className={typeColor}>
-              {typeLabels[type] ?? type}
-            </Badge>
             <Badge variant="outline" className={config.color}>
               {status === 'Running' && <span className="inline-block size-1.5 bg-current rounded-full mr-1 animate-pulse" />}
               {statusLabels[status] ?? status}

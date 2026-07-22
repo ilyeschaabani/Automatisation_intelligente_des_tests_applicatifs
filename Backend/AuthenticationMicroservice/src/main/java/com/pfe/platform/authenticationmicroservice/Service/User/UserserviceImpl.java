@@ -3,7 +3,9 @@ package com.pfe.platform.authenticationmicroservice.Service.User;
 import com.pfe.platform.authenticationmicroservice.Dto.CreateUserRequest;
 import com.pfe.platform.authenticationmicroservice.Entity.GlobalRole;
 import com.pfe.platform.authenticationmicroservice.Entity.User;
+import com.pfe.platform.authenticationmicroservice.Repository.PasswordResetRequestRepository;
 import com.pfe.platform.authenticationmicroservice.Repository.UserRepository;
+import com.pfe.platform.authenticationmicroservice.Service.EmailService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -11,8 +13,10 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
@@ -24,7 +28,9 @@ import java.util.stream.Collectors;
 public class UserserviceImpl implements UserService {
 
     private final UserRepository userRepository;
+    private final PasswordResetRequestRepository passwordResetRequestRepository;
     private final PasswordEncoder passwordEncoder;
+    private final EmailService emailService;
 
     @Override
     public UserDetailsService userDetailsService() {
@@ -69,20 +75,19 @@ public class UserserviceImpl implements UserService {
         if (request.getEmail() == null || request.getEmail().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is required");
         }
-        if (request.getPassword() == null || request.getPassword().length() < 6) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Password must be at least 6 characters");
-        }
 
         String email = request.getEmail().trim().toLowerCase();
         if (userRepository.findByEmail(email).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already in use");
         }
 
+        String generatedPassword = generateRandomPassword();
+
         User user = new User();
         user.setNom(request.getNom());
         user.setPrenom(request.getPrenom());
         user.setEmail(email);
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setPassword(passwordEncoder.encode(generatedPassword));
         user.setEnabled(true);
 
         if (request.getRoles() != null && !request.getRoles().isEmpty()) {
@@ -93,10 +98,30 @@ public class UserserviceImpl implements UserService {
             user.setGlobalRoles(roles);
         }
 
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+
+        String userName = "";
+        if (request.getPrenom() != null) userName += request.getPrenom();
+        if (request.getNom() != null) userName += (userName.isEmpty() ? "" : " ") + request.getNom();
+        if (userName.isEmpty()) userName = email;
+
+        emailService.sendWelcomeEmail(email, userName, generatedPassword);
+
+        return saved;
+    }
+
+    private String generateRandomPassword() {
+        String chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#$!";
+        SecureRandom random = new SecureRandom();
+        StringBuilder sb = new StringBuilder(12);
+        for (int i = 0; i < 12; i++) {
+            sb.append(chars.charAt(random.nextInt(chars.length())));
+        }
+        return sb.toString();
     }
 
     @Override
+    @Transactional
     public void deleteUser(Long id) {
         User user = getUserById(id);
 
@@ -109,6 +134,7 @@ public class UserserviceImpl implements UserService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Impossible de supprimer votre propre compte");
         }
 
+        passwordResetRequestRepository.deleteAllByUserId(id);
         userRepository.deleteById(id);
     }
 

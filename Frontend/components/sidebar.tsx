@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
   Folder,
@@ -22,6 +22,7 @@ import { useUserRoles } from '@/hooks/use-roles'
 
 export function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
   const [isOpen, setIsOpen] = useState(true)
   const { isAdmin } = useUserRoles()
 
@@ -133,7 +134,14 @@ Plateforme de test bancaire
 
         {/* Footer */}
         <div className="border-t border-sidebar-border p-4 space-y-3">
-          <button className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent transition-all">
+          <button
+            className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent transition-all"
+            onClick={async () => {
+              await fetch('/api/auth/logout', { method: 'POST' }).catch(() => null)
+              router.push('/login')
+              router.refresh()
+            }}
+          >
             <LogOut size={18} />
             <span className="text-sm font-medium">Déconnexion</span>
           </button>

@@ -9,6 +9,7 @@ import com.pfe.platform.ms_gestion.service.EmailService;
 import com.pfe.platform.ms_gestion.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -24,6 +25,7 @@ public class ExecutionResultController {
     private final EmailService emailService;
 
     @PatchMapping("/{id}/assign")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER')")
     public ResponseEntity<?> assignResult(
             @PathVariable Long id,
             @RequestBody Map<String, Object> body) {

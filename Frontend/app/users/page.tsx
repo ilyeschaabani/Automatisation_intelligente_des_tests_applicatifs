@@ -16,7 +16,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
-import { Plus, Edit2, Trash2, Shield, Eye, EyeOff, Users, UserCheck, ShieldCheck } from 'lucide-react'
+import { Plus, Edit2, Trash2, Shield, Eye, EyeOff, Users, UserCheck, ShieldCheck, KeyRound, Check, X } from 'lucide-react'
 import {
   type UserAdmin, type GlobalRole,
   ROLE_LABELS, ROLE_COLORS, ASSIGNABLE_ROLES, ROLE_DESCRIPTIONS,
@@ -68,81 +68,81 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
     group: 'Projets',
     permissions: [
       { label: 'Créer un projet', roles: ['ADMIN', 'TEST_MANAGER'] },
-      { label: 'Modifier / archiver un projet', roles: ['ADMIN', 'TEST_MANAGER'] },
+      { label: 'Modifier un projet', roles: ['ADMIN', 'TEST_MANAGER'] },
       { label: 'Supprimer un projet', roles: ['ADMIN'] },
-      { label: 'Consulter les projets', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER', 'DEVELOPER', 'VIEWER'] },
+      { label: 'Consulter les projets', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR', 'OBSERVATEUR'] },
       { label: 'Gérer les membres du projet', roles: ['ADMIN', 'TEST_MANAGER'] },
     ],
   },
   {
     group: 'Environnements',
     permissions: [
-      { label: 'Créer / modifier un environnement', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER'] },
+      { label: 'Créer / modifier un environnement', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR'] },
       { label: 'Supprimer un environnement', roles: ['ADMIN', 'TEST_MANAGER'] },
     ],
   },
   {
     group: 'Suites de tests',
     permissions: [
-      { label: 'Créer / modifier une suite', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER'] },
+      { label: 'Créer / modifier une suite', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR'] },
       { label: 'Supprimer une suite', roles: ['ADMIN', 'TEST_MANAGER'] },
     ],
   },
   {
     group: 'Cas de test',
     permissions: [
-      { label: 'Créer / modifier un cas de test', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER'] },
+      { label: 'Créer / modifier un cas de test', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR'] },
       { label: 'Supprimer un cas de test', roles: ['ADMIN', 'TEST_MANAGER'] },
-      { label: 'Générer des tests via IA (LLM)', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER'] },
+      { label: 'Générer des tests via IA (LLM)', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR'] },
     ],
   },
   {
     group: 'Campagnes',
     permissions: [
       { label: 'Créer une campagne', roles: ['ADMIN', 'TEST_MANAGER'] },
-      { label: 'Modifier / ajouter des tests', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER'] },
+      { label: 'Modifier / ajouter des tests', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR'] },
       { label: 'Supprimer une campagne', roles: ['ADMIN', 'TEST_MANAGER'] },
     ],
   },
   {
     group: 'Exécution',
     permissions: [
-      { label: 'Lancer une campagne', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER'] },
-      { label: 'Arrêter une exécution en cours', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER'] },
-      { label: 'Consulter les résultats d\'exécution', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER', 'DEVELOPER', 'VIEWER'] },
-      { label: 'Consulter l\'analyse IA des échecs', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER', 'DEVELOPER', 'VIEWER'] },
+      { label: 'Lancer une campagne', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR'] },
+      { label: 'Arrêter une exécution en cours', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR'] },
+      { label: 'Consulter les résultats d\'exécution', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR', 'OBSERVATEUR'] },
+      { label: 'Consulter l\'analyse IA des échecs', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR', 'OBSERVATEUR'] },
     ],
   },
   {
     group: 'Rapports',
     permissions: [
-      { label: 'Générer un rapport PDF', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER'] },
-      { label: 'Télécharger un rapport', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER', 'DEVELOPER', 'VIEWER'] },
-      { label: 'Consulter les KPIs / tableaux de bord', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER', 'DEVELOPER', 'VIEWER'] },
+      { label: 'Générer un rapport PDF', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR'] },
+      { label: 'Télécharger un rapport', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR', 'OBSERVATEUR'] },
+      { label: 'Consulter les KPIs / tableaux de bord', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR', 'OBSERVATEUR'] },
     ],
   },
   {
     group: 'Évaluation UX',
     permissions: [
-      { label: 'Créer une évaluation UX', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER'] },
-      { label: 'Lancer / pause / arrêter', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER'] },
-      { label: 'Consulter les résultats', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER', 'DEVELOPER', 'VIEWER'] },
+      { label: 'Créer une évaluation UX', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR'] },
+      { label: 'Lancer / pause / arrêter', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR'] },
+      { label: 'Consulter les résultats', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR', 'OBSERVATEUR'] },
     ],
   },
   {
     group: 'Sécurité & conformité',
     permissions: [
-      { label: 'Lancer un scan (SAST / DAST / SCA)', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER'] },
-      { label: 'Consulter les vulnérabilités', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER', 'DEVELOPER', 'VIEWER'] },
+      { label: 'Lancer un scan (SAST / DAST / SCA)', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR'] },
+      { label: 'Consulter les vulnérabilités', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR', 'OBSERVATEUR'] },
       { label: 'Modifier le statut d\'une vulnérabilité', roles: ['ADMIN', 'TEST_MANAGER'] },
-      { label: 'Télécharger un rapport de sécurité', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER', 'DEVELOPER'] },
+      { label: 'Télécharger un rapport de sécurité', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR', 'OBSERVATEUR'] },
     ],
   },
   {
     group: 'GitHub & intégration',
     permissions: [
-      { label: 'Connecter / déconnecter GitHub', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER', 'DEVELOPER'] },
-      { label: 'Parcourir les repos / fichiers', roles: ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER', 'DEVELOPER'] },
+      { label: 'Connecter / déconnecter GitHub', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR'] },
+      { label: 'Parcourir les repos / fichiers', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR'] },
     ],
   },
   {
@@ -153,7 +153,7 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
   },
 ]
 
-const MATRIX_ROLES: GlobalRole[] = ['ADMIN', 'TEST_MANAGER', 'QA_ENGINEER', 'DEVELOPER', 'VIEWER']
+const MATRIX_ROLES: GlobalRole[] = ['ADMIN', 'TEST_MANAGER', 'TESTEUR', 'OBSERVATEUR']
 
 export default function UsersPage() {
   const router = useRouter()
@@ -170,6 +170,12 @@ export default function UsersPage() {
 
   // Current user email and roles from JWT
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null)
+
+  // Password reset requests
+  type ResetRequest = { id: number; userId: number; email: string; displayName: string; status: string; createdAt: string }
+  const [resetRequests, setResetRequests] = useState<ResetRequest[]>([])
+  const [resetLoading, setResetLoading] = useState(true)
+  const [processingResetId, setProcessingResetId] = useState<number | null>(null)
 
   const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type })
@@ -190,8 +196,39 @@ export default function UsersPage() {
     }
   }, [])
 
+  const fetchResetRequests = useCallback(async () => {
+    setResetLoading(true)
+    try {
+      const res = await fetch('/api/admin/users/password-reset-requests')
+      if (res.ok) {
+        const data = await res.json()
+        setResetRequests(Array.isArray(data) ? data : [])
+      }
+    } catch { /* ignore */ }
+    finally { setResetLoading(false) }
+  }, [])
+
+  const handleResetAction = useCallback(async (id: number, action: 'approve' | 'reject') => {
+    setProcessingResetId(id)
+    try {
+      const res = await fetch(`/api/admin/users/password-reset-requests/${id}/${action}`, { method: 'POST' })
+      const data = await res.json().catch(() => ({})) as any
+      if (res.ok) {
+        showToast(data.message || (action === 'approve' ? 'Mot de passe réinitialisé' : 'Demande rejetée'))
+        fetchResetRequests()
+      } else {
+        showToast(data.message || 'Erreur', 'error')
+      }
+    } catch {
+      showToast('Erreur réseau', 'error')
+    } finally {
+      setProcessingResetId(null)
+    }
+  }, [showToast, fetchResetRequests])
+
   useEffect(() => {
     fetchUsers()
+    fetchResetRequests()
     // Decode current user email and roles from JWT in localStorage
     try {
       const token = localStorage.getItem('access_token')
@@ -205,7 +242,7 @@ export default function UsersPage() {
         }
       }
     } catch { /* ignore */ }
-  }, [fetchUsers])
+  }, [fetchUsers, fetchResetRequests])
 
   // Stats
   const totalUsers = users.length
@@ -269,6 +306,66 @@ export default function UsersPage() {
               </div>
             </Card>
           </div>
+
+          {/* Password Reset Requests */}
+          {(() => {
+            const pendingRequests = resetRequests.filter(r => r.status === 'PENDING')
+            if (resetLoading || pendingRequests.length === 0) return null
+            return (
+              <Card className="mb-8 overflow-hidden border-orange-200 dark:border-orange-800">
+                <div className="px-6 py-4 bg-orange-50 dark:bg-orange-950/30 border-b border-orange-200 dark:border-orange-800">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-orange-100 dark:bg-orange-900/50 text-orange-600">
+                      <KeyRound size={18} />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-bold text-foreground">
+                        Demandes de réinitialisation
+                        <Badge variant="secondary" className="ml-2 bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300">
+                          {pendingRequests.length}
+                        </Badge>
+                      </h2>
+                      <p className="text-xs text-muted-foreground">
+                        Des utilisateurs ont demandé la réinitialisation de leur mot de passe.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="divide-y divide-border">
+                  {pendingRequests.map((req) => (
+                    <div key={req.id} className="px-6 py-3 flex items-center justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{req.displayName}</p>
+                        <p className="text-xs text-muted-foreground">{req.email} · {new Date(req.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5 text-green-700 border-green-300 hover:bg-green-50 dark:text-green-400 dark:border-green-700 dark:hover:bg-green-950/30"
+                          disabled={processingResetId === req.id}
+                          onClick={() => handleResetAction(req.id, 'approve')}
+                        >
+                          <Check size={14} />
+                          Réinitialiser
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5 text-red-700 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-950/30"
+                          disabled={processingResetId === req.id}
+                          onClick={() => handleResetAction(req.id, 'reject')}
+                        >
+                          <X size={14} />
+                          Rejeter
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )
+          })()}
 
           {/* Users Table */}
           {loading ? (
@@ -498,14 +595,13 @@ function AddUserModal({ open, onClose, onSuccess, onError }: {
   onSuccess: (user: UserAdmin) => void
   onError: (msg: string) => void
 }) {
-  const [form, setForm] = useState({ nom: '', prenom: '', email: '', password: '', roles: [] as GlobalRole[] })
+  const [form, setForm] = useState({ nom: '', prenom: '', email: '', roles: [] as GlobalRole[] })
   const [submitting, setSubmitting] = useState(false)
 
-  const reset = () => setForm({ nom: '', prenom: '', email: '', password: '', roles: [] })
+  const reset = () => setForm({ nom: '', prenom: '', email: '', roles: [] })
 
   const handleSubmit = async () => {
     if (!form.email.trim()) return onError('Email requis')
-    if (form.password.length < 6) return onError('Mot de passe: minimum 6 caractères')
     setSubmitting(true)
     try {
       const res = await fetch('/api/admin/users', {
@@ -558,10 +654,10 @@ function AddUserModal({ open, onClose, onSuccess, onError }: {
             <Label>Email *</Label>
             <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
           </div>
-          <div>
-            <Label>Mot de passe *</Label>
-            <Input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
-            <p className="text-xs text-muted-foreground mt-1">Minimum 6 caractères</p>
+          <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+            <p className="text-sm text-blue-700 dark:text-blue-300">
+              Un mot de passe sera généré automatiquement et envoyé par e-mail à l&apos;utilisateur.
+            </p>
           </div>
           <div>
             <Label>Rôles</Label>

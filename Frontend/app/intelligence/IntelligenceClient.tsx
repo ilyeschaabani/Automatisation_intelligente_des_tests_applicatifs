@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { ArrowRight, Filter, Loader2, RefreshCcw, Sparkles, Play } from 'lucide-react'
+import { ArrowRight, Filter, Loader2, RefreshCcw, Sparkles, Play, Trash2 } from 'lucide-react'
 
 import { Header } from '@/components/header'
 import { Sidebar } from '@/components/sidebar'
@@ -12,9 +12,22 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { listFunctionalEvaluations, executeFunctionalEvaluation, type FunctionalEvaluationDto } from '@/lib/api-client'
+import { listFunctionalEvaluations, executeFunctionalEvaluation, deleteFunctionalEvaluation, type FunctionalEvaluationDto } from '@/lib/api-client'
+import { useUserRoles } from '@/hooks/use-roles'
+import { ConfirmDialog } from '@/components/crud/ConfirmDialog'
 
 type PlatformFilter = 'ALL' | 'WEB' | 'MOBILE'
+
+function getCurrentUserId(): number | null {
+  try {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+    if (token) {
+      const payload = JSON.parse(atob(token.split('.')[1]))
+      return typeof payload.userId === 'number' ? payload.userId : null
+    }
+  } catch { /* ignore */ }
+  return null
+}
 
 function platformFromType(value?: string | null) {
   if (!value) return 'UX'
@@ -55,7 +68,7 @@ function excerpt(value?: string | null, limit = 220) {
   return text.length > limit ? `${text.slice(0, limit).trim()}...` : text
 }
 
-function EvaluationCard({ item, onExecute }: { item: FunctionalEvaluationDto; onExecute?: () => Promise<void> }) {
+function EvaluationCard({ item, onExecute, onDelete, canDelete }: { item: FunctionalEvaluationDto; onExecute?: () => Promise<void>; onDelete?: () => Promise<void>; canDelete?: boolean }) {
   const platform = platformFromType(item.platform)
   const analysis = excerpt(item.aiAnalysis ?? item.testSummary ?? item.pageContent ?? item.logs)
 
@@ -83,6 +96,17 @@ function EvaluationCard({ item, onExecute }: { item: FunctionalEvaluationDto; on
           {item.status === 'PENDING' ? (
             <Button variant="ghost" size="icon" onClick={onExecute} title="Lancer">
               <Play className="h-4 w-4" />
+            </Button>
+          ) : null}
+          {canDelete ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={(e) => { e.preventDefault(); onDelete?.() }}
+              title="Supprimer"
+            >
+              <Trash2 className="h-4 w-4" />
             </Button>
           ) : null}
         </div>
@@ -133,6 +157,10 @@ export default function IntelligencePage() {
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
   const [platform, setPlatform] = useState<PlatformFilter>('ALL')
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const { isAdmin } = useUserRoles()
+  const currentUserId = useMemo(() => getCurrentUserId(), [])
   const searchParams = useSearchParams()
   const created = searchParams.get('created')
 
@@ -162,11 +190,23 @@ export default function IntelligencePage() {
   const handleExecute = async (id: number) => {
     try {
       await executeFunctionalEvaluation(id)
-      // refresh list after triggering execution
       void loadUxEvaluations(platform)
     } catch (err) {
-      // best-effort: show console error
       console.warn('Failed to start execution', err)
+    }
+  }
+
+  const confirmDelete = async () => {
+    if (deleteTarget == null) return
+    setIsDeleting(true)
+    try {
+      await deleteFunctionalEvaluation(deleteTarget)
+      setItems(prev => prev.filter(i => i.id !== deleteTarget))
+    } catch (err) {
+      console.warn('Failed to delete evaluation', err)
+    } finally {
+      setIsDeleting(false)
+      setDeleteTarget(null)
     }
   }
 
@@ -283,13 +323,24 @@ export default function IntelligencePage() {
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {items.map((item) => (
-                  <EvaluationCard key={item.id} item={item} onExecute={() => handleExecute(item.id)} />
+                  <EvaluationCard key={item.id} item={item} onExecute={() => handleExecute(item.id)} onDelete={() => setDeleteTarget(item.id)} canDelete={isAdmin || (currentUserId != null && item.ownerUserId === currentUserId)} />
                 ))}
               </div>
             )}
           </div>
         </main>
       </div>
+
+      <ConfirmDialog
+        open={deleteTarget != null}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}
+        title="Supprimer l'évaluation"
+        description="Cette action est irréversible. L'évaluation, ses étapes et ses résultats seront définitivement supprimés."
+        confirmLabel="Supprimer"
+        cancelLabel="Annuler"
+        isConfirming={isDeleting}
+        onConfirm={confirmDelete}
+      />
     </div>
   )
 }

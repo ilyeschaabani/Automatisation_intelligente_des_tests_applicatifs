@@ -1,7 +1,6 @@
 'use client'
 
-import { Search, ChevronDown, LogOut, User } from 'lucide-react'
-import { Input } from '@/components/ui/input'
+import { ChevronDown, LogOut, User } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -89,28 +88,26 @@ export function Header() {
   }, [])
 
   const displayName = useMemo(() => {
-    if (!profile) return 'Admin'
-    return (
-      pickFirstString(profile, ['fullName', 'name', 'displayName']) ||
-      pickFirstString(profile, ['username', 'email']) ||
-      'Admin'
-    )
+    if (!profile) return 'Utilisateur'
+    const nom = pickFirstString(profile, ['nom'])
+    const prenom = pickFirstString(profile, ['prenom'])
+    if (prenom && nom) return `${prenom} ${nom}`
+    if (nom) return nom
+    if (prenom) return prenom
+    return pickFirstString(profile, ['email']) || 'Utilisateur'
+  }, [profile])
+
+  const avatarUrl = useMemo(() => {
+    if (!profile) return null
+    return pickFirstString(profile, ['imageUrl', 'avatarUrl', 'githubAvatarUrl'])
   }, [profile])
 
   const initials = useMemo(() => toInitials(displayName), [displayName])
+  const [headerImgError, setHeaderImgError] = useState(false)
 
   return (
     <header className="sticky top-0 z-20 bg-card border-b border-border">
       <div className="px-6 py-4 flex items-center justify-between gap-4">
-        {/* Search */}
-        <div className="hidden lg:flex flex-1 max-w-md relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground size-5" />
-          <Input
-            placeholder="Rechercher des tests, des campagnes…"
-            className="pl-10 bg-secondary"
-          />
-        </div>
-
         {/* Right Actions */}
         <div className="flex items-center gap-4 ml-auto">
           {/* Notifications */}
@@ -125,9 +122,13 @@ export function Header() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-2 hover:bg-secondary px-3 py-2 rounded-lg transition-colors">
-                <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center">
-                  <span className="text-xs font-bold text-primary-foreground">{initials}</span>
-                </div>
+                {avatarUrl && !headerImgError ? (
+                  <img src={avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover" onError={() => setHeaderImgError(true)} />
+                ) : (
+                  <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center">
+                    <span className="text-xs font-bold text-primary-foreground">{initials}</span>
+                  </div>
+                )}
                 <span className="hidden sm:inline text-sm font-medium">{displayName}</span>
                 <ChevronDown size={16} className="text-muted-foreground" />
               </button>

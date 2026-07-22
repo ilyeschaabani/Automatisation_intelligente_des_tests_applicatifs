@@ -133,7 +133,7 @@ public class SecurityController {
     }
 
     @PatchMapping("/vulnerabilities/{id}/status")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')")
     public ResponseEntity<SecurityVulnerability> updateVulnerabilityStatus(
             @PathVariable Long id, @RequestBody Map<String, String> body) {
         String status = body.get("status");

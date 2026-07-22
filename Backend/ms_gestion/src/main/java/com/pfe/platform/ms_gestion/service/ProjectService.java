@@ -79,14 +79,6 @@ public class ProjectService {
         projectRepository.delete(project);
     }
 
-    @Transactional
-    public void archive(Long projectId) {
-        Project project = getProjectOrThrow(projectId);
-        projectAccessService.checkMembership(project);
-        project.setStatus(Project.Status.ARCHIVED);
-        projectRepository.save(project);
-    }
-
     // Méthodes privées
     private Project getProjectOrThrow(Long id) {
         return projectRepository.findById(id)

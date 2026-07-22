@@ -90,13 +90,38 @@ public class AppiumDriverService {
     }
 
     public void copyApkToContainer(String hostApkPath) throws Exception {
-        String containerPath = "/tmp/" + Path.of(hostApkPath).getFileName().toString();
-        exec("docker", "cp", hostApkPath, CONTAINER_NAME + ":" + containerPath);
+        Path source = Path.of(hostApkPath);
+        if (!java.nio.file.Files.exists(source)) {
+            throw new RuntimeException("APK introuvable: " + hostApkPath
+                    + " — le fichier temporaire a ete supprime. Veuillez re-uploader l'APK.");
+        }
+
+        String sanitized = sanitizeFileName(source.getFileName().toString());
+        String containerPath = "/tmp/" + sanitized;
+
+        Path safeCopy = source.getParent().resolve(sanitized);
+        boolean copied = false;
+        if (!safeCopy.equals(source)) {
+            java.nio.file.Files.copy(source, safeCopy, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            copied = true;
+        }
+
+        try {
+            exec("docker", "cp", safeCopy.toString(), CONTAINER_NAME + ":" + containerPath);
+        } finally {
+            if (copied) {
+                java.nio.file.Files.deleteIfExists(safeCopy);
+            }
+        }
         log.info("[APPIUM] APK copied to container: {}", containerPath);
     }
 
     public String getContainerApkPath(String hostApkPath) {
-        return "/tmp/" + Path.of(hostApkPath).getFileName().toString();
+        return "/tmp/" + sanitizeFileName(Path.of(hostApkPath).getFileName().toString());
+    }
+
+    private String sanitizeFileName(String name) {
+        return name.replaceAll("[^a-zA-Z0-9._-]", "_");
     }
 
     public String createSession(String apkPath) throws Exception {

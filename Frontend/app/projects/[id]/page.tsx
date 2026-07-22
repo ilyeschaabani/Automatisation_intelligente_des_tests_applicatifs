@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
-import { Database, Plus, RefreshCw, Settings, Trash2, Users } from 'lucide-react'
+import { Database, Edit2, Plus, RefreshCw, Settings, Trash2, Users, Eye } from 'lucide-react'
 
 import { AuthGuard } from '@/components/auth-guard'
 import { Header } from '@/components/header'
@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { apiFetch } from '@/components/profile/GitHubIntegrationCard'
+import { useUserRoles } from '@/hooks/use-roles'
 import { environmentService } from '@/services/environments'
 import { memberService } from '@/services/members'
 import { projectService } from '@/services/projects'
@@ -80,11 +81,13 @@ type SuiteFormState = {
 }
 
 // Add suite type to form state
-type SuiteType = 'WEB' | 'UNIT' | 'INTEGRATION'
+type SuiteType = 'UNIT' | 'INTEGRATION'
 
 
 type MemberFormState = {
   userId: string
+  email: string
+  mode: 'select' | 'email'
 }
 
 const emptyEnvForm: EnvironmentFormState = {
@@ -103,12 +106,14 @@ const emptySuiteForm: SuiteFormState = {
   gitBranch: '',
   modulePath: '',
   useGitRepo: false,
-  type: 'WEB',
+  type: 'UNIT',
 }
 
 
 const emptyMemberForm: MemberFormState = {
   userId: '',
+  email: '',
+  mode: 'select',
 }
 
 const statusVariant: Record<
@@ -117,7 +122,6 @@ const statusVariant: Record<
 > = {
   ACTIVE: 'default',
   PAUSED: 'secondary',
-  ARCHIVED: 'outline',
 }
 
 const formatDate = (value?: string) => {
@@ -142,10 +146,8 @@ const normalizeRepoUrl = (url: string): string =>
 
 const isRepoMandatorySuiteType = (type?: SuiteType): boolean => type === 'UNIT' || type === 'INTEGRATION'
 
-const isWebOrApiSuiteType = (type?: SuiteType): boolean => type === 'WEB'
-
-const shouldShowGitRepoFields = (type?: SuiteType, useGitRepo?: boolean): boolean =>
-  isRepoMandatorySuiteType(type) || (isWebOrApiSuiteType(type) && Boolean(useGitRepo))
+const shouldShowGitRepoFields = (type?: SuiteType): boolean =>
+  isRepoMandatorySuiteType(type)
 
 const extractBranchNames = (payload: unknown): string[] => {
   const list: unknown[] = Array.isArray(payload)
@@ -197,6 +199,18 @@ export default function ProjectDetailsPage() {
   const id = Array.isArray(params?.id) ? params?.id[0] : params?.id
   const projectId = Number(id)
   const hasProjectId = Number.isFinite(projectId)
+
+  const { isAdmin } = useUserRoles()
+  const currentUserId = useMemo(() => {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+      if (token) {
+        const payload = JSON.parse(atob(token.split('.')[1]))
+        return typeof payload.userId === 'number' ? payload.userId : null
+      }
+    } catch { /* ignore */ }
+    return null
+  }, [])
 
   const [project, setProject] = useState<Project | null>(null)
   const [projectState, setProjectState] = useState<LoadState>('loading')
@@ -355,6 +369,9 @@ export default function ProjectDetailsPage() {
     return project.description || 'Manage environments, suites, and members.'
   }, [project])
 
+  const isMember = currentUserId != null && members.some(m => m.userId === currentUserId)
+  const canManage = isAdmin || (currentUserId != null && project?.createdBy === currentUserId) || isMember
+
   const resetEnvForm = () => {
     setEnvForm(emptyEnvForm)
     setFormError(null)
@@ -395,13 +412,13 @@ export default function ProjectDetailsPage() {
 
   const openSuiteCreate = () => {
     resetSuiteForm()
-    setSuiteForm((prev) => ({ ...prev, type: 'WEB', useGitRepo: false }))
+    setSuiteForm((prev) => ({ ...prev, type: 'UNIT', useGitRepo: false }))
     setSuiteCreateOpen(true)
   }
 
   const openSuiteEdit = (suite: TestSuite) => {
     setSuiteEditing(suite)
-    const type = (suite.type ?? 'WEB') as SuiteType
+    const type = (suite.type ?? 'UNIT') as SuiteType
     const gitBranchRaw = suite.gitBranch ?? ''
     const gitBranch = (type === 'UNIT' || type === 'INTEGRATION') && !gitBranchRaw.trim() ? 'main' : gitBranchRaw
     setSuiteForm({
@@ -573,7 +590,7 @@ export default function ProjectDetailsPage() {
   useEffect(() => {
     if (!suiteCreateOpen && !suiteEditOpen) return
 
-    const showGitRepoFields = shouldShowGitRepoFields(suiteForm.type, suiteForm.useGitRepo)
+    const showGitRepoFields = shouldShowGitRepoFields(suiteForm.type)
     if (showGitRepoFields) {
       void fetchGitHubRepos()
     }
@@ -667,7 +684,7 @@ export default function ProjectDetailsPage() {
   }
 
   useEffect(() => {
-    const showGitRepoFields = shouldShowGitRepoFields(suiteForm.type, suiteForm.useGitRepo)
+    const showGitRepoFields = shouldShowGitRepoFields(suiteForm.type)
     if (!showGitRepoFields) return
     if (!suiteCreateOpen && !suiteEditOpen) return
     if (!suiteForm.gitRepoUrl.trim()) {
@@ -711,7 +728,7 @@ export default function ProjectDetailsPage() {
   }, [suiteForm.type, suiteForm.useGitRepo, suiteForm.gitRepoUrl, suiteCreateOpen, suiteEditOpen, gitReposState, gitRepos])
 
   useEffect(() => {
-    const showGitRepoFields = shouldShowGitRepoFields(suiteForm.type, suiteForm.useGitRepo)
+    const showGitRepoFields = shouldShowGitRepoFields(suiteForm.type)
     if (!showGitRepoFields) return
     if (gitReposState !== 'ready') return
     if (gitRepos.length === 0) return
@@ -776,7 +793,7 @@ export default function ProjectDetailsPage() {
     setFormError(null)
 
     try {
-      const showGitRepoFields = shouldShowGitRepoFields(suiteForm.type, suiteForm.useGitRepo)
+      const showGitRepoFields = shouldShowGitRepoFields(suiteForm.type)
       const payload: CreateTestSuiteRequest = {
         name: suiteForm.name.trim(),
         type: (suiteForm.type as any) || undefined,
@@ -806,7 +823,7 @@ export default function ProjectDetailsPage() {
     setFormError(null)
 
     try {
-      const showGitRepoFields = shouldShowGitRepoFields(suiteForm.type, suiteForm.useGitRepo)
+      const showGitRepoFields = shouldShowGitRepoFields(suiteForm.type)
       const payload: UpdateTestSuiteRequest = {
         name: suiteForm.name.trim(),
         type: (suiteForm.type as any) || undefined,
@@ -850,23 +867,33 @@ export default function ProjectDetailsPage() {
     setIsMemberSubmitting(true)
     setFormError(null)
 
-    const userId = Number(memberForm.userId)
-    if (!Number.isFinite(userId)) {
-      setFormError('Select a user.')
-      setIsMemberSubmitting(false)
-      return
+    let payload: AddMemberRequest
+
+    if (memberForm.mode === 'email') {
+      const email = memberForm.email.trim()
+      if (!email || !email.includes('@')) {
+        setFormError('Veuillez saisir un email valide.')
+        setIsMemberSubmitting(false)
+        return
+      }
+      payload = { email }
+    } else {
+      const userId = Number(memberForm.userId)
+      if (!Number.isFinite(userId)) {
+        setFormError('Veuillez sélectionner un utilisateur.')
+        setIsMemberSubmitting(false)
+        return
+      }
+      payload = { userId }
     }
 
     try {
-      const payload: AddMemberRequest = {
-        userId,
-      }
       await memberService.add(projectId, payload)
       setMemberAddOpen(false)
       resetMemberForm()
       await loadMembers()
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Failed to add member')
+      setFormError(err instanceof Error ? err.message : 'Erreur lors de l\'ajout du membre')
     } finally {
       setIsMemberSubmitting(false)
     }
@@ -939,10 +966,12 @@ export default function ProjectDetailsPage() {
                   <Database size={18} />
                   <h2 className="text-lg font-semibold">Environnements</h2>
                 </div>
-                <Button size="sm" onClick={openEnvCreate} className="gap-2">
-                  <Plus size={14} />
-                  Ajouter un environnement
-                </Button>
+                {canManage && (
+                  <Button size="sm" onClick={openEnvCreate} className="gap-2">
+                    <Plus size={14} />
+                    Ajouter un environnement
+                  </Button>
+                )}
               </div>
 
               {envError ? <p className="text-sm text-destructive mt-4">{envError}</p> : null}
@@ -960,8 +989,8 @@ export default function ProjectDetailsPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Nom</TableHead>
-                        <TableHead>URL de base (Web)</TableHead>
-                        <TableHead>URL de base (API)</TableHead>
+                        <TableHead>URL Application</TableHead>
+                        <TableHead>URL API</TableHead>
                         <TableHead>Créé le</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
@@ -974,16 +1003,16 @@ export default function ProjectDetailsPage() {
                           <TableCell>{env.baseUrlApi || '—'}</TableCell>
                           <TableCell>{formatDate(env.createdAt)}</TableCell>
                           <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button size="sm" variant="outline" onClick={() => openEnvEdit(env)}>
-                                <Settings size={14} />
-                                Modifier
-                              </Button>
-                              <Button size="sm" variant="destructive" onClick={() => openEnvDelete(env)}>
-                                <Trash2 size={14} />
-                                Supprimer
-                              </Button>
-                            </div>
+                            {canManage && (
+                              <div className="flex items-center justify-end gap-1">
+                                <Button variant="ghost" size="sm" title="Modifier" onClick={() => openEnvEdit(env)}>
+                                  <Edit2 size={16} />
+                                </Button>
+                                <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10" title="Supprimer" onClick={() => openEnvDelete(env)}>
+                                  <Trash2 size={16} />
+                                </Button>
+                              </div>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -999,10 +1028,12 @@ export default function ProjectDetailsPage() {
                   <Settings size={18} />
                   <h2 className="text-lg font-semibold">Suites de test</h2>
                 </div>
-                <Button size="sm" onClick={openSuiteCreate} className="gap-2">
-                  <Plus size={14} />
-                  Ajouter une suite
-                </Button>
+                {canManage && (
+                  <Button size="sm" onClick={openSuiteCreate} className="gap-2">
+                    <Plus size={14} />
+                    Ajouter une suite
+                  </Button>
+                )}
               </div>
 
               {suiteError ? <p className="text-sm text-destructive mt-4">{suiteError}</p> : null}
@@ -1032,20 +1063,22 @@ export default function ProjectDetailsPage() {
                           <TableCell>{suite.description || '—'}</TableCell>
                           <TableCell>{formatDate(suite.createdAt)}</TableCell>
                           <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button size="sm" variant="outline" asChild>
+                            <div className="flex items-center justify-end gap-1">
+                              <Button variant="ghost" size="sm" title="Voir les cas" asChild>
                                 <Link href={`/projects/${projectId}/suites/${suite.id}`}>
-                                  Voir les cas
+                                  <Eye size={16} />
                                 </Link>
                               </Button>
-                              <Button size="sm" variant="outline" onClick={() => openSuiteEdit(suite)}>
-                                <Settings size={14} />
-                                Modifier
-                              </Button>
-                              <Button size="sm" variant="destructive" onClick={() => openSuiteDelete(suite)}>
-                                <Trash2 size={14} />
-                                Supprimer
-                              </Button>
+                              {canManage && (
+                                <>
+                                  <Button variant="ghost" size="sm" title="Modifier" onClick={() => openSuiteEdit(suite)}>
+                                    <Edit2 size={16} />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10" title="Supprimer" onClick={() => openSuiteDelete(suite)}>
+                                    <Trash2 size={16} />
+                                  </Button>
+                                </>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -1062,10 +1095,12 @@ export default function ProjectDetailsPage() {
                   <Users size={18} />
                   <h2 className="text-lg font-semibold">Membres du projet</h2>
                 </div>
-                <Button size="sm" onClick={openMemberAdd} className="gap-2">
-                  <Plus size={14} />
-                  Ajouter un membre
-                </Button>
+                {canManage && (
+                  <Button size="sm" onClick={openMemberAdd} className="gap-2">
+                    <Plus size={14} />
+                    Ajouter un membre
+                  </Button>
+                )}
               </div>
 
               {memberError ? <p className="text-sm text-destructive mt-4">{memberError}</p> : null}
@@ -1104,14 +1139,13 @@ export default function ProjectDetailsPage() {
                             </span>
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => openMemberDelete(member)}
-                            >
-                              <Trash2 size={14} />
-                              Remove
-                            </Button>
+                            {canManage && project?.createdBy !== member.userId && (
+                              <div className="flex items-center justify-end gap-1">
+                                <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10" title="Retirer" onClick={() => openMemberDelete(member)}>
+                                  <Trash2 size={16} />
+                                </Button>
+                              </div>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -1144,7 +1178,7 @@ export default function ProjectDetailsPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="env-web">Base URL (Web)</Label>
+          <Label htmlFor="env-web">URL de l'application</Label>
           <Input
             id="env-web"
             value={envForm.baseUrlWeb}
@@ -1155,7 +1189,7 @@ export default function ProjectDetailsPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="env-api">Base URL (API)</Label>
+          <Label htmlFor="env-api">URL de l'API</Label>
           <Input
             id="env-api"
             value={envForm.baseUrlApi}
@@ -1166,7 +1200,7 @@ export default function ProjectDetailsPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="env-git-repo">Dépôt du code source <span className="text-muted-foreground text-xs">(pour les tests UNIT / INTEGRATION)</span></Label>
+          <Label htmlFor="env-git-repo">Dépôt du code source</Label>
           <Select
             value={envForm.gitRepoUrl}
             onValueChange={(v) => setEnvForm((prev) => ({ ...prev, gitRepoUrl: v, gitBranch: '' }))}
@@ -1213,13 +1247,13 @@ export default function ProjectDetailsPage() {
           </Select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="env-db-type">Type de base de données <span className="text-muted-foreground text-xs">(pour les tests INTEGRATION)</span></Label>
+          <Label htmlFor="env-db-type">Type de base de données</Label>
           <Select value={envForm.databaseType} onValueChange={(v) => setEnvForm((prev) => ({ ...prev, databaseType: v }))}>
             <SelectTrigger id="env-db-type">
               <SelectValue placeholder="Sélectionner un type de base de données" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="H2">H2 (in-memory)</SelectItem>
+              <SelectItem value="H2">H2</SelectItem>
               <SelectItem value="POSTGRESQL">PostgreSQL</SelectItem>
               <SelectItem value="MYSQL">MySQL</SelectItem>
               <SelectItem value="MONGODB">MongoDB</SelectItem>
@@ -1248,7 +1282,7 @@ export default function ProjectDetailsPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="env-edit-web">Base URL (Web)</Label>
+          <Label htmlFor="env-edit-web">URL de l'application</Label>
           <Input
             id="env-edit-web"
             value={envForm.baseUrlWeb}
@@ -1258,7 +1292,7 @@ export default function ProjectDetailsPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="env-edit-api">Base URL (API)</Label>
+          <Label htmlFor="env-edit-api">URL de l'API</Label>
           <Input
             id="env-edit-api"
             value={envForm.baseUrlApi}
@@ -1268,7 +1302,7 @@ export default function ProjectDetailsPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="env-edit-git-repo">Dépôt du code source <span className="text-muted-foreground text-xs">(pour les tests UNIT / INTEGRATION)</span></Label>
+          <Label htmlFor="env-edit-git-repo">Dépôt du code source</Label>
           <Select
             value={envForm.gitRepoUrl}
             onValueChange={(v) => setEnvForm((prev) => ({ ...prev, gitRepoUrl: v, gitBranch: '' }))}
@@ -1315,13 +1349,13 @@ export default function ProjectDetailsPage() {
           </Select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="env-edit-db-type">Type de base de données <span className="text-muted-foreground text-xs">(pour les tests INTEGRATION)</span></Label>
+          <Label htmlFor="env-edit-db-type">Type de base de données</Label>
           <Select value={envForm.databaseType} onValueChange={(v) => setEnvForm((prev) => ({ ...prev, databaseType: v }))}>
             <SelectTrigger id="env-edit-db-type">
               <SelectValue placeholder="Sélectionner un type de base de données" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="H2">H2 (in-memory)</SelectItem>
+              <SelectItem value="H2">H2</SelectItem>
               <SelectItem value="POSTGRESQL">PostgreSQL</SelectItem>
               <SelectItem value="MYSQL">MySQL</SelectItem>
               <SelectItem value="MONGODB">MongoDB</SelectItem>
@@ -1380,19 +1414,10 @@ export default function ProjectDetailsPage() {
               setSuiteForm((prev) => ({
                 ...prev,
                 type: value as SuiteType,
-                ...(value === 'UNIT' || value === 'INTEGRATION'
-                  ? {
-                      useGitRepo: true,
-                      gitRepoUrl: prev.gitRepoUrl,
-                      gitBranch: prev.gitBranch.trim() ? prev.gitBranch : 'main',
-                    }
-                  : {
-                      // Switching away from mandatory types clears git fields by default.
-                      useGitRepo: isWebOrApiSuiteType(prev.type) ? prev.useGitRepo : false,
-                      gitRepoUrl: isWebOrApiSuiteType(prev.type) && prev.useGitRepo ? prev.gitRepoUrl : '',
-                      gitBranch: isWebOrApiSuiteType(prev.type) && prev.useGitRepo ? prev.gitBranch : '',
-                    }),
-                modulePath: value === 'UNIT' || value === 'INTEGRATION' ? prev.modulePath : '',
+                useGitRepo: true,
+                gitRepoUrl: prev.gitRepoUrl,
+                gitBranch: prev.gitBranch.trim() ? prev.gitBranch : 'main',
+                modulePath: prev.modulePath,
               }))
             }}
           >
@@ -1402,7 +1427,6 @@ export default function ProjectDetailsPage() {
             <SelectContent>
               <SelectItem value="UNIT">Test unitaire</SelectItem>
               <SelectItem value="INTEGRATION">Test d'intégration</SelectItem>
-              <SelectItem value="WEB">E2E</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -1465,18 +1489,10 @@ export default function ProjectDetailsPage() {
               setSuiteForm((prev) => ({
                 ...prev,
                 type: value as SuiteType,
-                ...(value === 'UNIT' || value === 'INTEGRATION'
-                  ? {
-                      useGitRepo: true,
-                      gitRepoUrl: prev.gitRepoUrl,
-                      gitBranch: prev.gitBranch.trim() ? prev.gitBranch : 'main',
-                    }
-                  : {
-                      useGitRepo: (prev.type === 'WEB' || prev.type === 'API') ? prev.useGitRepo : false,
-                      gitRepoUrl: (prev.type === 'WEB' || prev.type === 'API') && prev.useGitRepo ? prev.gitRepoUrl : '',
-                      gitBranch: (prev.type === 'WEB' || prev.type === 'API') && prev.useGitRepo ? prev.gitBranch : '',
-                    }),
-                modulePath: value === 'UNIT' || value === 'INTEGRATION' ? prev.modulePath : '',
+                useGitRepo: true,
+                gitRepoUrl: prev.gitRepoUrl,
+                gitBranch: prev.gitBranch.trim() ? prev.gitBranch : 'main',
+                modulePath: prev.modulePath,
               }))
             }}
           >
@@ -1486,7 +1502,6 @@ export default function ProjectDetailsPage() {
             <SelectContent>
               <SelectItem value="UNIT">Test unitaire</SelectItem>
               <SelectItem value="INTEGRATION">Test d'intégration</SelectItem>
-              <SelectItem value="WEB">E2E</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -1526,37 +1541,73 @@ export default function ProjectDetailsPage() {
         open={memberAddOpen}
         onOpenChange={setMemberAddOpen}
         title="Ajouter un membre"
-        description="Invitez un coéquipier sur le projet."
+        description="Invitez un coéquipier sur le projet. Il recevra un e-mail de notification."
         submitLabel="Ajouter le membre"
         isSubmitting={isMemberSubmitting}
         onSubmit={submitMemberAdd}
       >
-        <div className="space-y-2">
-          <Label>Utilisateur</Label>
-          <Select
-            value={memberForm.userId}
-            onValueChange={(value) => setMemberForm((prev) => ({ ...prev, userId: value }))}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Sélectionner un utilisateur" />
-            </SelectTrigger>
-            <SelectContent>
-              {availableUsers.map((user) => (
-                <SelectItem key={user.id} value={String(user.id)}>
-                  {formatUserLabel(user)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {usersState === 'loading' ? (
-            <p className="text-xs text-muted-foreground">Chargement des utilisateurs…</p>
-          ) : null}
-          {usersState === 'error' ? (
-            <p className="text-xs text-destructive">{usersError}</p>
-          ) : null}
-          {usersState === 'ready' && availableUsers.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Tous les utilisateurs sont déjà membres.</p>
-          ) : null}
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={memberForm.mode === 'select' ? 'default' : 'outline'}
+              onClick={() => setMemberForm(prev => ({ ...prev, mode: 'select', email: '' }))}
+            >
+              Liste
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={memberForm.mode === 'email' ? 'default' : 'outline'}
+              onClick={() => setMemberForm(prev => ({ ...prev, mode: 'email', userId: '' }))}
+            >
+              Par e-mail
+            </Button>
+          </div>
+
+          {memberForm.mode === 'select' ? (
+            <div className="space-y-2">
+              <Label>Utilisateur</Label>
+              <Select
+                value={memberForm.userId}
+                onValueChange={(value) => setMemberForm((prev) => ({ ...prev, userId: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionner un utilisateur" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableUsers.map((user) => (
+                    <SelectItem key={user.id} value={String(user.id)}>
+                      {formatUserLabel(user)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {usersState === 'loading' ? (
+                <p className="text-xs text-muted-foreground">Chargement des utilisateurs…</p>
+              ) : null}
+              {usersState === 'error' ? (
+                <p className="text-xs text-destructive">{usersError}</p>
+              ) : null}
+              {usersState === 'ready' && availableUsers.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Tous les utilisateurs sont déjà membres.</p>
+              ) : null}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label>Adresse e-mail</Label>
+              <Input
+                type="email"
+                placeholder="utilisateur@exemple.com"
+                value={memberForm.email}
+                onChange={(e) => setMemberForm(prev => ({ ...prev, email: e.target.value }))}
+              />
+              <p className="text-xs text-muted-foreground">
+                L&apos;utilisateur doit avoir un compte sur la plateforme.
+              </p>
+            </div>
+          )}
         </div>
         {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
       </FormDialog>

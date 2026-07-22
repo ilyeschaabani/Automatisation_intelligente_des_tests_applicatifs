@@ -33,7 +33,7 @@ public class SecurityScanController {
     }
 
     @PostMapping("/scan/sast")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'QA_ENGINEER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')")
     public ResponseEntity<Map<String, Object>> launchSast(
             @RequestParam Long projectId,
             @RequestParam Long environmentId) {
@@ -47,7 +47,7 @@ public class SecurityScanController {
     }
 
     @PostMapping("/scan/dast")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'QA_ENGINEER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')")
     public ResponseEntity<Map<String, Object>> launchDast(
             @RequestParam Long projectId,
             @RequestParam Long environmentId) {
@@ -61,7 +61,7 @@ public class SecurityScanController {
     }
 
     @PostMapping("/scan/sca")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'QA_ENGINEER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')")
     public ResponseEntity<Map<String, Object>> launchSca(
             @RequestParam Long projectId,
             @RequestParam Long environmentId) {
@@ -104,7 +104,7 @@ public class SecurityScanController {
     }
 
     @GetMapping("/report/{scanId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'QA_ENGINEER', 'DEVELOPER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'TESTEUR', 'OBSERVATEUR')")
     public ResponseEntity<ByteArrayResource> downloadReport(@PathVariable Long scanId) {
         SecurityScan scan = scanService.getScan(scanId);
         if (scan == null) return ResponseEntity.notFound().build();
@@ -123,7 +123,7 @@ public class SecurityScanController {
     }
 
     @GetMapping("/report/project/{projectId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'QA_ENGINEER', 'DEVELOPER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'TESTEUR', 'OBSERVATEUR')")
     public ResponseEntity<ByteArrayResource> downloadProjectReport(@PathVariable Long projectId) {
         projectAccessService.checkMembership(projectId);
         List<SecurityScan> scans = scanService.getScansForProject(projectId);

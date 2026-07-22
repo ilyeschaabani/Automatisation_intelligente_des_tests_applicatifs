@@ -17,7 +17,7 @@ public class ScriptRetryService {
     @Value("${ollama.url:http://localhost:11434/api/generate}")
     private String ollamaUrl;
 
-    @Value("${ollama.model:qwen3-coder-next:cloud}")
+    @Value("${ollama.model:nemotron-3-ultra:cloud}")
     private String model;
 
     @Value("${ollama.model.fallback:deepseek-coder:6.7b}")

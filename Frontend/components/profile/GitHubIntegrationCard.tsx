@@ -20,6 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { ScrollArea } from '@/components/ui/scroll-area'
 
 export async function apiFetch(
   path: string,
@@ -421,52 +422,54 @@ export function GitHubIntegrationCard({
                 ) : repos.repos.length === 0 ? (
                   <p className="text-sm text-muted-foreground">Aucun dépôt trouvé.</p>
                 ) : (
-                  <div className="rounded-md border border-border overflow-x-auto">
-                  <Table className="min-w-[680px]">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Nom</TableHead>
-                        <TableHead>Branches</TableHead>
-                        <TableHead>Propriétaire</TableHead>
-                        <TableHead>Visibilité</TableHead>
-                        <TableHead>URL</TableHead>
-                        <TableHead>Mis à jour</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {repos.repos.map((repo) => (
-                        <TableRow key={repo.key}>
-                          <TableCell className="font-medium">{repo.name}</TableCell>
-                          <TableCell className="max-w-[240px] truncate">
-                            {repo.branches.length ? repo.branches.join(', ') : '—'}
-                          </TableCell>
-                          <TableCell>{repo.owner}</TableCell>
-                          <TableCell>
-                            <Badge variant={repo.isPrivate ? 'outline' : 'secondary'}>
-                              {repo.isPrivate ? 'Privé' : 'Public'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="max-w-[220px] truncate">
-                            {repo.url ? (
-                              <a
-                                href={repo.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-primary hover:underline"
-                              >
-                                {repo.url}
-                              </a>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {repo.updatedAt ? safeFormatDate(repo.updatedAt) : '—'}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                  <div className="rounded-md border border-border">
+                    <ScrollArea className="h-[320px] overflow-x-auto">
+                      <Table className="min-w-[680px]">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Nom</TableHead>
+                            <TableHead>Branches</TableHead>
+                            <TableHead>Propriétaire</TableHead>
+                            <TableHead>Visibilité</TableHead>
+                            <TableHead>URL</TableHead>
+                            <TableHead>Mis à jour</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {repos.repos.map((repo) => (
+                            <TableRow key={repo.key}>
+                              <TableCell className="font-medium">{repo.name}</TableCell>
+                              <TableCell className="max-w-[240px] truncate">
+                                {repo.branches.length ? repo.branches.join(', ') : '—'}
+                              </TableCell>
+                              <TableCell>{repo.owner}</TableCell>
+                              <TableCell>
+                                <Badge variant={repo.isPrivate ? 'outline' : 'secondary'}>
+                                  {repo.isPrivate ? 'Privé' : 'Public'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="max-w-[220px] truncate">
+                                {repo.url ? (
+                                  <a
+                                    href={repo.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-primary hover:underline"
+                                  >
+                                    {repo.url}
+                                  </a>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                {repo.updatedAt ? safeFormatDate(repo.updatedAt) : '—'}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </ScrollArea>
                   </div>
                 )}
               </div>

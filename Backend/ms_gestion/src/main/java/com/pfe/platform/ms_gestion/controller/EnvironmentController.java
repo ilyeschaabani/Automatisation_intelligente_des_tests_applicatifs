@@ -19,7 +19,7 @@ public class EnvironmentController {
     private final EnvironmentService environmentService;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'QA_ENGINEER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')")
     public ResponseEntity<EnvironmentResponse> add(@PathVariable Long projectId,
                                                    @Valid @RequestBody CreateEnvironmentRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(environmentService.add(projectId, request));
@@ -37,7 +37,7 @@ public class EnvironmentController {
     }
 
     @PutMapping("/{envId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'QA_ENGINEER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')")
     public ResponseEntity<EnvironmentResponse> update(@PathVariable Long projectId,
                                                       @PathVariable Long envId,
                                                       @Valid @RequestBody CreateEnvironmentRequest request) {

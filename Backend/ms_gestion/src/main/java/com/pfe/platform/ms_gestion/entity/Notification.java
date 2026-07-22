@@ -50,6 +50,8 @@ public class Notification {
         TEST_FAILED,
         TEST_RESOLVED,
         REPORT_READY,
-        SCAN_COMPLETED
+        SCAN_COMPLETED,
+        PROJECT_MEMBER_ADDED,
+        EVALUATION_MEMBER_ADDED
     }
 }

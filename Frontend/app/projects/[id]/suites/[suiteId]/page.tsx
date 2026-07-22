@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, Plus, RefreshCw, Trash2, Wand2 } from 'lucide-react'
+import { ChevronLeft, Code2, Edit2, FolderGit2, Plus, RefreshCw, Trash2, Wand2 } from 'lucide-react'
 
 import { AuthGuard } from '@/components/auth-guard'
 import { Header } from '@/components/header'
@@ -39,6 +39,8 @@ import { testCaseService } from '@/services/testCases'
 import { llmService } from '@/services/llm'
 import { testSuiteService } from '@/services/suites'
 import { projectService } from '@/services/projects'
+import { memberService } from '@/services/members'
+import { useUserRoles } from '@/hooks/use-roles'
 import type {
   CreateTestCaseRequest,
   Environment,
@@ -106,8 +108,8 @@ type CaseFormState = {
 const emptyCaseForm: CaseFormState = {
   title: '',
   description: '',
-  mode: 'MANUAL',
-  type: 'WEB',
+  mode: 'AI',
+  type: 'UNIT',
   gitRepoUrl: '',
   springProfile: '',
   databaseType: '',
@@ -228,8 +230,21 @@ export default function SuiteTestCasesPage() {
   )
   const hasIds = Number.isFinite(projectId) && Number.isFinite(suiteId)
 
+  const { isAdmin } = useUserRoles()
+  const currentUserId = useMemo(() => {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+      if (token) {
+        const payload = JSON.parse(atob(token.split('.')[1]))
+        return typeof payload.userId === 'number' ? payload.userId : null
+      }
+    } catch { /* ignore */ }
+    return null
+  }, [])
+
   const [suite, setSuite] = useState<TestSuite | null>(null)
   const [project, setProject] = useState<Project | null>(null)
+  const [memberIds, setMemberIds] = useState<Set<number>>(new Set())
   const [suiteState, setSuiteState] = useState<LoadState>('loading')
   const [suiteError, setSuiteError] = useState<string | null>(null)
 
@@ -283,9 +298,8 @@ export default function SuiteTestCasesPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
-  const isUxSuiteType = (suite?.type as string) === 'FUNCTIONAL_WEB' || (suite?.type as string) === 'FUNCTIONAL_MOBILE'
-  const forceAiForSuite = suite?.type === 'UNIT' || suite?.type === 'INTEGRATION' || isUxSuiteType
-  const effectiveMode: CaseMode = forceAiForSuite ? 'AI' : formState.mode
+  const forceAiForSuite = false
+  const effectiveMode: CaseMode = formState.mode
   const showAiSection = effectiveMode === 'AI'
 
   const connectUrl = useMemo(() => {
@@ -334,9 +348,20 @@ export default function SuiteTestCasesPage() {
     }
   }
 
-  const loadAll = async () => {
-    await Promise.all([loadSuite(), loadCases(), loadProject()])
+  const loadMembers = async () => {
+    if (!hasIds) return
+    try {
+      const data = await memberService.getAll(projectId)
+      setMemberIds(new Set((Array.isArray(data) ? data : []).map((m: any) => m.userId)))
+    } catch { /* ignore */ }
   }
+
+  const loadAll = async () => {
+    await Promise.all([loadSuite(), loadCases(), loadProject(), loadMembers()])
+  }
+
+  const isMember = currentUserId != null && memberIds.has(currentUserId)
+  const canManage = isAdmin || (currentUserId != null && project?.createdBy === currentUserId) || isMember
 
   const fetchRepos = async () => {
     setGitHubRepos({ kind: 'loading' })
@@ -644,7 +669,7 @@ export default function SuiteTestCasesPage() {
     if (mode === 'AI') {
       if (aiState.generatedCode && aiState.generatedCode.trim()) {
         if (!aiState.codeValidated) {
-          setFormError('You must validate the generated script before saving.')
+          setFormError('Veuillez valider le script généré avant d\'enregistrer.')
           return null
         }
         payload.generatedCode = aiState.generatedCode
@@ -662,25 +687,32 @@ export default function SuiteTestCasesPage() {
         delete (payload as any).generatedCode
       }
       delete (payload as any).gitRepoUrl
-    } else {
-      const repoUrl = formState.gitRepoUrl.trim()
-      const scriptPath = formState.scriptPath.trim()
-
-      if (!repoUrl) {
-        setFormError('Repository URL is required for manual/import mode.')
+    } else if (mode === 'MANUAL') {
+      const code = aiState.generatedCode.trim()
+      if (!code) {
+        setFormError('Le code du test est requis en mode manuel.')
         return null
       }
-
-      if (!scriptPath) {
-        setFormError('Script path is required for manual/import mode.')
+      if (!aiState.codeValidated) {
+        setFormError('Veuillez valider le script avant d\'enregistrer.')
         return null
       }
-
+      payload.generatedCode = code
       payload.useAI = false
-      payload.gitRepoUrl = repoUrl
+      delete (payload as any).scriptPath
+      delete (payload as any).gitRepoUrl
+      delete (payload as any).descriptionAI
+    } else {
+      const scriptPath = formState.scriptPath.trim()
+      if (!scriptPath) {
+        setFormError('Le chemin du script est requis en mode dépôt.')
+        return null
+      }
+      payload.useAI = false
       payload.scriptPath = scriptPath
       delete (payload as any).generatedCode
       delete (payload as any).descriptionAI
+      delete (payload as any).gitRepoUrl
     }
 
     return payload
@@ -789,10 +821,12 @@ export default function SuiteTestCasesPage() {
                   <RefreshCw size={16} />
                   Actualiser
                 </Button>
-                <Button onClick={openCreate} className="gap-2">
-                  <Plus size={16} />
-                  Ajouter un cas de test
-                </Button>
+                {canManage && (
+                  <Button onClick={openCreate} className="gap-2">
+                    <Plus size={16} />
+                    Ajouter un cas de test
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -865,15 +899,16 @@ export default function SuiteTestCasesPage() {
                         </TableCell>
                         <TableCell>{formatDate(testCase.createdAt)}</TableCell>
                         <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button size="sm" variant="outline" onClick={() => openEdit(testCase)}>
-                              Modifier
-                            </Button>
-                            <Button size="sm" variant="destructive" onClick={() => openDelete(testCase)}>
-                              <Trash2 size={14} />
-                              Supprimer
-                            </Button>
-                          </div>
+                          {canManage && (
+                            <div className="flex items-center justify-end gap-1">
+                              <Button variant="ghost" size="sm" title="Modifier" onClick={() => openEdit(testCase)}>
+                                <Edit2 size={16} />
+                              </Button>
+                              <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10" title="Supprimer" onClick={() => openDelete(testCase)}>
+                                <Trash2 size={16} />
+                              </Button>
+                            </div>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -893,7 +928,7 @@ export default function SuiteTestCasesPage() {
         submitLabel="Créer le cas de test"
         isSubmitting={isSubmitting}
         disableSubmit={
-          showAiSection && Boolean(aiState.generatedCode && aiState.generatedCode.trim()) && !aiState.codeValidated
+          (formState.mode === 'AI' || formState.mode === 'MANUAL') && Boolean(aiState.generatedCode && aiState.generatedCode.trim()) && !aiState.codeValidated
         }
         size="xl"
         onSubmit={submitCreate}
@@ -908,7 +943,7 @@ export default function SuiteTestCasesPage() {
             required
           />
         </div>
-        {!forceAiForSuite ? (
+        {!forceAiForSuite && formState.mode !== 'MANUAL' ? (
           <div className="space-y-2">
             <Label htmlFor="case-description">Description</Label>
             <Textarea
@@ -922,27 +957,38 @@ export default function SuiteTestCasesPage() {
           </div>
         ) : null}
         <div className="space-y-2">
-          <Label>Mode</Label>
+          <Label>Mode de création</Label>
           {forceAiForSuite ? (
             <Input value="Générer avec l'IA" readOnly />
           ) : (
-            <Select
-              value={formState.mode}
-              onValueChange={(value) => {
-                const mode = value as CaseMode
-                setFormState((prev) => ({ ...prev, mode }))
-                if (mode !== 'AI') setAiState(emptyAICase)
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Sélectionner un mode" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="AI">Générer avec l'IA</SelectItem>
-                <SelectItem value="MANUAL">Écrire manuellement</SelectItem>
-                <SelectItem value="REPO">Importer depuis un dépôt</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { value: 'AI' as CaseMode, icon: Wand2, label: 'IA', desc: 'Génération intelligente' },
+                { value: 'MANUAL' as CaseMode, icon: Code2, label: 'Manuel', desc: 'Écrire le code' },
+                { value: 'REPO' as CaseMode, icon: FolderGit2, label: 'Dépôt', desc: 'Script existant' },
+              ]).map((opt) => {
+                const active = formState.mode === opt.value
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => {
+                      setFormState((prev) => ({ ...prev, mode: opt.value }))
+                      if (opt.value !== 'AI') setAiState(emptyAICase)
+                    }}
+                    className={`flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 transition-all text-center cursor-pointer ${
+                      active
+                        ? 'border-primary bg-primary/5 shadow-sm'
+                        : 'border-border hover:border-muted-foreground/30 hover:bg-muted/50'
+                    }`}
+                  >
+                    <opt.icon size={20} className={active ? 'text-primary' : 'text-muted-foreground'} />
+                    <span className={`text-sm font-semibold ${active ? 'text-primary' : 'text-foreground'}`}>{opt.label}</span>
+                    <span className="text-[11px] text-muted-foreground leading-tight">{opt.desc}</span>
+                  </button>
+                )
+              })}
+            </div>
           )}
         </div>
         {showAiSection ? (
@@ -1141,7 +1187,7 @@ export default function SuiteTestCasesPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="case-duration">Max duration (s)</Label>
+            <Label htmlFor="case-duration">Durée max (s)</Label>
             <Input
               id="case-duration"
               type="number"
@@ -1152,91 +1198,58 @@ export default function SuiteTestCasesPage() {
             />
           </div>
         </div>
-        {!showAiSection ? (
-          <>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label>GitHub repository</Label>
-                {gitHubConnection.kind === 'notConnected' && connectUrl ? (
-                  <Button variant="outline" size="sm" asChild>
-                    <a href={connectUrl}>Connect GitHub</a>
-                  </Button>
-                ) : null}
-              </div>
-
-              {gitHubConnection.kind === 'loading' ? (
-                <p className="text-sm text-muted-foreground">Checking GitHub connection...</p>
-              ) : null}
-
-              {gitHubConnection.kind === 'unauthorized' ? (
-                <p className="text-sm text-muted-foreground">Sign in to load GitHub repositories.</p>
-              ) : null}
-
-              {gitHubConnection.kind === 'error' ? (
-                <p className="text-sm text-destructive">{gitHubConnection.message}</p>
-              ) : null}
-
-              {gitHubConnection.kind === 'notConnected' ? (
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">
-                    Connect GitHub to select a repository. You can still paste a URL manually.
-                  </p>
-                  <Input
-                    value={formState.gitRepoUrl}
-                    onChange={(event) =>
-                      setFormState((prev) => ({ ...prev, gitRepoUrl: event.target.value }))
-                    }
-                    placeholder="https://github.com/org/repo"
-                  />
-                </div>
-              ) : null}
-
-              {gitHubConnection.kind === 'connected' ? (
-                <div className="space-y-2">
-                  {gitHubRepos.kind === 'loading' ? (
-                    <p className="text-sm text-muted-foreground">Chargement des dépôts…</p>
-                  ) : null}
-
-                  {gitHubRepos.kind === 'error' ? (
-                    <p className="text-sm text-destructive">{gitHubRepos.message}</p>
-                  ) : null}
-
-                  {gitHubRepos.kind === 'available' ? (
-                    <Select
-                      value={selectedRepoKey}
-                      onValueChange={(value) => setSelectedRepoKey(value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner un dépôt" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {gitHubRepos.repos.map((repo) => (
-                          <SelectItem key={repo.key} value={repo.key}>
-                            {repo.owner}/{repo.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : null}
-
-                  <Input value={formState.gitRepoUrl} readOnly placeholder="URL du dépôt" />
-                </div>
-              ) : null}
+        {formState.mode === 'MANUAL' ? (
+          <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <Code2 size={16} />
+              Mode manuel — collez ou écrivez votre code de test
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="case-script">Chemin du script à exécuter</Label>
+              <Label htmlFor="case-manual-code">Code du test <span className="text-destructive">*</span></Label>
+              <Textarea
+                id="case-manual-code"
+                className="font-mono text-sm bg-background min-h-[200px] resize-y"
+                value={aiState.generatedCode}
+                onChange={(e) => setAiState((prev) => ({ ...prev, generatedCode: e.target.value, codeValidated: false }))}
+                placeholder={"package suites.unit;\n\nimport org.testng.annotations.Test;\nimport static org.testng.Assert.*;\n\npublic class MyTest {\n    @Test\n    public void testExample() {\n        // votre code ici\n    }\n}"}
+                required
+              />
+            </div>
+            {aiState.generatedCode.trim() && (
+              <div className="flex gap-2">
+                <Button type="button" onClick={validateScript} disabled={aiState.codeValidated} size="sm">
+                  {aiState.codeValidated ? '✓ Validé' : 'Valider le script'}
+                </Button>
+                {aiState.codeValidated && (
+                  <span className="text-xs text-green-600 flex items-center gap-1">✓ Prêt à enregistrer</span>
+                )}
+              </div>
+            )}
+          </div>
+        ) : null}
+
+        {formState.mode === 'REPO' ? (
+          <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <FolderGit2 size={16} />
+              Mode dépôt — référencez un script de test existant dans votre repo
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="case-script">Chemin du script dans le dépôt <span className="text-destructive">*</span></Label>
               <Input
                 id="case-script"
                 value={formState.scriptPath}
                 onChange={(event) =>
                   setFormState((prev) => ({ ...prev, scriptPath: event.target.value }))
                 }
-                placeholder="tests/login.spec.ts"
+                placeholder="src/test/java/com/example/UserServiceTest.java"
                 required
               />
+              <p className="text-xs text-muted-foreground">
+                Chemin relatif depuis la racine du dépôt Git configuré sur l'environnement.
+              </p>
             </div>
-          </>
+          </div>
         ) : null}
 
         {suite?.type !== 'UNIT' ? (
@@ -1261,7 +1274,7 @@ export default function SuiteTestCasesPage() {
         submitLabel="Enregistrer"
         isSubmitting={isSubmitting}
         disableSubmit={
-          showAiSection && Boolean(aiState.generatedCode && aiState.generatedCode.trim()) && !aiState.codeValidated
+          (formState.mode === 'AI' || formState.mode === 'MANUAL') && Boolean(aiState.generatedCode && aiState.generatedCode.trim()) && !aiState.codeValidated
         }
         size="xl"
         onSubmit={submitEdit}
@@ -1286,27 +1299,38 @@ export default function SuiteTestCasesPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label>Mode</Label>
+          <Label>Mode de création</Label>
           {forceAiForSuite ? (
             <Input value="Générer avec l'IA" readOnly />
           ) : (
-            <Select
-              value={formState.mode}
-              onValueChange={(value) => {
-                const mode = value as CaseMode
-                setFormState((prev) => ({ ...prev, mode }))
-                if (mode !== 'AI') setAiState(emptyAICase)
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Sélectionner un mode" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="AI">Générer avec l'IA</SelectItem>
-                <SelectItem value="MANUAL">Écrire manuellement</SelectItem>
-                <SelectItem value="REPO">Importer depuis un dépôt</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { value: 'AI' as CaseMode, icon: Wand2, label: 'IA', desc: 'Génération intelligente' },
+                { value: 'MANUAL' as CaseMode, icon: Code2, label: 'Manuel', desc: 'Écrire le code' },
+                { value: 'REPO' as CaseMode, icon: FolderGit2, label: 'Dépôt', desc: 'Script existant' },
+              ]).map((opt) => {
+                const active = formState.mode === opt.value
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => {
+                      setFormState((prev) => ({ ...prev, mode: opt.value }))
+                      if (opt.value !== 'AI') setAiState(emptyAICase)
+                    }}
+                    className={`flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 transition-all text-center cursor-pointer ${
+                      active
+                        ? 'border-primary bg-primary/5 shadow-sm'
+                        : 'border-border hover:border-muted-foreground/30 hover:bg-muted/50'
+                    }`}
+                  >
+                    <opt.icon size={20} className={active ? 'text-primary' : 'text-muted-foreground'} />
+                    <span className={`text-sm font-semibold ${active ? 'text-primary' : 'text-foreground'}`}>{opt.label}</span>
+                    <span className="text-[11px] text-muted-foreground leading-tight">{opt.desc}</span>
+                  </button>
+                )
+              })}
+            </div>
           )}
         </div>
         {showAiSection ? (
@@ -1482,7 +1506,7 @@ export default function SuiteTestCasesPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="case-edit-duration">Max duration (s)</Label>
+            <Label htmlFor="case-edit-duration">Durée max (s)</Label>
             <Input
               id="case-edit-duration"
               type="number"
@@ -1492,90 +1516,58 @@ export default function SuiteTestCasesPage() {
             />
           </div>
         </div>
-        {!showAiSection ? (
-          <>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label>GitHub repository</Label>
-                {gitHubConnection.kind === 'notConnected' && connectUrl ? (
-                  <Button variant="outline" size="sm" asChild>
-                    <a href={connectUrl}>Connect GitHub</a>
-                  </Button>
-                ) : null}
-              </div>
-
-              {gitHubConnection.kind === 'loading' ? (
-                <p className="text-sm text-muted-foreground">Checking GitHub connection...</p>
-              ) : null}
-
-              {gitHubConnection.kind === 'unauthorized' ? (
-                <p className="text-sm text-muted-foreground">Sign in to load GitHub repositories.</p>
-              ) : null}
-
-              {gitHubConnection.kind === 'error' ? (
-                <p className="text-sm text-destructive">{gitHubConnection.message}</p>
-              ) : null}
-
-              {gitHubConnection.kind === 'notConnected' ? (
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">
-                    Connect GitHub to select a repository. You can still paste a URL manually.
-                  </p>
-                  <Input
-                    value={formState.gitRepoUrl}
-                    onChange={(event) =>
-                      setFormState((prev) => ({ ...prev, gitRepoUrl: event.target.value }))
-                    }
-                    placeholder="https://github.com/org/repo"
-                  />
-                </div>
-              ) : null}
-
-              {gitHubConnection.kind === 'connected' ? (
-                <div className="space-y-2">
-                  {gitHubRepos.kind === 'loading' ? (
-                    <p className="text-sm text-muted-foreground">Chargement des dépôts…</p>
-                  ) : null}
-
-                  {gitHubRepos.kind === 'error' ? (
-                    <p className="text-sm text-destructive">{gitHubRepos.message}</p>
-                  ) : null}
-
-                  {gitHubRepos.kind === 'available' ? (
-                    <Select
-                      value={selectedRepoKey}
-                      onValueChange={(value) => setSelectedRepoKey(value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner un dépôt" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {gitHubRepos.repos.map((repo) => (
-                          <SelectItem key={repo.key} value={repo.key}>
-                            {repo.owner}/{repo.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : null}
-
-                  <Input value={formState.gitRepoUrl} readOnly placeholder="URL du dépôt" />
-                </div>
-              ) : null}
+        {formState.mode === 'MANUAL' ? (
+          <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <Code2 size={16} />
+              Mode manuel — collez ou écrivez votre code de test
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="case-edit-script">Script path to execute</Label>
+              <Label htmlFor="case-edit-manual-code">Code du test <span className="text-destructive">*</span></Label>
+              <Textarea
+                id="case-edit-manual-code"
+                className="font-mono text-sm bg-background min-h-[200px] resize-y"
+                value={aiState.generatedCode}
+                onChange={(e) => setAiState((prev) => ({ ...prev, generatedCode: e.target.value, codeValidated: false }))}
+                placeholder={"package suites.unit;\n\nimport org.testng.annotations.Test;\n\npublic class MyTest {\n    @Test\n    public void testExample() {\n        // votre code ici\n    }\n}"}
+                required
+              />
+            </div>
+            {aiState.generatedCode.trim() && (
+              <div className="flex gap-2">
+                <Button type="button" onClick={validateScript} disabled={aiState.codeValidated} size="sm">
+                  {aiState.codeValidated ? '✓ Validé' : 'Valider le script'}
+                </Button>
+                {aiState.codeValidated && (
+                  <span className="text-xs text-green-600 flex items-center gap-1">✓ Prêt à enregistrer</span>
+                )}
+              </div>
+            )}
+          </div>
+        ) : null}
+
+        {formState.mode === 'REPO' ? (
+          <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <FolderGit2 size={16} />
+              Mode dépôt — référencez un script de test existant dans votre repo
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="case-edit-script">Chemin du script dans le dépôt <span className="text-destructive">*</span></Label>
               <Input
                 id="case-edit-script"
                 value={formState.scriptPath}
                 onChange={(event) =>
                   setFormState((prev) => ({ ...prev, scriptPath: event.target.value }))
                 }
+                placeholder="src/test/java/com/example/UserServiceTest.java"
                 required
               />
+              <p className="text-xs text-muted-foreground">
+                Chemin relatif depuis la racine du dépôt Git configuré sur l'environnement.
+              </p>
             </div>
-          </>
+          </div>
         ) : null}
 
         {suite?.type !== 'UNIT' ? (

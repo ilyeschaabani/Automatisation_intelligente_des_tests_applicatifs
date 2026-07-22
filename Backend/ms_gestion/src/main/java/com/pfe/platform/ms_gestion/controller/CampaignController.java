@@ -28,6 +28,14 @@ public class CampaignController {
         return ResponseEntity.status(HttpStatus.CREATED).body(campaignService.create(projectId, request));
     }
 
+    @PutMapping("/{campaignId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')")
+    public ResponseEntity<CampaignResponse> update(@PathVariable Long projectId,
+                                                   @PathVariable Long campaignId,
+                                                   @Valid @RequestBody CreateCampaignRequest request) {
+        return ResponseEntity.ok(campaignService.update(projectId, campaignId, request));
+    }
+
     @GetMapping
     public ResponseEntity<List<CampaignResponse>> list(@PathVariable Long projectId) {
         return ResponseEntity.ok(campaignService.listForProject(projectId));
@@ -54,7 +62,7 @@ public class CampaignController {
 
     /** Add one or more test cases to an existing campaign */
     @PostMapping("/{campaignId}/testcases")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'QA_ENGINEER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')")
     public ResponseEntity<?> addTestCases(
             @PathVariable Long projectId,
             @PathVariable Long campaignId,
@@ -69,7 +77,7 @@ public class CampaignController {
 
     /** Remove a test case from an existing campaign */
     @DeleteMapping("/{campaignId}/testcases/{testCaseId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'QA_ENGINEER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')")
     public ResponseEntity<?> removeTestCase(
             @PathVariable Long projectId,
             @PathVariable Long campaignId,

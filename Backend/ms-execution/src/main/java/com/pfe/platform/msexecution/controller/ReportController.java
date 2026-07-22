@@ -45,7 +45,7 @@ public class ReportController {
     }
 
     @PostMapping("/campaign/{campaignId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'QA_ENGINEER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')")
     public Report generateAndStore(@PathVariable Long campaignId, @RequestHeader(name = "Authorization", required = false) String authorization) {
         checkCampaignAccess(campaignId);
         byte[] pdf = reportService.generateCampaignReport(campaignId, authorization);

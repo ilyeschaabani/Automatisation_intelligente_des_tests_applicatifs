@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Bell, Check, CheckCheck, ExternalLink } from 'lucide-react'
+import { Bell, Check, CheckCheck } from 'lucide-react'
 import {
   Popover,
   PopoverContent,
@@ -111,7 +111,7 @@ export function NotificationBell({ userId }: { userId: number | null }) {
             </Button>
           )}
         </div>
-        <ScrollArea className="max-h-[400px]">
+        <ScrollArea className="h-[400px]">
           {notifications.length === 0 ? (
             <div className="py-12 text-center text-sm text-muted-foreground">
               Aucune notification

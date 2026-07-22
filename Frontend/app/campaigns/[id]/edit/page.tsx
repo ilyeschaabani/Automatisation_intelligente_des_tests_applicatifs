@@ -1,6 +1,6 @@
 'use client'
 
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 
 import { Header } from '@/components/header'
 import { Sidebar } from '@/components/sidebar'
@@ -8,8 +8,11 @@ import { CampaignForm } from '@/app/campaigns/_components/campaign-form'
 
 export default function EditCampaignPage() {
   const params = useParams<{ id?: string | string[] }>()
+  const searchParams = useSearchParams()
   const raw = Array.isArray(params?.id) ? params?.id[0] : params?.id
   const campaignId = raw ? Number(raw) : NaN
+  const projectIdParam = searchParams.get('projectId')
+  const projectId = projectIdParam ? Number(projectIdParam) : undefined
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -19,17 +22,10 @@ export default function EditCampaignPage() {
         <Header />
 
         <div className="p-6 max-w-3xl">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-foreground">Modifier la campagne</h1>
-            <p className="text-muted-foreground mt-1">
-              Mettez à jour les champs et les cas de test attachés
-            </p>
-          </div>
-
           {Number.isFinite(campaignId) ? (
-            <CampaignForm mode="edit" campaignId={campaignId} />
+            <CampaignForm mode="edit" campaignId={campaignId} initialProjectId={projectId} />
           ) : (
-            <p className="text-sm text-muted-foreground">Invalid campaign id.</p>
+            <p className="text-sm text-muted-foreground">ID de campagne invalide.</p>
           )}
         </div>
       </main>

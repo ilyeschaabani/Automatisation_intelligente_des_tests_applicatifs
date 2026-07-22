@@ -19,7 +19,7 @@ public class TestCaseController {
     private final TestCaseService testCaseService;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'QA_ENGINEER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')")
     public ResponseEntity<TestCaseResponse> add(@PathVariable Long suiteId,
                                                 @Valid @RequestBody CreateTestCaseRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(testCaseService.add(suiteId, request));
@@ -37,7 +37,7 @@ public class TestCaseController {
     }
 
     @PutMapping("/{caseId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'QA_ENGINEER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')")
     public ResponseEntity<TestCaseResponse> update(@PathVariable Long suiteId,
                                                    @PathVariable Long caseId,
                                                    @Valid @RequestBody CreateTestCaseRequest request) {

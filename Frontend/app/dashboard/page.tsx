@@ -471,11 +471,6 @@ export default function DashboardPage() {
                     id={campaign.id}
                     projectId={campaign.projectId}
                     name={campaign.name}
-                    type={
-                      campaign.triggerMode === 'CI' ? 'Regression'
-                        : campaign.triggerMode === 'SCHEDULED' ? 'Functional'
-                        : 'API'
-                    }
                     status={
                       (campaign.status || '').toUpperCase() === 'RUNNING' ? 'Running'
                         : (campaign.status || '').toUpperCase() === 'FINISHED' ? 'Completed'

@@ -20,8 +20,6 @@ import { toast } from '@/hooks/use-toast'
 import { getProjects, listCampaigns, listExecutionResults, type Project, type TestCampaignDto } from '@/lib/api-client'
 
 type CardStatus = 'Running' | 'Completed' | 'Failed' | 'Scheduled'
-type CardType = 'Functional' | 'API' | 'Regression'
-
 type CampaignStats = {
   tests: number
   passed: number
@@ -36,10 +34,6 @@ function mapStatus(status: unknown): CardStatus {
   if (value === 'FINISHED_WITH_ERRORS') return 'Failed'
   if (value === 'PENDING') return 'Scheduled'
   return 'Scheduled'
-}
-
-function mapType(_campaign: TestCampaignDto): CardType {
-  return 'Functional'
 }
 
 function formatLastRun(value: string | null | undefined): string {
@@ -244,7 +238,6 @@ export default function CampaignsPage() {
                   key={campaign.id}
                   id={campaign.id}
                   name={String(campaign.name ?? 'Campagne sans titre')}
-                  type={mapType(campaign)}
                   status={mapStatus(campaign.status)}
                   progress={0}
                   projectId={campaign.projectId}

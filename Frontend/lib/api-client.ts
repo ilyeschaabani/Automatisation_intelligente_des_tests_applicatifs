@@ -130,6 +130,7 @@ export type UxEvaluationDto = {
   generatedScript?: string | null
   durationMs?: number | null
   errorMessage?: string | null
+  ownerUserId?: number | null
   createdAt: string
   executedAt?: string | null
   navigationSteps?: UxNavigationStepDto[]
@@ -216,6 +217,15 @@ export async function executeFunctionalEvaluation(id: number): Promise<void> {
   const token = getAccessToken()
   const response = await fetch(`/api/functional-evaluation/${encodeURIComponent(String(id))}/execute`, {
     method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!response.ok) throw new Error(await readReadableError(response))
+}
+
+export async function deleteFunctionalEvaluation(id: number): Promise<void> {
+  const token = getAccessToken()
+  const response = await fetch(`/api/functional-evaluation/${encodeURIComponent(String(id))}`, {
+    method: 'DELETE',
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!response.ok) throw new Error(await readReadableError(response))
@@ -957,6 +967,22 @@ export async function createCampaign(input: TestCampaignCreateRequest): Promise<
         ? normalizeEnum(input.triggerMode, ['MANUAL', 'SCHEDULED', 'CI'] as const)
         : 'MANUAL',
       testCaseIds: Array.isArray(input.testCaseIds) ? input.testCaseIds : [],
+    }),
+  })
+}
+
+export async function updateCampaign(projectId: number, campaignId: number, input: Omit<TestCampaignCreateRequest, 'projectId'>): Promise<TestCampaignDto> {
+  const query = new URLSearchParams({ projectId: String(projectId) })
+  return requestJson<TestCampaignDto>(`/api/campaigns/${campaignId}?${query.toString()}`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      name: input.name,
+      environmentId: input.environmentId,
+      appVersion: input.appVersion ?? null,
+      triggerMode: input.triggerMode
+        ? normalizeEnum(input.triggerMode, ['MANUAL', 'SCHEDULED', 'CI'] as const)
+        : 'MANUAL',
     }),
   })
 }

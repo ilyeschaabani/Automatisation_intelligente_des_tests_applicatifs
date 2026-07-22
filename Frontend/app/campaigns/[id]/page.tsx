@@ -106,13 +106,11 @@ import type { Environment } from '@/types/ms-gestion'
 
 import { toast } from '@/hooks/use-toast'
 
-type CampaignType = 'Functional' | 'API' | 'Regression'
 type CampaignStatus = 'Running' | 'Completed' | 'Failed' | 'Scheduled'
 
 type Campaign = {
   id: string
   name: string
-  type: CampaignType
   status: CampaignStatus
   startedAt?: string | null
   finishedAt?: string | null
@@ -190,7 +188,7 @@ function mapBackendCampaign(dto: TestCampaignDto): Campaign {
   return {
     id: String(dto.id),
     name: dto.name,
-    type: 'Functional',
+
     status: mapBackendStatus(dto.status),
     startedAt: dto.startedAt ?? null,
     finishedAt: dto.finishedAt ?? null,
@@ -236,16 +234,9 @@ const statusStyle: Record<CampaignStatus, string> = {
   Scheduled: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-400',
 }
 
-const typeStyle: Record<CampaignType, string> = {
-  Functional: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-400',
-  API: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-400',
-  Regression: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-950 dark:text-cyan-400',
-}
-
 const allCampaignsSeed: Omit<Campaign, 'id'>[] = [
   {
     name: 'Banking Mobile App - v2.5',
-    type: 'Functional',
     status: 'Running',
     progress: 65,
     tests: 145,
@@ -261,7 +252,6 @@ const allCampaignsSeed: Omit<Campaign, 'id'>[] = [
   },
   {
     name: 'Payment Gateway API Tests',
-    type: 'API',
     status: 'Completed',
     progress: 100,
     tests: 89,
@@ -277,7 +267,6 @@ const allCampaignsSeed: Omit<Campaign, 'id'>[] = [
   },
   {
     name: 'Regression Suite - Production',
-    type: 'Regression',
     status: 'Scheduled',
     progress: 0,
     tests: 234,
@@ -293,7 +282,7 @@ const allCampaignsSeed: Omit<Campaign, 'id'>[] = [
   },
   {
     name: 'Core Banking Features',
-    type: 'Functional',
+
     status: 'Completed',
     progress: 100,
     tests: 112,
@@ -309,7 +298,7 @@ const allCampaignsSeed: Omit<Campaign, 'id'>[] = [
   },
   {
     name: 'Authentication Module Tests',
-    type: 'API',
+
     status: 'Running',
     progress: 40,
     tests: 76,
@@ -325,7 +314,7 @@ const allCampaignsSeed: Omit<Campaign, 'id'>[] = [
   },
   {
     name: 'UI Components - v3.0',
-    type: 'Functional',
+
     status: 'Failed',
     progress: 85,
     tests: 98,
@@ -341,7 +330,7 @@ const allCampaignsSeed: Omit<Campaign, 'id'>[] = [
   },
   {
     name: 'Database Integration Tests',
-    type: 'Regression',
+
     status: 'Completed',
     progress: 100,
     tests: 167,
@@ -357,7 +346,7 @@ const allCampaignsSeed: Omit<Campaign, 'id'>[] = [
   },
   {
     name: 'Security & Compliance Checks',
-    type: 'API',
+
     status: 'Running',
     progress: 72,
     tests: 56,
@@ -398,29 +387,7 @@ function formatWhen(iso: string): string {
   return date.toLocaleString()
 }
 
-function seedTestsFor(campaign: Campaign): CampaignTest[] {
-  if (campaign.type === 'API') {
-    return [
-      { id: 'API-001', name: 'Auth token refresh', area: 'Auth', kind: 'API' },
-      { id: 'API-002', name: 'Payments - create transaction', area: 'Payments', kind: 'API' },
-      { id: 'API-003', name: 'Payments - refund', area: 'Payments', kind: 'API' },
-      { id: 'API-004', name: 'Rate limiting', area: 'Gateway', kind: 'API' },
-      { id: 'API-005', name: 'Audit logs', area: 'Compliance', kind: 'API' },
-      { id: 'API-006', name: 'Permissions matrix', area: 'RBAC', kind: 'API' },
-    ]
-  }
-
-  if (campaign.type === 'Regression') {
-    return [
-      { id: 'REG-001', name: 'Smoke - critical flows', area: 'Platform', kind: 'UI' },
-      { id: 'REG-002', name: 'DB migration checks', area: 'Database', kind: 'DB' },
-      { id: 'REG-003', name: 'Data consistency', area: 'Database', kind: 'DB' },
-      { id: 'REG-004', name: 'Login + session stability', area: 'Auth', kind: 'UI' },
-      { id: 'REG-005', name: 'Reporting exports', area: 'Reports', kind: 'UI' },
-      { id: 'REG-006', name: 'API contract snapshot', area: 'Gateway', kind: 'API' },
-    ]
-  }
-
+function seedTestsFor(_campaign: Campaign): CampaignTest[] {
   return [
     { id: 'UI-001', name: 'Login - valid credentials', area: 'Auth', kind: 'UI' },
     { id: 'UI-002', name: 'Login - invalid credentials', area: 'Auth', kind: 'UI' },
@@ -983,39 +950,6 @@ export default function CampaignDetailsPage() {
     }
   }, [campaignNumericId])
 
-  // Auto-download report when a backend execution finishes (generates PDF on demand).
-  useEffect(() => {
-    if (!campaignNumericId) return
-    if (!latestExecution) return
-    if (latestExecution.status !== 'FINISHED') return
-    // Avoid re-downloading for the same execution
-    if (autoDownloadedExecutionId === latestExecution.id) return
-
-    let cancelled = false
-    const download = async () => {
-      try {
-        const blob = await downloadCampaignReport(campaignNumericId)
-        if (cancelled) return
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `campaign-${campaignNumericId}-report.pdf`
-        document.body.appendChild(a)
-        a.click()
-        a.remove()
-        window.URL.revokeObjectURL(url)
-        setAutoDownloadedExecutionId(latestExecution.id)
-        toast({ title: 'Report downloaded', description: 'Campaign report downloaded automatically.' })
-      } catch (e) {
-        console.warn('Failed to auto-download report', e)
-      }
-    }
-
-    void download()
-    return () => {
-      cancelled = true
-    }
-  }, [latestExecution, campaignNumericId, autoDownloadedExecutionId])
 
   useEffect(() => {
     return () => {}
@@ -1199,6 +1133,12 @@ export default function CampaignDetailsPage() {
     } catch { setAvailableTestCases([]) }
     finally { setAvailableLoading(false) }
   }
+
+  useEffect(() => {
+    if (campaignNumericId && campaign?.projectId) {
+      void loadAvailableTestCases()
+    }
+  }, [campaignNumericId, campaign?.projectId])
 
   // ── Add test cases to campaign ──
   const handleAddTestCases = async () => {
@@ -1443,9 +1383,6 @@ export default function CampaignDetailsPage() {
                   <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0 space-y-4">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="outline" className={typeStyle[campaign.type]}>
-                          {campaign.type}
-                        </Badge>
                         <Badge variant="outline" className={statusStyle[campaign.status]}>
                           {campaign.status === 'Running' && (
                             <span className="inline-block size-1.5 bg-current rounded-full mr-1 animate-pulse" />
@@ -1559,133 +1496,47 @@ export default function CampaignDetailsPage() {
                       ) : null}
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2 lg:w-[360px]">
-                      <div className="rounded-2xl border border-border/70 bg-card/80 p-4 backdrop-blur">
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Dernière exécution</p>
-                        <p className="mt-2 text-sm font-medium text-foreground">{campaign.lastRun}</p>
+                    <div className="flex flex-col gap-3 lg:w-[360px]">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-2xl border border-border/70 bg-card/80 p-4 backdrop-blur">
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">Dernière exécution</p>
+                          <p className="mt-2 text-sm font-medium text-foreground">{campaign.lastRun}</p>
+                        </div>
+                        <div className="rounded-2xl border border-border/70 bg-card/80 p-4 backdrop-blur">
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">Branche</p>
+                          <p className="mt-2 text-sm font-medium text-foreground truncate">{campaign.branch}</p>
+                        </div>
+                        <div className="rounded-2xl border border-border/70 bg-card/80 p-4 backdrop-blur">
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">Environnement</p>
+                          <p className="mt-2 text-sm font-medium text-foreground truncate">{campaign.environment}</p>
+                        </div>
+                        <div className="rounded-2xl border border-border/70 bg-card/80 p-4 backdrop-blur">
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">Version</p>
+                          <p className="mt-2 text-sm font-medium text-foreground truncate">{campaign.appVersion}</p>
+                        </div>
                       </div>
-                      <div className="rounded-2xl border border-border/70 bg-card/80 p-4 backdrop-blur">
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Branche</p>
-                        <p className="mt-2 text-sm font-medium text-foreground truncate">{campaign.branch}</p>
-                      </div>
-                      <div className="rounded-2xl border border-border/70 bg-card/80 p-4 backdrop-blur">
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Environnement</p>
-                        <p className="mt-2 text-sm font-medium text-foreground truncate">{campaign.environment}</p>
-                      </div>
-                      <div className="rounded-2xl border border-border/70 bg-card/80 p-4 backdrop-blur">
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Version</p>
-                        <p className="mt-2 text-sm font-medium text-foreground truncate">{campaign.appVersion}</p>
-                      </div>
-                      <div className="rounded-2xl border border-border/70 bg-white p-4">
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Rapport</p>
-                        {reportsLoading ? (
-                          <p className="mt-2 text-sm text-muted-foreground">Chargement des rapports…</p>
-                        ) : reports.length > 0 ? (
-                          <div className="mt-2 flex flex-col gap-2">
-                            <Select
-                              value={String(selectedReportId ?? '')}
-                              onValueChange={(v) => setSelectedReportId(v ? Number(v) : null)}
-                            >
-                              <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Select report" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {reports.map((r) => (
-                                  <SelectItem key={r.id} value={String(r.id)}>
-                                    {r.filename} — {new Date(r.generatedAt).toLocaleString()}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Button
-                              size="sm"
-                              onClick={async () => {
-                                if (!campaignNumericId) return
-                                try {
-                                  const blob = selectedReportId
-                                    ? await downloadReportById(selectedReportId)
-                                    : await downloadCampaignReport(campaignNumericId)
-                                  const url = window.URL.createObjectURL(blob)
-                                  const a = document.createElement('a')
-                                  a.href = url
-                                  a.download = selectedReportId
-                                    ? reports.find(r => r.id === selectedReportId)?.filename ?? `campaign-${campaignNumericId}-report.pdf`
-                                    : `campaign-${campaignNumericId}-report.pdf`
-                                  document.body.appendChild(a)
-                                  a.click()
-                                  a.remove()
-                                  window.URL.revokeObjectURL(url)
-                                  toast({ title: 'Report downloaded', description: 'Report downloaded.' })
-                                } catch (e) {
-                                  toast({ title: 'Error', description: (e as Error).message ?? String(e), variant: 'destructive' })
-                                }
-                              }}
-                            >
-                              Download
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="mt-2 flex flex-col gap-2">
-                            <p className="text-sm text-muted-foreground">Aucun rapport enregistré. Vous pouvez télécharger le dernier rapport.</p>
-                            <Button
-                              size="sm"
-                              onClick={async () => {
-                                if (!campaignNumericId) return
-                                try {
-                                  const blob = await downloadCampaignReport(campaignNumericId)
-                                  const url = window.URL.createObjectURL(blob)
-                                  const a = document.createElement('a')
-                                  a.href = url
-                                  a.download = `campaign-${campaignNumericId}-report.pdf`
-                                  document.body.appendChild(a)
-                                  a.click()
-                                  a.remove()
-                                  window.URL.revokeObjectURL(url)
-                                  toast({ title: 'Report downloaded', description: 'Report downloaded.' })
-                                } catch (e) {
-                                  toast({ title: 'Error', description: (e as Error).message ?? String(e), variant: 'destructive' })
-                                }
-                              }}
-                            >
-                              Download
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-
+                      {isExecutionRunning || campaign.status === 'Running' ? (
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          className="w-full gap-2"
+                          onClick={() => void handleStopCampaign()}
+                        >
+                          <Square className="h-4 w-4" />
+                          Arrêter la campagne
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          className="w-full gap-2"
+                          onClick={() => void runCampaign()}
+                          disabled={runSubmitting}
+                        >
+                          <Play className="h-4 w-4" />
+                          {runButtonLabel}
+                        </Button>
+                      )}
                     </div>
-                  </div>
-
-                  <div className="mt-8 flex flex-col sm:flex-row sm:items-center gap-3">
-                    <Button asChild variant="outline" size="sm" className="gap-2">
-                      <Link href={`/executions?campaignId=${campaign.id}`}>
-                        <Clock className="h-4 w-4" />
-                        Voir les exécutions
-                      </Link>
-                    </Button>
-                    {isExecutionRunning || campaign.status === 'Running' ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="destructive"
-                        className="gap-2"
-                        onClick={() => void handleStopCampaign()}
-                      >
-                        <Square className="h-4 w-4" />
-                        Arrêter la campagne
-                      </Button>
-                    ) : (
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="gap-2"
-                        onClick={() => void runCampaign()}
-                        disabled={runSubmitting}
-                      >
-                        <Play className="h-4 w-4" />
-                        {runButtonLabel}
-                      </Button>
-                    )}
                   </div>
 
                   <Dialog open={runDialogOpen} onOpenChange={setRunDialogOpen}>
@@ -2135,7 +1986,7 @@ export default function CampaignDetailsPage() {
                           </Table>
                         </div>
                       ) : (
-                        <p className="text-sm text-muted-foreground">Aucun résultat pour l'instant. Lancez la campagne pour voir les résultats détaillés.</p>
+                        <p className="text-sm text-muted-foreground">Aucun résultat pour l'instant. Lancez la campagne pour voir les résultats.</p>
                       )}
 
                       {/* ── Add test cases section ── */}
@@ -2155,9 +2006,7 @@ export default function CampaignDetailsPage() {
 
                           {availableTestCases.length === 0 && !availableLoading ? (
                             <p className="text-xs text-muted-foreground">
-                              {availableTestCases.length === 0
-                                ? 'Tous les tests du projet sont déjà dans cette campagne. Cliquez Rafraîchir pour vérifier.'
-                                : 'Aucun test disponible.'}
+                              Tous les tests du projet sont déjà dans cette campagne.
                             </p>
                           ) : availableLoading ? (
                             <p className="text-xs text-muted-foreground">Chargement des tests disponibles...</p>
@@ -2227,84 +2076,12 @@ export default function CampaignDetailsPage() {
                 <div className="space-y-6">
                   <Card>
                     <CardHeader>
-                      <CardTitle>Détails</CardTitle>
-                      <CardDescription>Données de la campagne en un coup d'œil.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="rounded-2xl border border-border/70 overflow-hidden bg-card/60">
-                        <Table>
-                          <TableBody>
-                            <TableRow>
-                              <TableCell className="text-muted-foreground">Projet</TableCell>
-                              <TableCell className="text-right font-medium">
-                                {projectName ?? (campaign.projectId ? `Projet #${campaign.projectId}` : '—')}
-                              </TableCell>
-                            </TableRow>
-                            <TableRow>
-                              <TableCell className="text-muted-foreground">Environnement</TableCell>
-                              <TableCell className="text-right font-medium">{campaign.environment}</TableCell>
-                            </TableRow>
-                            <TableRow>
-                              <TableCell className="text-muted-foreground">Propriétaire</TableCell>
-                              <TableCell className="text-right">
-                                <span className="inline-flex items-center justify-end gap-2">
-                                  {ownerMember?.imageUrl ? (
-                                    <img src={ownerMember.imageUrl} alt="" className="h-5 w-5 rounded-full object-cover" />
-                                  ) : ownerMember ? (
-                                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-[9px] font-bold text-primary-foreground">
-                                      {memberInitials(ownerMember)}
-                                    </span>
-                                  ) : null}
-                                  <span className="font-medium">{membersLoading ? '…' : ownerName}</span>
-                                </span>
-                              </TableCell>
-                            </TableRow>
-                            <TableRow>
-                              <TableCell className="text-muted-foreground">Statut</TableCell>
-                              <TableCell className="text-right">
-                                <Badge variant="outline" className={statusStyle[campaign.status]}>
-                                  {campaign.status}
-                                </Badge>
-                              </TableCell>
-                            </TableRow>
-                            <TableRow>
-                              <TableCell className="text-muted-foreground">Branche</TableCell>
-                              <TableCell className="text-right font-medium">{campaign.branch}</TableCell>
-                            </TableRow>
-                            <TableRow>
-                              <TableCell className="text-muted-foreground">Version de l'app</TableCell>
-                              <TableCell className="text-right font-medium">{campaign.appVersion}</TableCell>
-                            </TableRow>
-                            <TableRow>
-                              <TableCell className="text-muted-foreground">Mode de déclenchement</TableCell>
-                              <TableCell className="text-right font-medium">{campaign.triggerMode}</TableCell>
-                            </TableRow>
-                            <TableRow>
-                              <TableCell className="text-muted-foreground">Démarré le</TableCell>
-                              <TableCell className="text-right font-medium">{campaign.startedAt ? formatWhen(campaign.startedAt) : '—'}</TableCell>
-                            </TableRow>
-                            <TableRow>
-                              <TableCell className="text-muted-foreground">Terminé le</TableCell>
-                              <TableCell className="text-right font-medium">{campaign.finishedAt ? formatWhen(campaign.finishedAt) : '—'}</TableCell>
-                            </TableRow>
-                            <TableRow>
-                              <TableCell className="text-muted-foreground">ID campagne</TableCell>
-                              <TableCell className="text-right font-mono text-xs text-muted-foreground">#{campaign.id}</TableCell>
-                            </TableRow>
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <Users className="h-4 w-4" />
-                        Project members
+                        Membres du projet
                       </CardTitle>
                       <CardDescription>
-                        Only the project owner can create campaigns. Here is the project team.
+                        Équipe associée à ce projet.
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -2313,7 +2090,7 @@ export default function CampaignDetailsPage() {
                           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                         </div>
                       ) : members.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No members found for this project.</p>
+                        <p className="text-sm text-muted-foreground">Aucun membre trouvé pour ce projet.</p>
                       ) : (
                         <div className="space-y-1.5">
                           {[...members]
@@ -2352,68 +2129,37 @@ export default function CampaignDetailsPage() {
 
                   <Card>
                     <CardHeader>
-                      <CardTitle>Dernier résultat d'exécution</CardTitle>
-                      <CardDescription>Résultat renvoyé par le backend ms-execution.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {latestExecution ? (
-                        <>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div className="rounded-lg border border-border bg-card p-3">
-                              <p className="text-xs uppercase tracking-wide text-muted-foreground">ID exécution</p>
-                              <p className="mt-1 text-sm font-medium text-foreground">#{latestExecution.id}</p>
-                            </div>
-                            <div className="rounded-lg border border-border bg-card p-3">
-                              <p className="text-xs uppercase tracking-wide text-muted-foreground">Statut</p>
-                              <p className="mt-1 text-sm font-medium text-foreground">{latestExecution.status}</p>
-                            </div>
-                            <div className="rounded-lg border border-border bg-card p-3">
-                              <p className="text-xs uppercase tracking-wide text-muted-foreground">Type d'exécution</p>
-                              <p className="mt-1 text-sm font-medium text-foreground">{latestExecution.executionType}</p>
-                            </div>
-                            <div className="rounded-lg border border-border bg-card p-3">
-                              <p className="text-xs uppercase tracking-wide text-muted-foreground">ID campagne</p>
-                              <p className="mt-1 text-sm font-medium text-foreground">{latestExecution.campaignId}</p>
-                            </div>
-                          </div>
-
-                          <div className="rounded-lg border border-border bg-card p-3">
-                            <p className="text-xs uppercase tracking-wide text-muted-foreground">Date d'exécution</p>
-                            <p className="mt-1 text-sm font-medium text-foreground">{formatWhen(latestExecution.executionDate)}</p>
-                            <p className="mt-2 text-xs text-muted-foreground">
-                              Numéro d'exécution : {latestExecution.executionNumber ?? '—'}
-                            </p>
-                          </div>
-                        </>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">Aucun résultat d'exécution renvoyé pour l'instant.</p>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Santé de l'exécution</CardTitle>
-                      <CardDescription>Indicateurs de surveillance simples.</CardDescription>
+                      <CardTitle className="flex items-center gap-2">
+                        <ShieldCheck className="h-4 w-4" />
+                        Santé de l'exécution
+                      </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-secondary/80 flex items-center justify-center text-primary shadow-sm">
-                          <ShieldCheck className="h-5 w-5" />
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-foreground">Seuil de réussite</p>
-                          <p className="text-sm text-muted-foreground">Taux de réussite cible : 95 %</p>
-                        </div>
-                      </div>
-
                       <div>
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm text-muted-foreground">Actuel</span>
+                          <span className="text-sm text-muted-foreground">Taux de réussite</span>
                           <span className="text-sm font-semibold text-foreground">{formatPercent(passRate)}</span>
                         </div>
                         <Progress value={passRate} className="h-2" />
+                        <p className="text-xs text-muted-foreground mt-1.5">Objectif : 95 %</p>
                       </div>
+                      {latestExecution && (
+                        <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground">Dernière exécution</span>
+                            <Badge variant="outline" className={
+                              latestExecution.status === 'FINISHED'
+                                ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400'
+                                : latestExecution.status === 'ERROR'
+                                  ? 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-400'
+                                  : ''
+                            }>
+                              {latestExecution.status}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{formatWhen(latestExecution.executionDate)}</p>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </div>

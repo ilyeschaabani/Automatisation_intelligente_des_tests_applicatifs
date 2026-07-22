@@ -7,4 +7,5 @@ import java.util.List;
 
 public interface UserRefRepository extends JpaRepository<UserRef, Long> {
     List<UserRef> findByIdIn(List<Long> ids);
+    java.util.Optional<UserRef> findByEmail(String email);
 }

@@ -1,11 +1,13 @@
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Sidebar } from '@/components/sidebar'
 import { Header } from '@/components/header'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Download } from 'lucide-react'
 import { downloadCampaignReport, downloadReportById, listAllReports, listCampaigns, type TestCampaignDto } from '@/lib/api-client'
 import { toast } from '@/hooks/use-toast'
 
@@ -13,6 +15,7 @@ export default function ReportsPage() {
   const [reports, setReports] = useState<{ id: number; campaignId: number; filename: string; generatedAt: string }[]>([])
   const [loading, setLoading] = useState(false)
   const [campaignNames, setCampaignNames] = useState<Record<number, string>>({})
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -48,6 +51,16 @@ export default function ReportsPage() {
     }
   }, [])
 
+  const filteredReports = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return reports
+    return reports.filter((r) => {
+      const name = (campaignNames[r.campaignId] ?? '').toLowerCase()
+      const idStr = String(r.campaignId)
+      return name.includes(q) || idStr.includes(q)
+    })
+  }, [reports, campaignNames, search])
+
   const downloadReport = async (r: { id: number; campaignId: number; filename?: string }) => {
     try {
       let blob: Blob
@@ -82,15 +95,24 @@ export default function ReportsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Rapports générés</CardTitle>
-              <CardDescription>Tous les rapports de campagne générés (si disponibles côté backend).</CardDescription>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <CardTitle>Rapports générés</CardTitle>
+                  <CardDescription>Tous les rapports de campagne générés.</CardDescription>
+                </div>
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Rechercher par nom ou ID campagne"
+                  className="max-w-xs"
+                />
+              </div>
             </CardHeader>
             <CardContent>
               <div className="overflow-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>ID</TableHead>
                       <TableHead>Campagne</TableHead>
                       <TableHead>Nom du fichier</TableHead>
                       <TableHead className="text-right">Généré le</TableHead>
@@ -100,21 +122,24 @@ export default function ReportsPage() {
                   <TableBody>
                     {loading ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="py-4 text-center text-muted-foreground">Chargement des rapports…</TableCell>
+                        <TableCell colSpan={4} className="py-4 text-center text-muted-foreground">Chargement des rapports…</TableCell>
                       </TableRow>
-                    ) : reports.length === 0 ? (
+                    ) : filteredReports.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="py-4 text-center text-muted-foreground">Aucun rapport disponible</TableCell>
+                        <TableCell colSpan={4} className="py-4 text-center text-muted-foreground">
+                          {search ? 'Aucun rapport correspondant à la recherche.' : 'Aucun rapport disponible.'}
+                        </TableCell>
                       </TableRow>
                     ) : (
-                      reports.map((r) => (
+                      filteredReports.map((r) => (
                         <TableRow key={r.id}>
-                          <TableCell className="font-medium">{r.id}</TableCell>
-                          <TableCell>{campaignNames[r.campaignId] ?? `Campagne #${r.campaignId}`}</TableCell>
+                          <TableCell className="font-medium">{campaignNames[r.campaignId] ?? `Campagne #${r.campaignId}`}</TableCell>
                           <TableCell>{r.filename}</TableCell>
                           <TableCell className="text-right text-muted-foreground">{new Date(r.generatedAt).toLocaleString()}</TableCell>
                           <TableCell className="text-right">
-                            <Button size="sm" onClick={() => void downloadReport(r)}>Télécharger</Button>
+                            <Button variant="ghost" size="sm" onClick={() => void downloadReport(r)} title="Télécharger">
+                              <Download size={16} />
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))
@@ -129,4 +154,3 @@ export default function ReportsPage() {
     </div>
   )
 }
- 

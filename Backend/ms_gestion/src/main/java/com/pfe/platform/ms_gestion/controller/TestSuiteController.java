@@ -19,7 +19,7 @@ public class TestSuiteController {
     private final TestSuiteService suiteService;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'QA_ENGINEER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')")
     public ResponseEntity<TestSuiteResponse> add(@PathVariable Long projectId,
                                                  @Valid @RequestBody CreateTestSuiteRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(suiteService.add(projectId, request));
@@ -37,7 +37,7 @@ public class TestSuiteController {
     }
 
     @PutMapping("/{suiteId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'QA_ENGINEER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')")
     public ResponseEntity<TestSuiteResponse> update(@PathVariable Long projectId,
                                                     @PathVariable Long suiteId,
                                                     @Valid @RequestBody CreateTestSuiteRequest request) {

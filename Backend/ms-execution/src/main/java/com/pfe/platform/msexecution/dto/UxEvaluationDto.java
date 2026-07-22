@@ -33,6 +33,8 @@ public class UxEvaluationDto {
     private LocalDateTime createdAt;
     private LocalDateTime executedAt;
 
+    private Long ownerUserId;
+
     /** Navigation steps — populated only on detail endpoint */
     @Builder.Default
     private List<UxNavigationStepDto> navigationSteps = Collections.emptyList();

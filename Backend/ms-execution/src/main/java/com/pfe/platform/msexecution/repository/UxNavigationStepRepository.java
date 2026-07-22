@@ -9,4 +9,5 @@ import java.util.List;
 @Repository
 public interface UxNavigationStepRepository extends JpaRepository<UxNavigationStep, Long> {
     List<UxNavigationStep> findByEvaluationIdOrderByStepNumberAsc(Long evaluationId);
+    void deleteByEvaluationId(Long evaluationId);
 }

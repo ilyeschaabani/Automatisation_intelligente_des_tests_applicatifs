@@ -35,23 +35,17 @@ public class ProjectController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')")
     public ResponseEntity<ProjectResponse> update(@PathVariable Long id,
                                                   @Valid @RequestBody CreateProjectRequest request) {
         return ResponseEntity.ok(projectService.update(id, request));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         projectService.delete(id);
         return ResponseEntity.noContent().build();
     }
 
-    @PatchMapping("/{id}/archive")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER')")
-    public ResponseEntity<Void> archive(@PathVariable Long id) {
-        projectService.archive(id);
-        return ResponseEntity.noContent().build();
-    }
 }

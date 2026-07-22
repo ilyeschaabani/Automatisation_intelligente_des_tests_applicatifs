@@ -1,4 +1,4 @@
-type MsProjectStatus = 'ACTIVE' | 'PAUSED' | 'ARCHIVED'
+type MsProjectStatus = 'ACTIVE' | 'PAUSED'
 
 type MsProject = {
   id: number

@@ -21,7 +21,4 @@ export const projectService = {
   delete: async (id: number): Promise<void> => {
     await axiosClient.delete(`/api/projects/${id}`);
   },
-  archive: async (id: number): Promise<void> => {
-    await axiosClient.patch(`/api/projects/${id}/archive`);
-  },
 };

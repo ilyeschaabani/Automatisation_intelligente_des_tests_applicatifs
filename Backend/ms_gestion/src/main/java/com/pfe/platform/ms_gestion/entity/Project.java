@@ -49,5 +49,17 @@ public class Project {
     @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TestSuite> testSuites = new ArrayList<>();
 
+    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Campaign> campaigns = new ArrayList<>();
+
+    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<SecurityScan> securityScans = new ArrayList<>();
+
+    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<SecurityVulnerability> securityVulnerabilities = new ArrayList<>();
+
+    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ComplianceResult> complianceResults = new ArrayList<>();
+
     public enum Status { ACTIVE, PAUSED, ARCHIVED }
 }

@@ -8,8 +8,6 @@ package com.pfe.platform.authenticationmicroservice.Entity;
 public enum GlobalRole {
     ADMIN,
     TEST_MANAGER,
-    QA_ENGINEER,
-    DEVELOPER,
-    VIEWER,
-    TESTER
+    TESTEUR,
+    OBSERVATEUR
 }

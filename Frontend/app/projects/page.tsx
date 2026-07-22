@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import { Archive, Folder, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Eye, Folder, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 
 import { AuthGuard } from '@/components/auth-guard'
 import { Header } from '@/components/header'
@@ -15,13 +15,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { useUserRoles } from '@/hooks/use-roles'
 import {
   Table,
   TableBody,
@@ -54,13 +48,11 @@ const statusVariant: Record<
 > = {
   ACTIVE: 'default',
   PAUSED: 'secondary',
-  ARCHIVED: 'outline',
 }
 
 const statusLabels: Record<string, string> = {
   ACTIVE: 'Actif',
   PAUSED: 'En pause',
-  ARCHIVED: 'Archivé',
 }
 
 const formatDate = (value?: string) => {
@@ -71,6 +63,18 @@ const formatDate = (value?: string) => {
 }
 
 export default function ProjectsPage() {
+  const { isAdmin } = useUserRoles()
+  const currentUserId = useMemo(() => {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+      if (token) {
+        const payload = JSON.parse(atob(token.split('.')[1]))
+        return typeof payload.userId === 'number' ? payload.userId : null
+      }
+    } catch { /* ignore */ }
+    return null
+  }, [])
+
   const [projects, setProjects] = useState<Project[]>([])
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
@@ -88,9 +92,6 @@ export default function ProjectsPage() {
   const [deletingProject, setDeletingProject] = useState<Project | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
-  const [archiveOpen, setArchiveOpen] = useState(false)
-  const [archivingProject, setArchivingProject] = useState<Project | null>(null)
-  const [isArchiving, setIsArchiving] = useState(false)
 
   const loadProjects = async () => {
     setStatus('loading')
@@ -146,10 +147,6 @@ export default function ProjectsPage() {
     setDeleteOpen(true)
   }
 
-  const openArchive = (project: Project) => {
-    setArchivingProject(project)
-    setArchiveOpen(true)
-  }
 
 
   const onCreateSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -215,20 +212,6 @@ export default function ProjectsPage() {
     }
   }
 
-  const onArchiveConfirm = async () => {
-    if (!archivingProject) return
-    setIsArchiving(true)
-    try {
-      await projectService.archive(archivingProject.id)
-      setArchiveOpen(false)
-      setArchivingProject(null)
-      await loadProjects()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Échec de l\'archivage du projet')
-    } finally {
-      setIsArchiving(false)
-    }
-  }
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -304,11 +287,6 @@ export default function ProjectsPage() {
                             >
                               {project.name}
                             </Link>
-                            {(project.aiProject || project.aiBuiltin || !project.gitRepoUrl || project.gitRepoUrl === 'ai-builtin') ? (
-                              <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                                IA
-                              </Badge>
-                            ) : null}
                           </div>
                         </TableCell>
                         <TableCell>{project.gitRepoUrl || '—'}</TableCell>
@@ -320,33 +298,33 @@ export default function ProjectsPage() {
                         </TableCell>
                         <TableCell>{formatDate(project.createdAt)}</TableCell>
                         <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => openEdit(project)}
-                            >
-                              <Pencil size={14} />
-                              Modifier
+                          <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="sm" asChild title="Voir le projet">
+                              <Link href={`/projects/${project.id}`}>
+                                <Eye size={16} />
+                              </Link>
                             </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => openArchive(project)}
-                              disabled={project.status === 'ARCHIVED'}
-                              title={project.status === 'ARCHIVED' ? 'Déjà archivé' : 'Archiver le projet'}
-                            >
-                              <Archive size={14} />
-                              Archiver
-                            </Button>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => openDelete(project)}
-                            >
-                              <Trash2 size={14} />
-                              Supprimer
-                            </Button>
+                            {(isAdmin || currentUserId === project.createdBy) && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openEdit(project)}
+                                title="Modifier"
+                              >
+                                <Pencil size={16} />
+                              </Button>
+                            )}
+                            {(isAdmin || currentUserId === project.createdBy) && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openDelete(project)}
+                                title="Supprimer"
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                              >
+                                <Trash2 size={16} />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -448,19 +426,6 @@ export default function ProjectsPage() {
         onConfirm={onDeleteConfirm}
       />
 
-      <ConfirmDialog
-        open={archiveOpen}
-        onOpenChange={setArchiveOpen}
-        title="Archiver le projet"
-        description={
-          archivingProject
-            ? `Archiver « ${archivingProject.name} » ? Le projet passera en lecture seule. Vous pourrez le restaurer plus tard.`
-            : 'Archiver ce projet ?'
-        }
-        confirmLabel="Archiver"
-        isConfirming={isArchiving}
-        onConfirm={onArchiveConfirm}
-      />
     </div>
   )
 }

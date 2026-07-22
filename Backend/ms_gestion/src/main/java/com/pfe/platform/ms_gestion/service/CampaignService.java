@@ -76,6 +76,25 @@ public class CampaignService {
         return mapToResponse(campaign);
     }
 
+    @Transactional
+    public CampaignResponse update(Long projectId, Long campaignId, CreateCampaignRequest request) {
+        Campaign campaign = getCampaignOrThrow(campaignId, projectId);
+        projectAccessService.checkMembership(campaign.getProject());
+
+        Environment env = environmentRepository.findById(request.getEnvironmentId())
+                .orElseThrow(() -> new RuntimeException("Environnement non trouvé"));
+        if (!env.getProject().getId().equals(projectId)) {
+            throw new RuntimeException("L'environnement n'appartient pas à ce projet");
+        }
+
+        campaign.setName(request.getName());
+        campaign.setEnvironment(env);
+        campaign.setAppVersion(request.getAppVersion());
+        campaign.setTriggerMode(Campaign.TriggerMode.valueOf(request.getTriggerMode().toUpperCase()));
+
+        return mapToResponse(campaignRepository.save(campaign));
+    }
+
     public List<CampaignResponse> listForProject(Long projectId) {
         Project project = getProjectOrThrow(projectId);
         projectAccessService.checkMembership(project);

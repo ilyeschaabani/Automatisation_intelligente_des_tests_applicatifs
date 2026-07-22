@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { AlertCircle, CheckCircle2, Clock, Download } from 'lucide-react'
+import Link from 'next/link'
+import { AlertCircle, CheckCircle2, Clock } from 'lucide-react'
 
 import { Header } from '@/components/header'
 import { Sidebar } from '@/components/sidebar'
@@ -15,7 +16,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Button } from '@/components/ui/button'
 import { listCampaigns, listExecutionResults, type TestCampaignDto } from '@/lib/api-client'
 import type { ExecutionResultBackendDto } from '@/lib/api-client'
 
@@ -43,16 +43,30 @@ function formatDateTime(isoString: string | null): string {
   if (!isoString) return '—'
   try {
     const date = new Date(isoString)
-    return date.toLocaleString('en-US', {
-      year: '2-digit',
-      month: '02-digit',
-      day: '02-digit',
+    return date.toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }) + ' à ' + date.toLocaleTimeString('fr-FR', {
       hour: '2-digit',
       minute: '2-digit',
     })
   } catch {
     return isoString
   }
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  running: 'En cours',
+  finished: 'Terminé',
+  finished_with_errors: 'Terminé avec erreurs',
+  failed: 'Échoué',
+  aborted: 'Annulé',
+  pending: 'En attente',
+}
+
+function getStatusLabel(status: string): string {
+  return STATUS_LABELS[status.toLowerCase()] || status
 }
 
 function getStatusColor(status: string): string {
@@ -233,8 +247,7 @@ export default function ResultsPage() {
                       <TableHead className="text-center">Échoués</TableHead>
                       <TableHead className="text-center">Ignorés</TableHead>
                       <TableHead className="text-center">Durée</TableHead>
-                      <TableHead className="text-center">Heure</TableHead>
-                      <TableHead className="text-center">Action</TableHead>
+                      <TableHead className="text-center">Date</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -244,14 +257,13 @@ export default function ResultsPage() {
                         className="border-b border-border hover:bg-secondary/50"
                       >
                         <TableCell className="font-medium text-foreground">
-                          {result.campaignName}
+                          <Link href={`/campaigns/${result.id}`} className="hover:text-primary hover:underline transition-colors">
+                            {result.campaignName}
+                          </Link>
                         </TableCell>
                         <TableCell className="text-center">
                           <Badge variant="outline" className={getStatusColor(result.status)}>
-                            {result.status
-                              .split('_')
-                              .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-                              .join(' ')}
+                            {getStatusLabel(result.status)}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-center text-foreground">
@@ -271,11 +283,6 @@ export default function ResultsPage() {
                         </TableCell>
                         <TableCell className="text-center text-sm text-muted-foreground">
                           {formatDateTime(result.startedAt)}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Button variant="ghost" size="sm" disabled>
-                            <Download size={16} />
-                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}

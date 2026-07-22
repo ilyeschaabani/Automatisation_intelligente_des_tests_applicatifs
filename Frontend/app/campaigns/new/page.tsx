@@ -12,15 +12,10 @@ export default function NewCampaignPage() {
       <main className="flex-1 lg:ml-0 pt-16 lg:pt-0">
         <Header />
 
-        <div className="p-6 max-w-3xl">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-foreground">Add New Campaign</h1>
-            <p className="text-muted-foreground mt-1">
-              Create a campaign to organize and run your tests
-            </p>
+        <div className="p-6 flex justify-center">
+          <div className="w-full max-w-3xl">
+            <CampaignForm mode="create" />
           </div>
-
-          <CampaignForm mode="create" />
         </div>
       </main>
     </div>

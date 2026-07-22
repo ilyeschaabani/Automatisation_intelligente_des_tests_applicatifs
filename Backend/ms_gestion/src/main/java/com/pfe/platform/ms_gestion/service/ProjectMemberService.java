@@ -3,6 +3,7 @@ package com.pfe.platform.ms_gestion.service;
 
 import com.pfe.platform.ms_gestion.dto.request.AddMemberRequest;
 import com.pfe.platform.ms_gestion.dto.response.MemberResponse;
+import com.pfe.platform.ms_gestion.entity.Notification;
 import com.pfe.platform.ms_gestion.entity.Project;
 import com.pfe.platform.ms_gestion.entity.ProjectMember;
 import com.pfe.platform.ms_gestion.entity.UserRef;
@@ -25,20 +26,59 @@ public class ProjectMemberService {
     private final ProjectMemberRepository projectMemberRepository;
     private final ProjectAccessService projectAccessService;
     private final UserRefRepository userRefRepository;
+    private final NotificationService notificationService;
+    private final EmailService emailService;
 
     @Transactional
     public void addMember(Long projectId, AddMemberRequest request) {
         Project project = getProjectOrThrow(projectId);
         projectAccessService.checkMembership(project);
 
-        if (projectMemberRepository.existsByProjectIdAndUserId(projectId, request.getUserId())) {
+        Long userId = resolveUserId(request);
+
+        if (projectMemberRepository.existsByProjectIdAndUserId(projectId, userId)) {
             throw new RuntimeException("Cet utilisateur est déjà membre du projet");
         }
 
         ProjectMember member = new ProjectMember();
         member.setProject(project);
-        member.setUserId(request.getUserId());
+        member.setUserId(userId);
         projectMemberRepository.save(member);
+
+        UserRef user = userRefRepository.findById(userId).orElse(null);
+        if (user != null && user.getEmail() != null) {
+            String displayName = buildDisplayName(user);
+
+            notificationService.create(
+                    userId,
+                    "Ajouté au projet",
+                    "Vous avez été ajouté au projet « " + project.getName() + " ».",
+                    Notification.NotifType.PROJECT_MEMBER_ADDED,
+                    "/projects/" + projectId
+            );
+
+            emailService.sendProjectMemberEmail(user.getEmail(), displayName, project.getName(), projectId);
+        }
+    }
+
+    private Long resolveUserId(AddMemberRequest request) {
+        if (request.getUserId() != null) {
+            return request.getUserId();
+        }
+        if (request.getEmail() != null && !request.getEmail().isBlank()) {
+            String email = request.getEmail().trim().toLowerCase();
+            UserRef user = userRefRepository.findByEmail(email)
+                    .orElseThrow(() -> new RuntimeException("Aucun utilisateur trouvé avec l'email : " + email));
+            return user.getId();
+        }
+        throw new RuntimeException("userId ou email requis");
+    }
+
+    private String buildDisplayName(UserRef user) {
+        String name = "";
+        if (user.getPrenom() != null) name += user.getPrenom();
+        if (user.getNom() != null) name += (name.isEmpty() ? "" : " ") + user.getNom();
+        return name.isEmpty() ? user.getEmail() : name;
     }
 
     public List<MemberResponse> listMembers(Long projectId) {

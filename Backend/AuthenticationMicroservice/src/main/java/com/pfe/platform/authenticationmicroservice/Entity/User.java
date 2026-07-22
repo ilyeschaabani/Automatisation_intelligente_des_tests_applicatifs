@@ -14,6 +14,8 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import java.time.Instant;
 import java.util.Collection;
 import java.util.HashSet;
@@ -43,6 +45,7 @@ public class User  implements UserDetails {
     @Column(unique = true, nullable = false, length = 190)
     String email;
 
+    @JsonIgnore
     @NotBlank
     @Column(nullable = false)
     String password;
@@ -68,6 +71,7 @@ public class User  implements UserDetails {
     Boolean githubConnected;
 
     /** Access token encrypted at rest (AES-GCM payload, base64) */
+    @JsonIgnore
     @Column(length = 4096)
     String githubAccessToken;
 

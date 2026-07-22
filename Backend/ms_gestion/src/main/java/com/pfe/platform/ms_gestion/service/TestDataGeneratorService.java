@@ -22,7 +22,7 @@ public class TestDataGeneratorService {
     @org.springframework.beans.factory.annotation.Value("${ollama.url:http://localhost:11434/api/generate}")
     private String ollamaUrl;
 
-    @org.springframework.beans.factory.annotation.Value("${ollama.model:qwen3-coder-next:cloud}")
+    @org.springframework.beans.factory.annotation.Value("${ollama.model:nemotron-3-ultra:cloud}")
     private String model;
 
     public String generateTestData(GenerateTestDataRequest request) {

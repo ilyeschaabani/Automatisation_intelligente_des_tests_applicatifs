@@ -12,6 +12,7 @@ import {
   ClipboardList, Shield, Bug, AlertCircle, ExternalLink,
   Loader2, ArrowRight, FileCode, Globe, Package, CheckCircle2,
 } from 'lucide-react'
+import { toast } from '@/hooks/use-toast'
 
 interface VulnAssignment {
   id: number
@@ -137,8 +138,14 @@ function MyAssignmentsInner() {
       })
       if (res.ok) {
         setVulns(prev => prev.map(v => v.id === vulnId ? { ...v, status: 'RESOLVED' } : v))
+        toast({ title: 'Résolu', description: 'La vulnérabilité a été marquée comme résolue.' })
+      } else {
+        const text = await res.text().catch(() => '')
+        toast({ title: 'Erreur', description: text || `Erreur ${res.status}`, variant: 'destructive' })
       }
-    } catch { /* ignore */ }
+    } catch {
+      toast({ title: 'Erreur', description: 'Impossible de contacter le serveur.', variant: 'destructive' })
+    }
     setResolving(null)
   }
 
@@ -153,8 +160,14 @@ function MyAssignmentsInner() {
       })
       if (res.ok) {
         setTestErrors(prev => prev.map(r => r.id === resultId ? { ...r, status: 'RESOLVED' } : r))
+        toast({ title: 'Résolu', description: 'L\'erreur de test a été marquée comme résolue.' })
+      } else {
+        const text = await res.text().catch(() => '')
+        toast({ title: 'Erreur', description: text || `Erreur ${res.status}`, variant: 'destructive' })
       }
-    } catch { /* ignore */ }
+    } catch {
+      toast({ title: 'Erreur', description: 'Impossible de contacter le serveur.', variant: 'destructive' })
+    }
     setResolving(null)
   }
 

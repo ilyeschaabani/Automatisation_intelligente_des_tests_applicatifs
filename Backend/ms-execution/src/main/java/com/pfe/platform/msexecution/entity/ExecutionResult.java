@@ -52,7 +52,7 @@ public class ExecutionResult {
     @Column(name = "assigned_to_user_id")
     private Long assignedToUserId;
 
-    public enum ResultStatus { SUCCESS, FAILURE, ERROR }
+    public enum ResultStatus { SUCCESS, FAILURE, ERROR, RESOLVED }
 
     public ExecutionResult() {
     }

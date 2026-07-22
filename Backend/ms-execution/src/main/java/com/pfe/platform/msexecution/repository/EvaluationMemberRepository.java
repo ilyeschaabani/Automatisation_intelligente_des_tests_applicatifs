@@ -12,4 +12,6 @@ public interface EvaluationMemberRepository extends JpaRepository<EvaluationMemb
     List<EvaluationMember> findByEvaluationId(Long evaluationId);
     List<EvaluationMember> findByUserId(Long userId);
     void deleteByEvaluationIdAndUserId(Long evaluationId, Long userId);
+    void deleteByEvaluationId(Long evaluationId);
+    List<EvaluationMember> findByEvaluationIdInAndRole(List<Long> evaluationIds, EvaluationMember.Role role);
 }

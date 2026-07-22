@@ -1,5 +1,5 @@
-export type ProjectStatus = 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
-export type TestType = 'WEB' | 'UNIT' | 'INTEGRATION';
+export type ProjectStatus = 'ACTIVE' | 'PAUSED';
+export type TestType = 'UNIT' | 'INTEGRATION';
 export type RiskLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 export interface Project {
   id: number;
@@ -117,5 +117,6 @@ export interface Member {
 }
 
 export interface AddMemberRequest {
-  userId: number;
+  userId?: number;
+  email?: string;
 }

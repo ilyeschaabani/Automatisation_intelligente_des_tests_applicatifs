@@ -24,7 +24,7 @@ public class LlmClient {
     @Value("${ollama.url:http://localhost:11434/api/generate}")
     private String generateUrl;
 
-    @Value("${ollama.model:qwen3-coder-next:cloud}")
+    @Value("${ollama.model:nemotron-3-ultra:cloud}")
     private String model;
 
     /**

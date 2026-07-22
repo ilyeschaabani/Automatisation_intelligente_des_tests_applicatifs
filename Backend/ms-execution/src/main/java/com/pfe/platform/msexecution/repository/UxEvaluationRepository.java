@@ -10,10 +10,13 @@ import java.util.List;
 public interface UxEvaluationRepository extends JpaRepository<UxEvaluation, Long> {
     List<UxEvaluation> findByProjectIdOrderByCreatedAtDesc(Long projectId);
     List<UxEvaluation> findByProjectIdAndPlatformOrderByCreatedAtDesc(Long projectId, UxEvaluation.Platform platform);
+    List<UxEvaluation> findByProjectIdAndPlatformInOrderByCreatedAtDesc(Long projectId, List<UxEvaluation.Platform> platforms);
     List<UxEvaluation> findAllByOrderByCreatedAtDesc();
     List<UxEvaluation> findByPlatformOrderByCreatedAtDesc(UxEvaluation.Platform platform);
+    List<UxEvaluation> findByPlatformInOrderByCreatedAtDesc(List<UxEvaluation.Platform> platforms);
     List<UxEvaluation> findByProjectIdInOrderByCreatedAtDesc(List<Long> projectIds);
     List<UxEvaluation> findByProjectIdInAndPlatformOrderByCreatedAtDesc(List<Long> projectIds, UxEvaluation.Platform platform);
     List<UxEvaluation> findByIdInOrderByCreatedAtDesc(List<Long> ids);
     List<UxEvaluation> findByIdInAndPlatformOrderByCreatedAtDesc(List<Long> ids, UxEvaluation.Platform platform);
+    List<UxEvaluation> findByIdInAndPlatformInOrderByCreatedAtDesc(List<Long> ids, List<UxEvaluation.Platform> platforms);
 }
