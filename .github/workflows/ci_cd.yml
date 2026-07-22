@@ -315,6 +315,7 @@ jobs:
         continue-on-error: true
         with:
           category: java
+          upload: never
 
   security-sast-js:
     name: "Security — SAST JavaScript (CodeQL)"
@@ -339,6 +340,7 @@ jobs:
         continue-on-error: true
         with:
           category: javascript
+          upload: never
 
   security-npm-audit:
     name: "Security — npm audit"
