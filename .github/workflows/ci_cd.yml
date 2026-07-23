@@ -510,9 +510,7 @@ jobs:
 
       - name: Start all containers
         run: |
-          docker compose -f docker-compose.ci.yml up -d
-          echo "Waiting for services to start..."
-          sleep 60
+          docker compose -f docker-compose.ci.yml up -d --wait --wait-timeout 120
 
       - name: Check container status
         run: docker compose -f docker-compose.ci.yml ps
