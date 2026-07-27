@@ -42,7 +42,7 @@ public class ProjectController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEST_MANAGER')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         projectService.delete(id);
         return ResponseEntity.noContent().build();

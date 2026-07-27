@@ -63,7 +63,7 @@ const formatDate = (value?: string) => {
 }
 
 export default function ProjectsPage() {
-  const { isAdmin } = useUserRoles()
+  const { isAdmin, canDeleteProject, canCreateProject } = useUserRoles()
   const currentUserId = useMemo(() => {
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
@@ -269,8 +269,6 @@ export default function ProjectsPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Nom</TableHead>
-                      <TableHead>Dépôt</TableHead>
-                      <TableHead>Branche par défaut</TableHead>
                       <TableHead>Statut</TableHead>
                       <TableHead>Créé le</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -289,8 +287,6 @@ export default function ProjectsPage() {
                             </Link>
                           </div>
                         </TableCell>
-                        <TableCell>{project.gitRepoUrl || '—'}</TableCell>
-                        <TableCell>{project.gitDefaultBranch || 'main'}</TableCell>
                         <TableCell>
                           <Badge variant={statusVariant[project.status]}>
                             {statusLabels[project.status] ?? project.status}
@@ -314,7 +310,7 @@ export default function ProjectsPage() {
                                 <Pencil size={16} />
                               </Button>
                             )}
-                            {(isAdmin || currentUserId === project.createdBy) && (
+                            {(canDeleteProject || currentUserId === project.createdBy) && (
                               <Button
                                 variant="ghost"
                                 size="sm"

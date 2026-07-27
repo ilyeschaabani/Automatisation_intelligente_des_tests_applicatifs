@@ -27,7 +27,7 @@ export function useUserRoles() {
   const isAdmin = roles.includes('ADMIN')
   const canManageUsers = isAdmin
   const canCreateProject = hasRole('ADMIN', 'TEST_MANAGER')
-  const canDeleteProject = isAdmin
+  const canDeleteProject = hasRole('ADMIN', 'TEST_MANAGER')
   const canCreateEnvironment = hasRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')
   const canDeleteEnvironment = hasRole('ADMIN', 'TEST_MANAGER')
   const canCreateSuite = hasRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')
@@ -42,7 +42,7 @@ export function useUserRoles() {
   const canStopExecution = hasRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')
   const canGenerateReport = hasRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')
   const canLaunchScan = hasRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')
-  const canUpdateVulnStatus = hasRole('ADMIN', 'TEST_MANAGER')
+  const canUpdateVulnStatus = hasRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')
   const canDownloadSecurityReport = hasRole('ADMIN', 'TEST_MANAGER', 'TESTEUR', 'OBSERVATEUR')
   const canCreateUxEval = hasRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')
   const canControlUxEval = hasRole('ADMIN', 'TEST_MANAGER', 'TESTEUR')

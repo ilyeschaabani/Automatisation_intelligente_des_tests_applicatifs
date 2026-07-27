@@ -69,7 +69,7 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
     permissions: [
       { label: 'Créer un projet', roles: ['ADMIN', 'TEST_MANAGER'] },
       { label: 'Modifier un projet', roles: ['ADMIN', 'TEST_MANAGER'] },
-      { label: 'Supprimer un projet', roles: ['ADMIN'] },
+      { label: 'Supprimer un projet', roles: ['ADMIN', 'TEST_MANAGER'] },
       { label: 'Consulter les projets', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR', 'OBSERVATEUR'] },
       { label: 'Gérer les membres du projet', roles: ['ADMIN', 'TEST_MANAGER'] },
     ],
@@ -134,7 +134,7 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
     permissions: [
       { label: 'Lancer un scan (SAST / DAST / SCA)', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR'] },
       { label: 'Consulter les vulnérabilités', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR', 'OBSERVATEUR'] },
-      { label: 'Modifier le statut d\'une vulnérabilité', roles: ['ADMIN', 'TEST_MANAGER'] },
+      { label: 'Modifier le statut d\'une vulnérabilité', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR'] },
       { label: 'Télécharger un rapport de sécurité', roles: ['ADMIN', 'TEST_MANAGER', 'TESTEUR', 'OBSERVATEUR'] },
     ],
   },
