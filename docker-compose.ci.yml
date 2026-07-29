@@ -87,7 +87,11 @@ services:
       SPRING_DATASOURCE_USERNAME: ilyes
       SPRING_DATASOURCE_PASSWORD: mypassword
       EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://eureka:8761/eureka/
-      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      # CI uses a fresh database. ms-execution owns tables (reports, ux_evaluations,
+      # ux_navigation_steps, evaluation_members, functional_test_results) that ms_gestion
+      # does not create and whose SQL migration scripts are not run in CI. Use "update"
+      # so Hibernate creates them; ms-gestion (starts first) creates the shared tables.
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8083/actuator/health || exit 1"]
       interval: 15s
