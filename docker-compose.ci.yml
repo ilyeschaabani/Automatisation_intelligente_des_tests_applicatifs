@@ -111,6 +111,10 @@ services:
       ms-execution:
         condition: service_healthy
     environment:
+      # Force Next.js standalone to bind all interfaces so the localhost healthcheck
+      # works (Docker otherwise sets HOSTNAME to the container id).
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
       NEXT_PUBLIC_API_URL: http://localhost:3000
       AUTH_SERVICE_URL: http://auth:8081
       MS_GESTION_SERVICE_URL: http://ms-gestion:8082
